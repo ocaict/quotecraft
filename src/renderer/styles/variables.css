@@ -1,0 +1,20 @@
+:root {
+  color-scheme: dark;
+
+  --bg: #0f1117;
+  --bg-elevated: #161822;
+  --bg-card: #1c1f2e;
+  --border: #21262d;
+  --border-strong: #30363d;
+  --text: #e1e4e8;
+  --text-muted: #8b949e;
+  --text-faint: #6e7681;
+  --accent: #58a6ff;
+  --accent-hover: #79b8ff;
+  --success: #3fb950;
+  --error: #f85149;
+  --warning: #d29922;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}

@@ -1,0 +1,252 @@
+.quotes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.quote-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.quote-items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.quote-items-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.items-table-wrap {
+  overflow-x: auto;
+}
+
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.items-table thead th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.items-table tbody td {
+  padding: 8px 10px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.items-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.col-description { width: 45%; }
+.col-qty { width: 10%; }
+.col-price { width: 15%; }
+.col-total { width: 15%; }
+.col-remove { width: 15%; text-align: right; }
+
+.item-row input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: var(--font);
+  outline: none;
+}
+
+.item-row input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+}
+
+.item-total {
+  text-align: right;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.quote-form textarea {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: var(--font);
+  outline: none;
+  resize: vertical;
+  width: 100%;
+}
+
+.quote-form textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+}
+
+.totals-panel {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  max-width: 360px;
+  margin-left: auto;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.total-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.grand-total {
+  border-top: 1px solid var(--border-strong);
+  margin-top: 6px;
+  padding-top: 12px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.grand-total .total-value {
+  color: var(--accent);
+}
+
+/* ---------- Sub-view switching ---------- */
+.quote-subview {
+  display: none;
+}
+
+.quote-subview.active {
+  display: block;
+}
+
+/* ---------- Badge ---------- */
+.quotes-header .badge {
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+/* ---------- Detail view ---------- */
+.detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.detail-meta {
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.detail-value {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.detail-terms {
+  white-space: pre-wrap;
+  color: var(--text);
+  margin: 0;
+}
+
+/* ---------- Toolbar ---------- */
+.quotes-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.quotes-toolbar .search-input {
+  flex: 1;
+  min-width: 220px;
+}
+
+/* ---------- Status select ---------- */
+.status-select {
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+}
+
+.status-select:focus {
+  border-color: var(--accent);
+}
+
+/* ---------- Detail status change ---------- */
+.status-change {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-change label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.status-change select {
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+}
+
+.status-change select:focus {
+  border-color: var(--accent);
+}

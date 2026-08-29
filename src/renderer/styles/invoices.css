@@ -1,0 +1,53 @@
+/* ---------- Sub-view switching ---------- */
+.invoice-subview {
+  display: none;
+}
+
+.invoice-subview.active {
+  display: block;
+}
+
+/* ---------- List ---------- */
+.invoice-list-table .cell-balance,
+.cell-balance {
+  font-weight: 600;
+}
+
+/* ---------- Payment modal ---------- */
+.payment-balance {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0;
+}
+
+/* ---------- Payment history ---------- */
+.payments-list .empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.detail-terms {
+  white-space: pre-wrap;
+}
+
+/* ---------- Convert notice ---------- */
+.convert-notice {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.convert-notice.notice-ok {
+  background: rgba(63,185,80,0.15);
+  color: #3fb950;
+  border: 1px solid rgba(63,185,80,0.4);
+}
+
+.convert-notice.notice-hint {
+  background: rgba(88,166,255,0.12);
+  color: var(--accent);
+  border: 1px solid rgba(88,166,255,0.35);
+}
+

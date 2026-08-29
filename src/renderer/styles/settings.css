@@ -1,0 +1,162 @@
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header .subtitle,
+.card > .subtitle {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.card h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.card > .subtitle {
+  margin-bottom: 16px;
+  margin-top: -8px;
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.field-span-2 {
+  flex: 2;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.field-required label::after {
+  content: ' *';
+  color: var(--error);
+}
+
+.field input,
+.field select {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: var(--font);
+  outline: none;
+  width: 100%;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+}
+
+.field input.invalid,
+.field select.invalid {
+  border-color: var(--error);
+}
+
+.field-error {
+  color: var(--error);
+  font-size: 12px;
+  margin-top: 5px;
+  min-height: 14px;
+}
+
+.hint {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+.logo-upload {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.logo-preview {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 6px;
+}
+
+.logo-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.logo-hint {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 24px;
+}
+
+.restore-warning {
+  margin-bottom: 8px;
+}
+
+.restore-warning strong {
+  color: var(--error);
+}
+
+.restore-file-info {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  margin: 12px 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.restore-note {
+  color: var(--text-muted);
+  font-size: 13px;
+}

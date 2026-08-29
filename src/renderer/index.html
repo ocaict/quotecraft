@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:; script-src 'self'">
+  <title>QuoteCraft</title>
+  <link rel="stylesheet" href="styles/variables.css">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/settings.css">
+  <link rel="stylesheet" href="styles/clients.css">
+  <link rel="stylesheet" href="styles/quotes.css">
+  <link rel="stylesheet" href="styles/invoices.css">
+  <link rel="stylesheet" href="styles/dashboard.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">QuoteCraft</div>
+    <nav id="nav">
+      <a href="#" data-page="dashboard" class="active">Dashboard</a>
+      <a href="#" data-page="clients">Clients</a>
+      <a href="#" data-page="quotes">Quotes</a>
+      <a href="#" data-page="invoices">Invoices</a>
+      <a href="#" data-page="settings">Settings</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <section id="page-dashboard" class="page active">
+      <div class="page-header dashboard-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p class="subtitle">At-a-glance overview of your quotes and invoices.</p>
+        </div>
+        <div class="detail-actions">
+          <button type="button" id="dashNewQuoteBtn" class="btn btn-primary">+ New Quote</button>
+          <button type="button" id="dashNewInvoiceBtn" class="btn btn-secondary">New Invoice</button>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card stat-card">
+          <span class="stat-label">Outstanding balance</span>
+          <span id="statOutstanding" class="stat-value">—</span>
+          <span class="stat-sub">Across unpaid & partially paid invoices</span>
+        </div>
+
+        <div class="card stat-card stat-card-link" id="overdueCard" role="button" tabindex="0">
+          <span class="stat-label">Overdue</span>
+          <span class="stat-value-row">
+            <span id="statOverdueCount" class="stat-count">0</span>
+            <span id="statOverdue" class="stat-value">—</span>
+          </span>
+          <span class="stat-sub">View overdue invoices &rarr;</span>
+        </div>
+
+        <div class="card stat-card">
+          <span class="stat-label">Invoiced this month</span>
+          <span id="statInvoicedMonth" class="stat-value">—</span>
+          <span class="stat-sub">Total of invoices created this month</span>
+        </div>
+
+        <div class="card stat-card">
+          <span class="stat-label">Invoiced this year</span>
+          <span id="statInvoicedYear" class="stat-value">—</span>
+          <span class="stat-sub">Total of invoices created this year</span>
+        </div>
+
+        <div class="card stat-card">
+          <span class="stat-label">Paid this month</span>
+          <span id="statPaidMonth" class="stat-value">—</span>
+          <span class="stat-sub">Payments received this month</span>
+        </div>
+
+        <div class="card stat-card">
+          <span class="stat-label">Paid this year</span>
+          <span id="statPaidYear" class="stat-value">—</span>
+          <span class="stat-sub">Payments received this year</span>
+        </div>
+      </div>
+
+      <div class="card dashboard-list-card">
+        <h2>Recent activity</h2>
+        <div id="dashboardActivity">
+          <p class="placeholder">Loading…</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-clients" class="page">
+      <div class="page-header clients-header">
+        <div>
+          <h1>Clients</h1>
+          <p class="subtitle">Manage the people and companies you send quotes and invoices to.</p>
+        </div>
+        <button type="button" id="addClientBtn" class="btn btn-primary">Add Client</button>
+      </div>
+
+      <div class="clients-toolbar">
+        <input type="text" id="clientSearch" class="search-input" placeholder="Search clients by name, email, company…">
+        <div class="sort-control">
+          <label for="clientSort">Sort by</label>
+          <select id="clientSort">
+            <option value="name">Name</option>
+            <option value="date">Date added</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card clients-table-card">
+        <div id="clientList" class="clients-list">
+          <p class="placeholder">Loading clients…</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-quotes" class="page">
+      <!-- Quotes list (default view) -->
+      <div id="quoteListView" class="quote-subview">
+        <div class="page-header quotes-header">
+          <div>
+            <h1>Quotes</h1>
+            <p class="subtitle">Saved quotes. Draft quotes can be edited.</p>
+          </div>
+          <button type="button" id="newQuoteBtn" class="btn btn-primary">+ New Quote</button>
+        </div>
+
+        <div class="quotes-toolbar">
+          <input type="text" id="quoteSearch" class="search-input" placeholder="Search by client or quote number…">
+          <div class="sort-control">
+            <label for="quoteStatusFilter">Status</label>
+            <select id="quoteStatusFilter">
+              <option value="all">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="accepted">Accepted</option>
+              <option value="declined">Declined</option>
+              <option value="expired">Expired</option>
+            </select>
+          </div>
+          <div class="sort-control">
+            <label for="quoteSort">Sort by</label>
+            <select id="quoteSort">
+              <option value="date">Date</option>
+              <option value="total">Total</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card quotes-list-card">
+          <div id="quoteList" class="quotes-list">
+            <p class="placeholder">Loading quotes…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quote form (new / edit) -->
+      <div id="quoteFormView" class="quote-subview">
+        <div class="page-header quotes-header">
+          <div>
+            <h1 id="quoteFormTitle">New Quote</h1>
+            <p class="subtitle">Build a quote for a client. Add line items, then save to generate a numbered quote.</p>
+          </div>
+          <button type="button" id="quotesBackBtn" class="btn btn-secondary">Back to quotes</button>
+        </div>
+
+        <form id="quoteForm" class="quote-form" novalidate>
+          <input type="hidden" id="quoteId" name="id">
+          <div class="card">
+            <h2>Quote details</h2>
+
+            <div class="form-row">
+              <div class="field field-required">
+                <label for="quoteClient">Client</label>
+                <select id="quoteClient" name="client_id">
+                  <option value="">Select a client…</option>
+                </select>
+                <span class="field-error" data-error-for="client_id"></span>
+              </div>
+              <div class="field">
+                <label for="quoteClientSearch">Search clients</label>
+                <input type="text" id="quoteClientSearch" placeholder="Type to filter…" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="quoteDate">Quote date</label>
+                <input type="date" id="quoteDate" name="date_created">
+                <span class="field-error" data-error-for="date_created"></span>
+              </div>
+              <div class="field">
+                <label for="quoteExpiry">Expiry date</label>
+                <input type="date" id="quoteExpiry" name="valid_until">
+                <span class="field-error" data-error-for="valid_until"></span>
+                <span class="hint">Defaults to 30 days from today. Editable.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="quote-items-header">
+              <h2>Line items</h2>
+              <button type="button" id="addLineItemBtn" class="btn btn-secondary">Add Line Item</button>
+            </div>
+
+            <div class="items-table-wrap">
+              <table class="items-table" id="itemsTable">
+                <thead>
+                  <tr>
+                    <th class="col-description">Description</th>
+                    <th class="col-qty">Qty</th>
+                    <th class="col-price">Unit price</th>
+                    <th class="col-total">Line total</th>
+                    <th class="col-remove"></th>
+                  </tr>
+                </thead>
+                <tbody id="itemsBody">
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Discount &amp; totals</h2>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="discountType">Discount type</label>
+                <select id="discountType" name="discount_type">
+                  <option value="none">No discount</option>
+                  <option value="percent">Percentage (%)</option>
+                  <option value="fixed">Fixed amount</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="discountValue" id="discountLabel">Discount</label>
+                <input type="number" id="discountValue" name="discount_value" min="0" step="0.01" placeholder="0.00" disabled>
+                <span class="field-error" data-error-for="discount_value"></span>
+              </div>
+              <div class="field">
+                <label for="taxRate">Tax rate (%)</label>
+                <input type="number" id="taxRate" name="tax_rate" min="0" max="100" step="0.01" placeholder="0">
+                <span class="field-error" data-error-for="tax_rate"></span>
+                <span class="hint">Defaults to your tax rate in Settings. Editable per quote.</span>
+              </div>
+            </div>
+
+            <div class="totals-panel">
+              <div class="total-row">
+                <span>Subtotal</span>
+                <span id="totalsSubtotal" class="total-value">0.00</span>
+              </div>
+              <div class="total-row">
+                <span>Discount</span>
+                <span id="totalsDiscount" class="total-value">0.00</span>
+              </div>
+              <div class="total-row">
+                <span>Tax</span>
+                <span id="totalsTax" class="total-value">0.00</span>
+              </div>
+              <div class="total-row grand-total">
+                <span>Grand total</span>
+                <span id="totalsGrand" class="total-value">0.00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Notes / terms</h2>
+            <div class="field field-span-2">
+              <label for="quoteTerms">Notes &amp; payment terms</label>
+              <textarea id="quoteTerms" name="terms" rows="4" placeholder="e.g. Payment due within 14 days"></textarea>
+              <span class="hint">Pre-filled from your default payment terms in Settings. You can edit per quote.</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" id="saveQuoteBtn" class="btn btn-primary">Save quote</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Quote read-only detail view -->
+      <div id="quoteDetailView" class="quote-subview">
+        <div class="page-header quotes-header">
+          <div>
+            <h1 id="detailQuoteNumber">Quote</h1>
+            <span id="detailQuoteStatus" class="badge">draft</span>
+            <p class="subtitle">Read-only view of this quote.</p>
+          </div>
+          <div class="detail-actions">
+            <div class="status-change">
+              <label for="detailStatusSelect">Status</label>
+              <select id="detailStatusSelect">
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="accepted">Accepted</option>
+                <option value="declined">Declined</option>
+              </select>
+            </div>
+            <button type="button" id="detailEditBtn" class="btn btn-secondary">Edit</button>
+            <button type="button" id="detailExportBtn" class="btn btn-secondary">Download PDF</button>
+            <button type="button" id="detailConvertBtn" class="btn btn-primary">Convert to Invoice</button>
+            <button type="button" id="detailBackBtn" class="btn btn-secondary">Back to quotes</button>
+          </div>
+        </div>
+
+        <div id="detailConvertResult" class="convert-notice hidden"></div>
+        <div class="card">
+          <div class="detail-meta">
+            <div class="detail-field">
+              <span class="detail-label">Client</span>
+              <span id="detailClient" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Quote date</span>
+              <span id="detailDate" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Expiry date</span>
+              <span id="detailExpiry" class="detail-value">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Line items</h2>
+          <div class="items-table-wrap">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th class="col-description">Description</th>
+                  <th class="col-qty">Qty</th>
+                  <th class="col-price">Unit price</th>
+                  <th class="col-total">Line total</th>
+                </tr>
+              </thead>
+              <tbody id="detailItemsBody"></tbody>
+            </table>
+          </div>
+
+          <div class="totals-panel">
+            <div class="total-row">
+              <span>Subtotal</span>
+              <span id="detailSubtotal" class="total-value">0.00</span>
+            </div>
+            <div class="total-row">
+              <span>Discount</span>
+              <span id="detailDiscount" class="total-value">0.00</span>
+            </div>
+            <div class="total-row">
+              <span>Tax</span>
+              <span id="detailTax" class="total-value">0.00</span>
+            </div>
+            <div class="total-row grand-total">
+              <span>Grand total</span>
+              <span id="detailTotal" class="total-value">0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Notes / terms</h2>
+          <p id="detailTerms" class="detail-terms">—</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-invoices" class="page">
+      <div id="invoiceListView" class="invoice-subview">
+        <div class="page-header">
+          <div>
+            <h1>Invoices</h1>
+            <p class="subtitle">Invoices created from accepted quotes. Record payments and track balances.</p>
+          </div>
+        </div>
+
+        <div class="quotes-toolbar">
+          <input type="text" id="invoiceSearch" class="search-input" placeholder="Search by client or invoice number…">
+          <div class="sort-control">
+            <label for="invoiceStatusFilter">Status</label>
+            <select id="invoiceStatusFilter">
+              <option value="all">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="partially_paid">Partially paid</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card quotes-list-card">
+          <div id="invoiceList" class="quotes-list">
+            <p class="placeholder">Loading invoices…</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="invoiceDetailView" class="invoice-subview">
+        <div class="page-header quotes-header">
+          <div>
+            <h1 id="invoiceDetailNumber">Invoice</h1>
+            <span id="invoiceDetailStatus" class="badge">sent</span>
+            <p class="subtitle">Created from an accepted quote.</p>
+          </div>
+          <div class="detail-actions">
+            <div class="status-change">
+              <label for="invoiceDetailStatusSelect">Status</label>
+              <select id="invoiceDetailStatusSelect">
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+              </select>
+            </div>
+            <button type="button" id="invoiceExportBtn" class="btn btn-secondary">Download PDF</button>
+            <button type="button" id="invoiceRecordPaymentBtn" class="btn btn-primary">Record Payment</button>
+            <button type="button" id="invoiceBackBtn" class="btn btn-secondary">Back to invoices</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="detail-meta">
+            <div class="detail-field">
+              <span class="detail-label">Client</span>
+              <span id="invoiceDetailClient" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Invoice date</span>
+              <span id="invoiceDetailDate" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Due date</span>
+              <span id="invoiceDetailDue" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Source quote</span>
+              <span id="invoiceDetailQuote" class="detail-value">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Line items</h2>
+          <div class="items-table-wrap">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th class="col-description">Description</th>
+                  <th class="col-qty">Qty</th>
+                  <th class="col-price">Unit price</th>
+                  <th class="col-total">Line total</th>
+                </tr>
+              </thead>
+              <tbody id="invoiceDetailItems"></tbody>
+            </table>
+          </div>
+
+          <div class="totals-panel">
+            <div class="total-row">
+              <span>Subtotal</span>
+              <span id="invoiceDetailSubtotal" class="total-value">0.00</span>
+            </div>
+            <div class="total-row">
+              <span>Discount</span>
+              <span id="invoiceDetailDiscount" class="total-value">0.00</span>
+            </div>
+            <div class="total-row">
+              <span>Tax</span>
+              <span id="invoiceDetailTax" class="total-value">0.00</span>
+            </div>
+            <div class="total-row grand-total">
+              <span>Total</span>
+              <span id="invoiceDetailTotal" class="total-value">0.00</span>
+            </div>
+            <div class="total-row">
+              <span>Amount paid</span>
+              <span id="invoiceDetailPaid" class="total-value">0.00</span>
+            </div>
+            <div class="total-row">
+              <span>Balance due</span>
+              <span id="invoiceDetailBalance" class="total-value">0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Terms</h2>
+          <p id="invoiceDetailTerms" class="detail-terms">—</p>
+        </div>
+
+        <div class="card">
+          <h2>Payment history</h2>
+          <div id="invoicePaymentHistory" class="payments-list">
+            <p class="empty">No payments recorded yet.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-settings" class="page">
+      <div class="page-header">
+        <h1>Company Profile / Settings</h1>
+        <p class="subtitle">This information appears on every quote and invoice you generate. Save it once; edit any time.</p>
+      </div>
+
+      <form id="settingsForm" class="settings-form" novalidate>
+        <div class="card">
+          <h2>Business details</h2>
+
+          <div class="form-row">
+            <div class="field field-required">
+              <label for="business_name">Business name</label>
+              <input type="text" id="business_name" name="business_name" autocomplete="off">
+              <span class="field-error" data-error-for="business_name"></span>
+            </div>
+
+            <div class="field">
+              <label for="tax_id">Tax ID / registration number</label>
+              <input type="text" id="tax_id" name="tax_id" placeholder="Optional">
+              <span class="field-error" data-error-for="tax_id"></span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Logo</label>
+            <div class="logo-upload">
+              <img id="logoPreview" class="logo-preview hidden" alt="Company logo">
+              <div class="logo-actions">
+                <button type="button" id="chooseLogoBtn" class="btn btn-secondary">Choose logo…</button>
+                <button type="button" id="removeLogoBtn" class="btn btn-ghost hidden">Remove logo</button>
+                <span class="logo-hint">PNG, JPG, GIF, WEBP or SVG. Stored locally.</span>
+              </div>
+            </div>
+            <input type="hidden" id="logo_path" name="logo_path">
+          </div>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="address_line1">Street address</label>
+              <input type="text" id="address_line1" name="address_line1">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="address_line2">Address line 2 (optional)</label>
+              <input type="text" id="address_line2" name="address_line2">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="city">City</label>
+              <input type="text" id="city" name="city">
+            </div>
+            <div class="field">
+              <label for="state">State / region</label>
+              <input type="text" id="state" name="state">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="postal_code">Postal code</label>
+              <input type="text" id="postal_code" name="postal_code">
+            </div>
+            <div class="field">
+              <label for="country">Country</label>
+              <input type="text" id="country" name="country">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Contact</h2>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="phone">Phone</label>
+              <input type="tel" id="phone" name="phone" placeholder="Optional">
+              <span class="field-error" data-error-for="phone"></span>
+            </div>
+            <div class="field">
+              <label for="email">Email</label>
+              <input type="email" id="email" name="email" placeholder="Optional">
+              <span class="field-error" data-error-for="email"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="website">Website</label>
+              <input type="url" id="website" name="website" placeholder="https://example.com — Optional">
+              <span class="field-error" data-error-for="website"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Payments</h2>
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="payment_details">Payment details</label>
+              <textarea id="payment_details" name="payment_details" rows="3" placeholder="e.g. Bank: Acme Bank, Account: 1234567890, Sort code: 00-00-00"></textarea>
+              <span class="hint">Shown on invoice PDFs. Include bank account details or how the client should pay (optional).</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Defaults</h2>
+
+          <div class="form-row">
+            <div class="field field-required">
+              <label for="default_currency">Default currency</label>
+              <select id="default_currency" name="default_currency"></select>
+              <span class="field-error" data-error-for="default_currency"></span>
+            </div>
+
+            <div class="field">
+              <label for="default_tax_rate">Default tax rate (%)</label>
+              <input type="number" id="default_tax_rate" name="default_tax_rate" min="0" max="100" step="0.01" value="0">
+              <span class="field-error" data-error-for="default_tax_rate"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="default_terms">Default payment terms</label>
+              <input type="text" id="default_terms" name="default_terms" placeholder="e.g. Payment due within 14 days">
+              <span class="hint">Pre-fills on new invoices. Can be overridden per invoice.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Numbering</h2>
+          <p class="subtitle">Numbers are assigned automatically and won't repeat. Start numbers set where counting begins.</p>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="invoice_prefix">Invoice prefix</label>
+              <input type="text" id="invoice_prefix" name="invoice_prefix" value="INV-">
+              <span class="field-error" data-error-for="invoice_prefix"></span>
+            </div>
+            <div class="field">
+              <label for="invoice_start_number">Invoice start number</label>
+              <input type="number" id="invoice_start_number" name="invoice_start_number" min="1" step="1" value="1">
+              <span class="field-error" data-error-for="invoice_start_number"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="quote_prefix">Quote prefix</label>
+              <input type="text" id="quote_prefix" name="quote_prefix" value="Q-">
+              <span class="field-error" data-error-for="quote_prefix"></span>
+            </div>
+            <div class="field">
+              <label for="quote_start_number">Quote start number</label>
+              <input type="number" id="quote_start_number" name="quote_start_number" min="1" step="1" value="1">
+              <span class="field-error" data-error-for="quote_start_number"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Backup &amp; Restore</h2>
+          <p class="subtitle">Export all of your data into a single file, or restore from an earlier backup. Backups include clients, quotes, invoices, payments, company settings, and your logo.</p>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="exportBackupBtn">Export</label>
+              <button type="button" id="exportBackupBtn" class="btn btn-secondary">Export Backup</button>
+              <span class="hint">Saves everything as one file you can keep anywhere (USB drive, cloud folder, etc.).</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="restoreBackupBtn">Restore</label>
+              <button type="button" id="restoreBackupBtn" class="btn btn-ghost">Restore from Backup</button>
+              <span class="hint">Replaces current data with the contents of a previous backup. A timestamped copy of your current data is saved first.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save settings</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <div id="busyOverlay" class="busy-overlay hidden" aria-live="polite">
+    <span class="busy-spinner" aria-hidden="true"></span>
+    <span id="busyLabel">Working…</span>
+  </div>
+
+  <div id="confirmModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="confirmModalTitle">Are you sure?</h2>
+        <button type="button" class="modal-close" id="confirmModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmModalMessage"></p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="confirmCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="confirmOkBtn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="clientModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="clientModalTitle">Add Client</h2>
+        <button type="button" class="modal-close" id="clientModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="clientForm" class="modal-form" novalidate>
+        <input type="hidden" id="clientId" name="id">
+        <div class="field field-required">
+          <label for="clientName">Name</label>
+          <input type="text" id="clientName" name="name" autocomplete="off">
+          <span class="field-error" data-error-for="name"></span>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="clientCompany">Company (optional)</label>
+            <input type="text" id="clientCompany" name="company_name" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="clientEmail">Email</label>
+            <input type="email" id="clientEmail" name="email" autocomplete="off">
+            <span class="field-error" data-error-for="email"></span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="clientPhone">Phone</label>
+            <input type="tel" id="clientPhone" name="phone" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="field field-span-2">
+          <label for="clientAddress1">Billing address</label>
+          <input type="text" id="clientAddress1" name="address_line1" placeholder="Street address" autocomplete="off">
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <input type="text" id="clientAddress2" name="address_line2" placeholder="Address line 2 (optional)" autocomplete="off">
+          </div>
+          <div class="field">
+            <input type="text" id="clientCity" name="city" placeholder="City" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <input type="text" id="clientState" name="state" placeholder="State / region" autocomplete="off">
+          </div>
+          <div class="field">
+            <input type="text" id="clientPostal" name="postal_code" placeholder="Postal code" autocomplete="off">
+          </div>
+        </div>
+        <div class="field field-span-2">
+          <input type="text" id="clientCountry" name="country" placeholder="Country" autocomplete="off">
+        </div>
+
+        <div class="field field-span-2">
+          <label for="clientNotes">Notes (optional)</label>
+          <textarea id="clientNotes" name="notes" rows="3" placeholder="Free text about this client"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="clientCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="clientSubmitBtn">Save client</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="clientDeleteDialog" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Cannot delete this client</h2>
+        <button type="button" class="modal-close" id="clientDeleteClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="clientDeleteMessage"></p>
+        <p class="hint">The client's historical quotes and invoices will be fully preserved if you archive them. Archived clients are hidden from the main list and can no longer be selected for new quotes.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="clientDeleteCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="clientDeleteArchive">Archive client</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="paymentModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="paymentModalTitle">Record Payment</h2>
+        <button type="button" class="modal-close" id="paymentModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="paymentForm" class="modal-form" novalidate>
+        <div class="field">
+          <label id="paymentBalanceLabel">Balance due</label>
+          <p id="paymentBalanceDisplay" class="payment-balance">—</p>
+        </div>
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="paymentAmount">Amount</label>
+            <input type="number" id="paymentAmount" name="amount" min="0" step="0.01" placeholder="0.00">
+            <span class="field-error" data-error-for="amount"></span>
+          </div>
+          <div class="field">
+            <label for="paymentDate">Date</label>
+            <input type="date" id="paymentDate" name="payment_date">
+            <span class="field-error" data-error-for="payment_date"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="paymentMethod">Method</label>
+          <select id="paymentMethod" name="payment_method">
+            <option value="">Select method (optional)</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Cash">Cash</option>
+            <option value="Card">Card</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="paymentReference">Reference (optional)</label>
+          <input type="text" id="paymentReference" name="reference_number" autocomplete="off" placeholder="e.g. Bank ref or check number">
+        </div>
+        <div class="field">
+          <label for="paymentNotes">Notes (optional)</label>
+          <textarea id="paymentNotes" name="notes" rows="2" placeholder="Optional notes about this payment"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="paymentCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="paymentSubmitBtn">Record payment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="restoreModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Restore backup</h2>
+        <button type="button" class="modal-close" id="restoreModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="restore-warning">This will <strong>replace all current data</strong> — clients, quotes, invoices, payments, and company settings — with the contents of the backup:</p>
+        <p id="restoreFileInfo" class="restore-file-info"></p>
+        <p class="restore-note">A timestamped copy of your <strong>current</strong> data will be saved automatically first, so a mistaken restore can still be undone.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="restoreCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="restoreConfirmBtn">Restore now</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/currencies.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/clients.js"></script>
+  <script src="js/quotes.js"></script>
+  <script src="js/invoices.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
