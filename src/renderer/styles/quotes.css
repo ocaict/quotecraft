@@ -56,11 +56,41 @@
   border-bottom: none;
 }
 
-.col-description { width: 45%; }
-.col-qty { width: 10%; }
-.col-price { width: 15%; }
-.col-total { width: 15%; }
-.col-remove { width: 15%; text-align: right; }
+.col-description { width: 30%; }
+.col-qty { width: 8%; }
+.col-price { width: 13%; }
+.col-line-discount { width: 15%; }
+.col-tax { width: 10%; }
+.col-total { width: 12%; }
+.col-remove { width: 12%; text-align: right; }
+
+.line-tax-input {
+  width: 100% !important;
+  min-width: 50px;
+  font-size: 13px !important;
+  padding: 7px 6px !important;
+}
+
+.tax-breakdown-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.tax-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tax-breakdown-row .tax-label {
+  font-size: 13px;
+}
+
+.tax-breakdown-row .tax-val {
+  font-variant-numeric: tabular-nums;
+}
 
 .item-row input {
   width: 100%;
@@ -77,6 +107,42 @@
 .item-row input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+}
+
+/* Line-item discount inline controls */
+.line-discount-wrap {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.line-disc-type {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 7px 4px;
+  font-size: 12px;
+  font-family: var(--font);
+  outline: none;
+  min-width: 58px;
+  cursor: pointer;
+}
+
+.line-disc-type:focus {
+  border-color: var(--accent);
+}
+
+.line-disc-value {
+  width: 60px !important;
+  min-width: 50px;
+  font-size: 13px !important;
+  padding: 7px 6px !important;
+}
+
+.line-disc-value:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .item-total {
@@ -250,3 +316,163 @@
 .status-change select:focus {
   border-color: var(--accent);
 }
+
+/* ---------- Quote Revision & Version History ---------- */
+.quote-version-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.version-banner-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.version-pills-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.version-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.version-pill.active {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.quote-old-version-notice {
+  background: rgba(210, 153, 34, 0.12);
+  border: 1px solid rgba(210, 153, 34, 0.4);
+  color: #e3b341;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quote-version-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(88, 166, 255, 0.12);
+  color: var(--accent);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ── Convert Quote Modal ── */
+.radio-options-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.radio-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.radio-card:hover {
+  border-color: var(--accent);
+}
+
+.radio-card input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.radio-card-body strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 2px;
+  color: var(--text);
+}
+
+.convert-deposit-section {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.deposit-summary-box {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.deposit-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 3px 0;
+  color: var(--text-muted);
+}
+
+.deposit-summary-row strong {
+  color: var(--text);
+}
+
+.deposit-summary-row.highlight-deposit {
+  font-weight: 600;
+  color: var(--accent);
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
+  padding: 6px 0;
+  margin: 4px 0;
+}
+
+.deposit-summary-row.highlight-deposit strong {
+  color: var(--accent);
+  font-size: 14px;
+}
+

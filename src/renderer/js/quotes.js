@@ -11,8 +11,10 @@
   const formTitle = document.getElementById('quoteFormTitle');
   const clientSelect = document.getElementById('quoteClient');
   const clientSearch = document.getElementById('quoteClientSearch');
+  const quoteContactSelect = document.getElementById('quoteContact');
   const itemsBody = document.getElementById('itemsBody');
   const addLineItemBtn = document.getElementById('addLineItemBtn');
+  const quoteLibrarySelect = document.getElementById('quoteLibrarySelect');
   const termsArea = document.getElementById('quoteTerms');
   const saveQuoteBtn = document.getElementById('saveQuoteBtn');
 
@@ -22,7 +24,7 @@
   const taxRateInput = document.getElementById('taxRate');
   const totalsSubtotal = document.getElementById('totalsSubtotal');
   const totalsDiscount = document.getElementById('totalsDiscount');
-  const totalsTax = document.getElementById('totalsTax');
+  const totalsTaxBreakdown = document.getElementById('totalsTaxBreakdown');
   const totalsGrand = document.getElementById('totalsGrand');
 
   const newQuoteBtn = document.getElementById('newQuoteBtn');
@@ -38,10 +40,34 @@
   const detailConvertBtn = document.getElementById('detailConvertBtn');
   const detailConvertResult = document.getElementById('detailConvertResult');
 
+  // Convert to Invoice Modal elements
+  const convertQuoteModal = document.getElementById('convertQuoteModal');
+  const convertQuoteForm = document.getElementById('convertQuoteForm');
+  const convertQuoteModalClose = document.getElementById('convertQuoteModalClose');
+  const convertQuoteCancelBtn = document.getElementById('convertQuoteCancelBtn');
+  const convertQuoteSubmitBtn = document.getElementById('convertQuoteSubmitBtn');
+  const convertFullQuoteTotalDisplay = document.getElementById('convertFullQuoteTotalDisplay');
+  const convertDepositSection = document.getElementById('convertDepositSection');
+  const convertDepositType = document.getElementById('convertDepositType');
+  const convertDepositValue = document.getElementById('convertDepositValue');
+  const convertDepositValueLabel = document.getElementById('convertDepositValueLabel');
+  const depositSummaryQuoteTotal = document.getElementById('depositSummaryQuoteTotal');
+  const depositSummaryDueNow = document.getElementById('depositSummaryDueNow');
+  const depositSummaryRemainder = document.getElementById('depositSummaryRemainder');
+
+  let currentConvertQuote = null;
+
   let clients = [];
+  let libraryItems = [];
   let quotes = [];
+  const quoteCurrencySelect = document.getElementById('quoteCurrency');
+  const quoteExchangeRateInput = document.getElementById('quoteExchangeRate');
+  const quoteExchangeRateField = document.getElementById('quoteExchangeRateField');
+
   let rowCounter = 0;
   let currencyCode = 'USD';
+  let defaultCurrencyCode = 'USD';
+  let reportingCurrencyCode = 'USD';
   let editingQuoteId = null;
   let currentDetailId = null;
   let searchTerm = '';
@@ -86,22 +112,49 @@
     return window.QuoteCraftUtils.formatCurrency(cents / 100, currencyCode);
   }
 
-  function formatLineTotal(qty, price) {
-    return centsToFormatted(toCents(qty) * toCents(price) / 100);
+  // Compute a single line item's raw and net cents
+  function lineRawCents(qty, price) {
+    return Math.round(toCents(qty) * toCents(price) / 100);
+  }
+
+  function lineDiscountCents(rawCents, discType, discValue) {
+    if (!discType || discType === 'none' || isNaN(discValue) || discValue <= 0) return 0;
+    let dc = discType === 'fixed' ? toCents(discValue) : Math.round(rawCents * discValue / 100);
+    if (dc > rawCents) dc = rawCents;
+    return dc;
+  }
+
+  function lineNetCents(qty, price, discType, discValue) {
+    const raw = lineRawCents(qty, price);
+    return raw - lineDiscountCents(raw, discType, discValue);
+  }
+
+  function formatLineTotal(qty, price, discType, discValue) {
+    return centsToFormatted(lineNetCents(qty, price, discType, discValue));
+  }
+
+  // Helper: format a line-item discount label (e.g. "10%" or "-$20.00")
+  function formatLineDiscountLabel(discType, discValue, currency) {
+    if (!discType || discType === 'none' || !discValue || Number(discValue) <= 0) return '—';
+    if (discType === 'percent') return `${Number(discValue)}%`;
+    return `−${window.QuoteCraftUtils.formatCurrency(Number(discValue), currency || currencyCode)}`;
   }
 
   // ---------- Calculation ----------
+  // Net subtotal = sum of all line net totals (after per-line discounts)
   function totalCentsOfCurrentRows() {
     let subtotalCents = 0;
     for (const tr of Array.from(itemsBody.querySelectorAll('tr.item-row'))) {
       const qty = tr.querySelector('input[name="item_quantity"]').value;
       const price = tr.querySelector('input[name="item_unit_price"]').value;
-      subtotalCents += Math.round(toCents(qty) * toCents(price) / 100);
+      const dType = tr.querySelector('select[name="item_discount_type"]').value;
+      const dVal = Number(tr.querySelector('input[name="item_discount_value"]').value);
+      subtotalCents += lineNetCents(qty, price, dType, dVal);
     }
     return subtotalCents;
   }
 
-  function discountCentsOfCurrentRows() {
+  function docDiscountCentsOfCurrentRows() {
     const subtotalCents = totalCentsOfCurrentRows();
     const type = discountTypeSelect.value;
     const value = Number(discountValueInput.value);
@@ -111,12 +164,126 @@
     return dc;
   }
 
-  function taxCentsOfCurrentRows() {
+  // Compute tax breakdown across all tax brackets from line items
+  function taxBreakdownOfCurrentRows() {
     const subtotalCents = totalCentsOfCurrentRows();
-    const discountCents = discountCentsOfCurrentRows();
-    const rate = Number(taxRateInput.value);
-    if (isNaN(rate) || rate <= 0) return 0;
-    return Math.round((subtotalCents - discountCents) * rate / 100);
+    const docDiscCents = docDiscountCentsOfCurrentRows();
+    const ratio = subtotalCents > 0 ? (subtotalCents - docDiscCents) / subtotalCents : 1;
+
+    const brackets = new Map(); // rate -> { rate, netCents }
+
+    for (const tr of Array.from(itemsBody.querySelectorAll('tr.item-row'))) {
+      const qty = tr.querySelector('input[name="item_quantity"]').value;
+      const price = tr.querySelector('input[name="item_unit_price"]').value;
+      const dType = tr.querySelector('select[name="item_discount_type"]').value;
+      const dVal = Number(tr.querySelector('input[name="item_discount_value"]').value);
+      const taxInput = tr.querySelector('input[name="item_tax_rate"]');
+      const taxRateVal = taxInput && !isNaN(Number(taxInput.value)) ? Number(taxInput.value) : 0;
+      const netCents = lineNetCents(qty, price, dType, dVal);
+
+      if (!brackets.has(taxRateVal)) {
+        brackets.set(taxRateVal, { rate: taxRateVal, netCents: 0 });
+      }
+      brackets.get(taxRateVal).netCents += netCents;
+    }
+
+    const list = [];
+    let totalTaxCents = 0;
+    const sortedRates = Array.from(brackets.keys()).sort((a, b) => a - b);
+    for (const rate of sortedRates) {
+      const b = brackets.get(rate);
+      const taxableBasisCents = Math.round(b.netCents * ratio);
+      const taxCents = rate > 0 ? Math.round(taxableBasisCents * rate / 100) : 0;
+      totalTaxCents += taxCents;
+      list.push({
+        rate,
+        netCents: b.netCents,
+        taxableBasisCents,
+        taxCents,
+      });
+    }
+
+    return { list, totalTaxCents };
+  }
+
+  function computeTaxBreakdown(lineItems, subtotal, discountAmount) {
+    const subtotalCents = Math.round((Number(subtotal) || 0) * 100);
+    const docDiscCents = Math.round((Number(discountAmount) || 0) * 100);
+    const ratio = subtotalCents > 0 ? (subtotalCents - docDiscCents) / subtotalCents : 1;
+
+    const brackets = new Map();
+    for (const item of (lineItems || [])) {
+      const rate = Number(item.tax_rate) || 0;
+      const amountCents = Math.round((Number(item.amount) || 0) * 100);
+      if (!brackets.has(rate)) {
+        brackets.set(rate, { rate, netCents: 0 });
+      }
+      brackets.get(rate).netCents += amountCents;
+    }
+
+    const list = [];
+    let totalTaxCents = 0;
+    const sortedRates = Array.from(brackets.keys()).sort((a, b) => a - b);
+    for (const rate of sortedRates) {
+      const b = brackets.get(rate);
+      const taxableBasisCents = Math.round(b.netCents * ratio);
+      const taxCents = rate > 0 ? Math.round(taxableBasisCents * rate / 100) : 0;
+      totalTaxCents += taxCents;
+      list.push({
+        rate,
+        netCents: b.netCents,
+        taxableBasisCents,
+        taxCents,
+      });
+    }
+    return { list, totalTaxCents };
+  }
+
+  function renderTaxBreakdown(containerEl, breakdownList, totalTaxCents, currency) {
+    if (!containerEl) return;
+    containerEl.innerHTML = '';
+    const cur = currency || currencyCode;
+
+    if (!breakdownList || breakdownList.length === 0) {
+      const row = document.createElement('div');
+      row.className = 'tax-breakdown-row';
+      row.innerHTML = `<span class="tax-label">Tax</span><span class="tax-val">${window.QuoteCraftUtils.formatCurrency(0, cur)}</span>`;
+      containerEl.appendChild(row);
+      return;
+    }
+
+    if (breakdownList.length === 1 && breakdownList[0].rate === 0) {
+      const basisStr = window.QuoteCraftUtils.formatCurrency(breakdownList[0].taxableBasisCents / 100, cur);
+      const row = document.createElement('div');
+      row.className = 'tax-breakdown-row';
+      row.innerHTML = `<span class="tax-label">Tax-exempt (0% on ${basisStr})</span><span class="tax-val">${window.QuoteCraftUtils.formatCurrency(0, cur)}</span>`;
+      containerEl.appendChild(row);
+      return;
+    }
+
+    for (const item of breakdownList) {
+      const row = document.createElement('div');
+      row.className = 'tax-breakdown-row';
+      const basisStr = window.QuoteCraftUtils.formatCurrency(item.taxableBasisCents / 100, cur);
+      const taxStr = window.QuoteCraftUtils.formatCurrency(item.taxCents / 100, cur);
+      if (item.rate === 0) {
+        row.innerHTML = `<span class="tax-label">Tax-exempt (0% on ${basisStr})</span><span class="tax-val">${taxStr}</span>`;
+      } else {
+        row.innerHTML = `<span class="tax-label">Tax (${item.rate}% on ${basisStr})</span><span class="tax-val">${taxStr}</span>`;
+      }
+      containerEl.appendChild(row);
+    }
+
+    if (breakdownList.length > 1) {
+      const totalRow = document.createElement('div');
+      totalRow.className = 'tax-breakdown-row';
+      totalRow.style.fontWeight = '600';
+      totalRow.style.borderTop = '1px dashed var(--border)';
+      totalRow.style.paddingTop = '4px';
+      totalRow.style.marginTop = '2px';
+      totalRow.innerHTML = `<span class="tax-label">Total Tax</span><span class="tax-val">${window.QuoteCraftUtils.formatCurrency(totalTaxCents / 100, cur)}</span>`;
+      containerEl.appendChild(totalRow);
+    }
   }
 
   function centsToValue(cents) {
@@ -124,14 +291,24 @@
   }
 
   function recalcTotals() {
+    for (const tr of Array.from(itemsBody.querySelectorAll('tr.item-row'))) {
+      const qty = tr.querySelector('input[name="item_quantity"]')?.value || 0;
+      const price = tr.querySelector('input[name="item_unit_price"]')?.value || 0;
+      const dType = tr.querySelector('select[name="item_discount_type"]')?.value || 'none';
+      const dVal = Number(tr.querySelector('input[name="item_discount_value"]')?.value) || 0;
+      const tdTotal = tr.querySelector('td.item-total');
+      if (tdTotal) {
+        tdTotal.textContent = formatLineTotal(qty, price, dType, dVal);
+      }
+    }
     const subtotalCents = totalCentsOfCurrentRows();
-    const discountCents = discountCentsOfCurrentRows();
-    const taxCents = taxCentsOfCurrentRows();
-    const grandCents = subtotalCents - discountCents + taxCents;
+    const discountCents = docDiscountCentsOfCurrentRows();
+    const { list, totalTaxCents } = taxBreakdownOfCurrentRows();
+    const grandCents = subtotalCents - discountCents + totalTaxCents;
 
     totalsSubtotal.textContent = centsToFormatted(subtotalCents);
     totalsDiscount.textContent = centsToFormatted(discountCents);
-    totalsTax.textContent = centsToFormatted(taxCents);
+    renderTaxBreakdown(totalsTaxBreakdown, list, totalTaxCents, currencyCode);
     totalsGrand.textContent = centsToFormatted(grandCents);
   }
 
@@ -194,6 +371,74 @@
     }
   }
 
+  // ---------- Client Contacts ----------
+  async function populateContactsForClient(clientId, selectedContactId) {
+    if (!quoteContactSelect) return;
+    quoteContactSelect.innerHTML = '<option value="">Default / No specific contact</option>';
+
+    if (!clientId) return;
+
+    try {
+      const res = await window.electronAPI.listContacts(clientId);
+      if (res.ok && Array.isArray(res.contacts) && res.contacts.length > 0) {
+        let defaultChoice = '';
+        res.contacts.forEach((c) => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          const rolePart = c.role ? ` — ${c.role}` : '';
+          const primaryTag = c.is_primary ? ' (Primary)' : '';
+          opt.textContent = `${c.name}${rolePart}${primaryTag}`;
+          quoteContactSelect.appendChild(opt);
+
+          if (c.is_primary && !defaultChoice) {
+            defaultChoice = String(c.id);
+          }
+        });
+
+        if (selectedContactId !== undefined && selectedContactId !== null) {
+          quoteContactSelect.value = String(selectedContactId);
+        } else if (defaultChoice) {
+          quoteContactSelect.value = defaultChoice;
+        } else if (res.contacts.length > 0) {
+          // Default to first contact if none marked primary
+          quoteContactSelect.value = String(res.contacts[0].id);
+        }
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  // ---------- Library items ----------
+  function populateLibrarySelect() {
+    if (!quoteLibrarySelect) return;
+    quoteLibrarySelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '+ Add from Library…';
+    quoteLibrarySelect.appendChild(placeholder);
+
+    for (const item of libraryItems) {
+      const opt = document.createElement('option');
+      opt.value = item.id;
+      const formattedPrice = window.QuoteCraftUtils.formatCurrency(item.unit_price, currencyCode);
+      opt.textContent = `${item.name} (${formattedPrice})`;
+      quoteLibrarySelect.appendChild(opt);
+    }
+  }
+
+  async function loadLibraryItems() {
+    try {
+      const res = await window.electronAPI.listItems();
+      if (res.ok) {
+        libraryItems = res.items || [];
+        populateLibrarySelect();
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
   // ---------- Line items ----------
   function createLineItemRow(data) {
     data = data || {};
@@ -232,9 +477,62 @@
     priceInput.value = data.unit_price !== undefined && data.unit_price !== null ? data.unit_price : '';
     tdPrice.appendChild(priceInput);
 
+    // ── Line-item discount cell ──
+    const tdDisc = document.createElement('td');
+    tdDisc.className = 'cell-line-discount';
+    const discWrap = document.createElement('div');
+    discWrap.className = 'line-discount-wrap';
+
+    const discTypeSelect = document.createElement('select');
+    discTypeSelect.name = 'item_discount_type';
+    discTypeSelect.className = 'line-disc-type';
+    discTypeSelect.innerHTML = '<option value="none">None</option><option value="percent">%</option><option value="fixed">Fixed</option>';
+    discTypeSelect.value = data.discount_type || 'none';
+
+    const discValueInput = document.createElement('input');
+    discValueInput.type = 'number';
+    discValueInput.name = 'item_discount_value';
+    discValueInput.className = 'line-disc-value';
+    discValueInput.min = '0';
+    discValueInput.step = '0.01';
+    discValueInput.placeholder = '0';
+    discValueInput.value = (data.discount_value !== undefined && data.discount_value !== null && data.discount_type && data.discount_type !== 'none') ? data.discount_value : '';
+    discValueInput.disabled = !data.discount_type || data.discount_type === 'none';
+
+    discTypeSelect.addEventListener('change', () => {
+      const isNone = discTypeSelect.value === 'none';
+      discValueInput.disabled = isNone;
+      if (isNone) discValueInput.value = '';
+      recalc();
+    });
+
+    discWrap.appendChild(discTypeSelect);
+    discWrap.appendChild(discValueInput);
+    tdDisc.appendChild(discWrap);
+
+    // ── Line-item tax rate cell ──
+    const tdTax = document.createElement('td');
+    tdTax.className = 'cell-tax';
+    const taxInput = document.createElement('input');
+    taxInput.type = 'number';
+    taxInput.name = 'item_tax_rate';
+    taxInput.className = 'line-tax-input';
+    taxInput.min = '0';
+    taxInput.max = '100';
+    taxInput.step = '0.01';
+    taxInput.placeholder = '0';
+    if (data.tax_rate !== undefined && data.tax_rate !== null && data.tax_rate !== '') {
+      taxInput.value = data.tax_rate;
+    } else if (taxRateInput && taxRateInput.value !== '') {
+      taxInput.value = taxRateInput.value;
+    } else {
+      taxInput.value = '0';
+    }
+    tdTax.appendChild(taxInput);
+
     const tdTotal = document.createElement('td');
     tdTotal.className = 'item-total';
-    tdTotal.textContent = formatLineTotal(qtyInput.value, priceInput.value);
+    tdTotal.textContent = formatLineTotal(qtyInput.value, priceInput.value, discTypeSelect.value, Number(discValueInput.value));
 
     const tdRemove = document.createElement('td');
     tdRemove.className = 'col-remove';
@@ -248,15 +546,19 @@
     tr.appendChild(tdDesc);
     tr.appendChild(tdQty);
     tr.appendChild(tdPrice);
+    tr.appendChild(tdDisc);
+    tr.appendChild(tdTax);
     tr.appendChild(tdTotal);
     tr.appendChild(tdRemove);
 
     const recalc = () => {
-      tdTotal.textContent = formatLineTotal(qtyInput.value, priceInput.value);
+      tdTotal.textContent = formatLineTotal(qtyInput.value, priceInput.value, discTypeSelect.value, Number(discValueInput.value));
       recalcTotals();
     };
     qtyInput.addEventListener('input', recalc);
     priceInput.addEventListener('input', recalc);
+    discValueInput.addEventListener('input', recalc);
+    taxInput.addEventListener('input', recalc);
 
     return tr;
   }
@@ -296,12 +598,56 @@
   }
 
   // ---------- Settings prefill ----------
+  function populateCurrencySelect(selectedCode) {
+    if (quoteCurrencySelect) {
+      window.prepareCurrencySelect(quoteCurrencySelect, selectedCode || defaultCurrencyCode);
+    }
+    updateExchangeRateVisibility();
+  }
+
+  function updateExchangeRateVisibility() {
+    if (!quoteExchangeRateField || !quoteCurrencySelect) return;
+    const selected = quoteCurrencySelect.value;
+    const baseCode = reportingCurrencyCode || defaultCurrencyCode || 'USD';
+    const label = quoteExchangeRateField.querySelector('label');
+    const hint = quoteExchangeRateField.querySelector('.hint');
+    if (label) {
+      label.textContent = `Exchange rate (${selected} to base ${baseCode})`;
+    }
+    if (hint) {
+      hint.textContent = `1 ${selected} = [rate] ${baseCode}. Used only for dashboard reporting.`;
+    }
+    if (selected === baseCode) {
+      quoteExchangeRateField.style.display = 'none';
+      quoteExchangeRateInput.value = '1';
+    } else {
+      quoteExchangeRateField.style.display = '';
+    }
+  }
+
+  if (quoteCurrencySelect) {
+    quoteCurrencySelect.addEventListener('change', () => {
+      currencyCode = quoteCurrencySelect.value;
+      updateExchangeRateVisibility();
+      recalcTotals();
+    });
+  }
+
   async function prefillFromSettings() {
     try {
       const res = await window.electronAPI.getCompanyProfile();
       if (!res.ok || !res.profile) return;
       const p = res.profile;
-      if (p.default_currency) currencyCode = p.default_currency;
+      if (p.default_currency) {
+        currencyCode = p.default_currency;
+        defaultCurrencyCode = p.default_currency;
+      }
+      if (p.reporting_currency) {
+        reportingCurrencyCode = p.reporting_currency;
+      } else if (p.default_currency) {
+        reportingCurrencyCode = p.default_currency;
+      }
+      populateCurrencySelect(currencyCode);
       if (p.default_tax_rate !== null && p.default_tax_rate !== undefined && taxRateInput.value === '') {
         taxRateInput.value = p.default_tax_rate;
       }
@@ -323,11 +669,18 @@
     form.reset();
     clientSearch.value = '';
     populateClientSelect('');
+    if (quoteContactSelect) {
+      quoteContactSelect.innerHTML = '<option value="">Default / No specific contact</option>';
+    }
     discountTypeSelect.value = 'none';
     updateDiscountControls();
     taxRateInput.value = '';
     termsArea.value = '';
     itemsBody.innerHTML = '';
+    currencyCode = defaultCurrencyCode;
+    populateCurrencySelect(defaultCurrencyCode);
+    if (quoteExchangeRateInput) quoteExchangeRateInput.value = '1';
+    updateExchangeRateVisibility();
     setDateDefaults();
     formTitle.textContent = 'New Quote';
   }
@@ -340,14 +693,24 @@
     showFormView();
   }
 
-  function loadQuoteIntoForm(quote) {
+  async function loadQuoteIntoForm(quote) {
     resetForm();
     editingQuoteId = quote.id;
     quoteIdInput.value = quote.id;
-    formTitle.textContent = `Edit ${quote.quote_number}`;
+
+    if (quote.status !== 'draft') {
+      const nextV = (quote.version || 1) + 1;
+      formTitle.textContent = `Edit ${quote.quote_number} (Creates Revision v${nextV})`;
+      saveQuoteBtn.textContent = 'Save as new revision';
+    } else {
+      formTitle.textContent = `Edit ${quote.quote_number}`;
+      saveQuoteBtn.textContent = 'Save quote';
+    }
 
     populateClientSelect('');
     clientSelect.value = String(quote.client_id);
+    await populateContactsForClient(quote.client_id, quote.contact_id);
+
     if (form.elements['date_created']) form.elements['date_created'].value = quote.date_created || '';
     if (form.elements['valid_until']) form.elements['valid_until'].value = quote.valid_until || '';
 
@@ -356,12 +719,25 @@
     taxRateInput.value = quote.tax_rate || '';
     termsArea.value = quote.terms || '';
 
+    // Set currency & exchange rate from saved quote
+    if (quote.currency) {
+      currencyCode = quote.currency;
+      populateCurrencySelect(quote.currency);
+    }
+    if (quoteExchangeRateInput) {
+      quoteExchangeRateInput.value = quote.exchange_rate || 1;
+    }
+    updateExchangeRateVisibility();
+
     itemsBody.innerHTML = '';
     for (const item of quote.line_items || []) {
       itemsBody.appendChild(createLineItemRow({
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        discount_type: item.discount_type || 'none',
+        discount_value: item.discount_value || 0,
+        tax_rate: item.tax_rate !== undefined && item.tax_rate !== null ? item.tax_rate : 0,
       }));
     }
     if (!itemsBody.children.length) addEmptyRow();
@@ -466,24 +842,34 @@
 
   function collectQuoteData() {
     const subtotalCents = totalCentsOfCurrentRows();
-    const discountCents = discountCentsOfCurrentRows();
-    const taxCents = taxCentsOfCurrentRows();
-    const grandCents = subtotalCents - discountCents + taxCents;
+    const discountCents = docDiscountCentsOfCurrentRows();
+    const { totalTaxCents } = taxBreakdownOfCurrentRows();
+    const grandCents = subtotalCents - discountCents + totalTaxCents;
 
     const lineItems = Array.from(itemsBody.querySelectorAll('tr.item-row')).map((tr) => {
       const qty = Number(tr.querySelector('input[name="item_quantity"]').value);
       const price = Number(tr.querySelector('input[name="item_unit_price"]').value);
+      const dType = tr.querySelector('select[name="item_discount_type"]').value;
+      const dVal = Number(tr.querySelector('input[name="item_discount_value"]').value) || 0;
+      const itemTax = Number(tr.querySelector('input[name="item_tax_rate"]').value) || 0;
+      const rawCents = lineRawCents(qty, price);
+      const discCents = lineDiscountCents(rawCents, dType, dVal);
       return {
         description: tr.querySelector('input[name="item_description"]').value.trim(),
         quantity: qty,
         unit_price: price,
-        amount: Math.round(toCents(qty) * toCents(price) / 100) / 100,
+        tax_rate: itemTax,
+        discount_type: dType,
+        discount_value: dType === 'none' ? 0 : dVal,
+        discount_amount: centsToValue(discCents),
+        amount: centsToValue(rawCents - discCents),
       };
     });
 
     return {
       data: {
         client_id: clientSelect.value,
+        contact_id: quoteContactSelect && quoteContactSelect.value ? Number(quoteContactSelect.value) : null,
         date_created: form.elements['date_created'].value,
         valid_until: form.elements['valid_until'].value,
         discount_type: discountTypeSelect.value,
@@ -491,8 +877,10 @@
         tax_rate: Number(taxRateInput.value) || 0,
         subtotal: centsToValue(subtotalCents),
         discount: centsToValue(discountCents),
-        tax: centsToValue(taxCents),
+        tax: centsToValue(totalTaxCents),
         total: centsToValue(grandCents),
+        currency: quoteCurrencySelect ? quoteCurrencySelect.value : currencyCode,
+        exchange_rate: quoteExchangeRateInput ? Number(quoteExchangeRateInput.value) || 1.0 : 1.0,
         notes: '',
         terms: termsArea.value,
       },
@@ -510,11 +898,15 @@
         : await window.electronAPI.updateQuote(editingQuoteId, data, lineItems);
 
       if (res.ok) {
-        toast(editingQuoteId === null
-          ? `Quote ${res.quote.quote_number} saved as Draft.`
-          : 'Quote updated.', 'success');
+        if (res.isRevision) {
+          toast(`Revision ${res.quote.quote_number} created as Draft.`, 'success');
+        } else {
+          toast(editingQuoteId === null
+            ? `Quote ${res.quote.quote_number} saved as Draft.`
+            : 'Quote updated.', 'success');
+        }
         await loadQuotes();
-        showListView();
+        openDetail(res.quote.id);
       } else {
         if (res.errors && res.errors.general) toast(res.errors.general, 'error');
         else if (res.errors) {
@@ -759,10 +1151,23 @@
       : '';
 
     document.getElementById('detailClient').textContent = clientDisplayName(q.client);
+    const contactEl = document.getElementById('detailContact');
+    if (contactEl) {
+      if (q.contact) {
+        contactEl.textContent = q.contact.name + (q.contact.role ? ` (${q.contact.role})` : '');
+      } else {
+        contactEl.textContent = '—';
+      }
+    }
     document.getElementById('detailDate').textContent = window.QuoteCraftUtils.formatDate(q.date_created);
     document.getElementById('detailExpiry').textContent = window.QuoteCraftUtils.formatDate(q.valid_until);
 
     const currency = q.currency || currencyCode;
+    const detailCurrencyEl = document.getElementById('detailCurrency');
+    if (detailCurrencyEl) {
+      const cObj = (window.CURRENCIES || []).find(c => c.code === currency);
+      detailCurrencyEl.textContent = cObj ? `${currency} (${cObj.symbol})` : currency;
+    }
     const itemsBody = document.getElementById('detailItemsBody');
     itemsBody.innerHTML = '';
     for (const item of q.line_items || []) {
@@ -774,23 +1179,78 @@
       tdQty.textContent = item.quantity;
       const tdPrice = document.createElement('td');
       tdPrice.textContent = window.QuoteCraftUtils.formatCurrency(item.unit_price, currency);
+      const tdDisc = document.createElement('td');
+      tdDisc.textContent = formatLineDiscountLabel(item.discount_type, item.discount_value, currency);
+      const tdTax = document.createElement('td');
+      tdTax.textContent = Number(item.tax_rate) > 0 ? `${item.tax_rate}%` : '0% (Exempt)';
       const tdTotal = document.createElement('td');
       tdTotal.className = 'item-total';
       tdTotal.textContent = window.QuoteCraftUtils.formatCurrency(item.amount, currency);
       tr.appendChild(tdDesc);
       tr.appendChild(tdQty);
       tr.appendChild(tdPrice);
+      tr.appendChild(tdDisc);
+      tr.appendChild(tdTax);
       tr.appendChild(tdTotal);
       itemsBody.appendChild(tr);
     }
 
     document.getElementById('detailSubtotal').textContent = window.QuoteCraftUtils.formatCurrency(q.subtotal, currency);
     document.getElementById('detailDiscount').textContent = window.QuoteCraftUtils.formatCurrency(q.discount_amount, currency);
-    document.getElementById('detailTax').textContent = window.QuoteCraftUtils.formatCurrency(q.tax_amount, currency);
+
+    // Render detail tax breakdown
+    const detailBreakdownEl = document.getElementById('detailTaxBreakdown');
+    const { list: detailList, totalTaxCents: detailTaxTotal } = computeTaxBreakdown(q.line_items, q.subtotal, q.discount_amount);
+    renderTaxBreakdown(detailBreakdownEl, detailList, detailTaxTotal, currency);
+
     document.getElementById('detailTotal').textContent = window.QuoteCraftUtils.formatCurrency(q.total, currency);
     document.getElementById('detailTerms').textContent = q.terms || '—';
 
-    detailEditBtn.style.display = q.status === 'draft' ? '' : 'none';
+    // Version history banner & older revision alert
+    const versionBanner = document.getElementById('quoteVersionBanner');
+    const versionList = document.getElementById('quoteVersionList');
+    const oldNotice = document.getElementById('quoteOldVersionNotice');
+
+    const history = q.version_history || [];
+    if (history.length > 1) {
+      versionBanner.classList.remove('hidden');
+      versionList.innerHTML = '';
+      let latestItem = history[0];
+      history.forEach((v) => {
+        if (v.is_latest) latestItem = v;
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'version-pill' + (v.id === q.id ? ' active' : '');
+        const statusStr = v.status ? ` · ${formatQuoteStatus(v.status)}` : '';
+        const latestTag = v.is_latest ? ' (Latest)' : '';
+        pill.textContent = `v${v.version}${statusStr}${latestTag}`;
+        pill.addEventListener('click', () => openDetail(v.id));
+        versionList.appendChild(pill);
+      });
+
+      if (!q.is_latest && latestItem) {
+        oldNotice.classList.remove('hidden');
+        oldNotice.innerHTML = `
+          <span>You are viewing an older revision (<strong>v${q.version}</strong>). The latest active revision is <strong>v${latestItem.version}</strong>.</span>
+          <button type="button" class="btn btn-small btn-primary" id="btnViewLatestVersion">View Latest (v${latestItem.version})</button>
+        `;
+        const viewLatestBtn = oldNotice.querySelector('#btnViewLatestVersion');
+        if (viewLatestBtn) {
+          viewLatestBtn.addEventListener('click', () => openDetail(latestItem.id));
+        }
+      } else {
+        oldNotice.classList.add('hidden');
+        oldNotice.innerHTML = '';
+      }
+    } else {
+      versionBanner.classList.add('hidden');
+      oldNotice.classList.add('hidden');
+    }
+
+    // Allow editing any quote; if non-draft, editing creates a revision
+    detailEditBtn.style.display = '';
+    detailEditBtn.textContent = q.status === 'draft' ? 'Edit' : 'Edit (Create Revision)';
+
     detailConvertBtn.disabled = q.status !== 'accepted';
     if (q.status === 'accepted') {
       hideConvertResult();
@@ -799,7 +1259,7 @@
     }
   }
 
-  // ---------- Convert to invoice ----------
+  // ---------- Convert to invoice Modal & Logic ----------
   function showConvertResult(message, type) {
     detailConvertResult.textContent = message;
     detailConvertResult.className = 'convert-notice ' + (type === 'ok' ? 'notice-ok' : 'notice-hint');
@@ -810,37 +1270,136 @@
     detailConvertResult.textContent = '';
   }
 
-  async function handleConvert() {
+  function updateConvertDepositPreview() {
+    if (!currentConvertQuote) return;
+    const total = Number(currentConvertQuote.total) || 0;
+    const curr = currentConvertQuote.currency || currencyCode;
+    const depType = convertDepositType.value;
+    const rawVal = parseFloat(convertDepositValue.value) || 0;
+
+    let depAmount = 0;
+    if (depType === 'percent') {
+      convertDepositValueLabel.textContent = 'Deposit Percentage (%)';
+      convertDepositValue.placeholder = 'e.g. 30';
+      convertDepositValue.max = '99.99';
+      depAmount = Math.round((total * (rawVal / 100)) * 100) / 100;
+    } else {
+      convertDepositValueLabel.textContent = `Deposit Amount (${curr})`;
+      convertDepositValue.placeholder = '0.00';
+      convertDepositValue.removeAttribute('max');
+      depAmount = Math.round(rawVal * 100) / 100;
+    }
+
+    const remainder = Math.max(0, Math.round((total - depAmount) * 100) / 100);
+
+    depositSummaryQuoteTotal.textContent = window.QuoteCraftUtils.formatCurrency(total, curr);
+    depositSummaryDueNow.textContent = window.QuoteCraftUtils.formatCurrency(depAmount, curr);
+    depositSummaryRemainder.textContent = window.QuoteCraftUtils.formatCurrency(remainder, curr);
+  }
+
+  async function handleOpenConvertModal() {
     if (!currentDetailId) return;
-    const confirmed = await window.QuoteCraftUtils.confirmAction({
-      title: 'Convert to invoice?',
-      message: 'A numbered invoice will be created from this accepted quote. The two stay linked — updating the quote afterwards will not change the invoice.',
-      confirmText: 'Create Invoice',
-    });
-    if (!confirmed) return;
-    detailConvertBtn.disabled = true;
     try {
-      const res = await window.electronAPI.convertQuoteToInvoice(currentDetailId);
+      const res = await window.electronAPI.getQuote(currentDetailId);
+      if (!res.ok || !res.quote) {
+        toast('Could not load quote details.', 'error');
+        return;
+      }
+      currentConvertQuote = res.quote;
+      const curr = currentConvertQuote.currency || currencyCode;
+      const total = Number(currentConvertQuote.total) || 0;
+
+      convertFullQuoteTotalDisplay.textContent = window.QuoteCraftUtils.formatCurrency(total, curr);
+
+      // Reset form
+      convertQuoteForm.elements['conversion_type'].value = 'full';
+      convertDepositSection.classList.add('hidden');
+      convertDepositType.value = 'percent';
+      convertDepositValue.value = '30';
+      updateConvertDepositPreview();
+
+      convertQuoteModal.classList.remove('hidden');
+    } catch (e) {
+      toast('Error opening convert dialog: ' + e.message, 'error');
+    }
+  }
+
+  function closeConvertModal() {
+    convertQuoteModal.classList.add('hidden');
+    currentConvertQuote = null;
+  }
+
+  async function handleConvertSubmit(e) {
+    e.preventDefault();
+    if (!currentConvertQuote || !currentDetailId) return;
+
+    const conversionType = convertQuoteForm.elements['conversion_type'].value;
+    const depositType = convertDepositType.value;
+    const depositValue = parseFloat(convertDepositValue.value);
+
+    if (conversionType === 'deposit') {
+      if (!(depositValue > 0)) {
+        toast('Please enter a valid deposit percentage or amount.', 'error');
+        return;
+      }
+      const total = Number(currentConvertQuote.total) || 0;
+      if (depositType === 'percent' && depositValue >= 100) {
+        toast('Deposit percentage must be less than 100%. Choose Full Invoice for 100%.', 'error');
+        return;
+      }
+      if (depositType === 'fixed' && depositValue >= total) {
+        toast('Deposit amount must be less than the quote total.', 'error');
+        return;
+      }
+    }
+
+    convertQuoteSubmitBtn.disabled = true;
+    try {
+      const res = await window.electronAPI.convertQuoteToInvoice(currentDetailId, {
+        conversion_type: conversionType,
+        deposit_type: depositType,
+        deposit_value: depositValue,
+      });
+
       if (res.ok) {
-        showConvertResult(`Invoice ${res.invoice.invoice_number} created from this quote.`, 'ok');
-        toast('Quote converted to invoice.', 'success');
+        closeConvertModal();
+        const typeLabel = res.invoice.invoice_type === 'deposit' ? 'Deposit Invoice' : 'Invoice';
+        showConvertResult(`${typeLabel} ${res.invoice.invoice_number} created from this quote.`, 'ok');
+        toast(`${typeLabel} ${res.invoice.invoice_number} created successfully.`, 'success');
         await loadQuotes();
         openDetail(currentDetailId);
       } else {
-        detailConvertBtn.disabled = false;
         if (res.invoice) {
+          closeConvertModal();
           showConvertResult(`This quote has already been converted — invoice ${res.invoice.invoice_number}.`, 'hint');
         } else {
-          showConvertResult(res.errors && res.errors.general ? res.errors.general : 'Could not convert quote.', 'hint');
+          toast(res.errors && res.errors.general ? res.errors.general : 'Could not convert quote.', 'error');
         }
-        toast(res.errors && res.errors.general ? res.errors.general : 'Could not convert quote.', 'error');
       }
-    } catch (e) {
-      detailConvertBtn.disabled = false;
-      showConvertResult('Could not convert quote: ' + e.message, 'hint');
-      toast('Could not convert quote: ' + e.message, 'error');
+    } catch (err) {
+      toast('Could not convert quote: ' + err.message, 'error');
+    } finally {
+      convertQuoteSubmitBtn.disabled = false;
     }
   }
+
+  // Convert modal radio changes
+  convertQuoteForm.elements['conversion_type'].forEach?.((radio) => {
+    radio.addEventListener('change', () => {
+      if (convertQuoteForm.elements['conversion_type'].value === 'deposit') {
+        convertDepositSection.classList.remove('hidden');
+        updateConvertDepositPreview();
+      } else {
+        convertDepositSection.classList.add('hidden');
+      }
+    });
+  });
+
+  convertDepositType.addEventListener('change', updateConvertDepositPreview);
+  convertDepositValue.addEventListener('input', updateConvertDepositPreview);
+  convertQuoteForm.addEventListener('submit', handleConvertSubmit);
+  convertQuoteModalClose.addEventListener('click', closeConvertModal);
+  convertQuoteCancelBtn.addEventListener('click', closeConvertModal);
 
   // ---------- Events ----------
   newQuoteBtn.addEventListener('click', openNewQuote);
@@ -868,6 +1427,7 @@
 
   clientSelect.addEventListener('change', () => {
     clearFieldError('client_id');
+    populateContactsForClient(clientSelect.value);
   });
 
   discountTypeSelect.addEventListener('change', () => {
@@ -906,7 +1466,7 @@
     changeStatus(currentDetailId, detailStatusSelect.value);
   });
 
-  detailConvertBtn.addEventListener('click', handleConvert);
+  detailConvertBtn.addEventListener('click', handleOpenConvertModal);
 
   window.addEventListener('qc-open-quote', (e) => {
     if (e.detail) openDetail(e.detail);
@@ -932,9 +1492,42 @@
     }
   });
 
+  if (quoteLibrarySelect) {
+    quoteLibrarySelect.addEventListener('change', () => {
+      const selectedId = Number(quoteLibrarySelect.value);
+      if (!selectedId) return;
+      const item = libraryItems.find((i) => i.id === selectedId);
+      if (item) {
+        const desc = item.description && item.description.trim()
+          ? `${item.name} - ${item.description}`
+          : item.name;
+        const row = createLineItemRow({
+          description: desc,
+          quantity: 1,
+          unit_price: item.unit_price,
+          tax_rate: (item.default_tax_rate !== null && item.default_tax_rate !== undefined) ? item.default_tax_rate : (taxRateInput.value || 0),
+        });
+        itemsBody.appendChild(row);
+        recalcTotals();
+      }
+      quoteLibrarySelect.value = '';
+    });
+  }
+
+  window.addEventListener('qc-library-updated', () => {
+    loadLibraryItems();
+  });
+
+  document.addEventListener('pagechange', (e) => {
+    if (e.detail === 'quotes') {
+      loadLibraryItems();
+      loadClients();
+    }
+  });
+
   // ---------- Init ----------
   async function init() {
-    await Promise.all([loadClients(), loadQuotes()]);
+    await Promise.all([loadClients(), loadQuotes(), loadLibraryItems()]);
     prefillFromSettings();
     showListView();
   }

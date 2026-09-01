@@ -39,7 +39,8 @@
 .page {
   display: none;
   padding: 32px 40px;
-  max-width: 900px;
+  max-width: 1400px;
+  width: 100%;
 }
 
 .page.active {
@@ -273,6 +274,38 @@
   color: #8b949e;
 }
 
+.badge.status-active {
+  background: rgba(63, 185, 80, 0.18);
+  color: #3fb950;
+}
+
+.badge.status-paused {
+  background: rgba(139, 148, 158, 0.18);
+  color: #8b949e;
+}
+
+.badge.status-cancelled {
+  background: rgba(248, 81, 73, 0.18);
+  color: #f85149;
+}
+
+.badge.status-completed {
+  background: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+}
+
+.badge.badge-deposit {
+  background: rgba(210, 153, 34, 0.18);
+  color: #d29922;
+  border: 1px solid rgba(210, 153, 34, 0.35);
+}
+
+.badge.badge-final {
+  background: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+  border: 1px solid rgba(88, 166, 255, 0.35);
+}
+
 /* ---------- Money alignment in tables ---------- */
 .cell-number {
   text-align: right;
@@ -311,3 +344,77 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ── Contacts sub-section inside client modal ─────────────────────────── */
+.contacts-section {
+  margin-top: 8px;
+}
+
+.contacts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.contacts-header label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contact-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.contact-row input {
+  font-size: 13px;
+  padding: 5px 8px;
+  border-radius: 4px;
+}
+
+.contact-row .primary-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.contact-row .primary-wrap input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+.contact-row .btn-remove-contact {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+
+.contact-row .btn-remove-contact:hover {
+  color: var(--danger);
+  background: rgba(255,80,80,0.08);
+}
+

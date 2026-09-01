@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="styles/components.css">
   <link rel="stylesheet" href="styles/settings.css">
   <link rel="stylesheet" href="styles/clients.css">
+  <link rel="stylesheet" href="styles/items.css">
   <link rel="stylesheet" href="styles/quotes.css">
   <link rel="stylesheet" href="styles/invoices.css">
   <link rel="stylesheet" href="styles/dashboard.css">
@@ -20,6 +21,7 @@
     <nav id="nav">
       <a href="#" data-page="dashboard" class="active">Dashboard</a>
       <a href="#" data-page="clients">Clients</a>
+      <a href="#" data-page="items">Items</a>
       <a href="#" data-page="quotes">Quotes</a>
       <a href="#" data-page="invoices">Invoices</a>
       <a href="#" data-page="settings">Settings</a>
@@ -37,6 +39,13 @@
           <button type="button" id="dashNewQuoteBtn" class="btn btn-primary">+ New Quote</button>
           <button type="button" id="dashNewInvoiceBtn" class="btn btn-secondary">New Invoice</button>
         </div>
+      </div>
+
+      <div id="dashboardRecurringBanner" class="quote-old-version-notice hidden" style="margin-bottom:20px;"></div>
+
+      <div id="dashboardCurrencyNotice" class="dashboard-currency-notice">
+        <span class="currency-notice-icon">ℹ️</span>
+        <span id="dashboardCurrencyNoticeText">Dashboard totals converted to reporting base currency (<strong id="dashBaseCurrencyCode">USD</strong>). Multi-currency totals are approximate conversions based on the rate entered at invoice time.</span>
       </div>
 
       <div class="dashboard-grid">
@@ -89,28 +98,230 @@
     </section>
 
     <section id="page-clients" class="page">
-      <div class="page-header clients-header">
-        <div>
-          <h1>Clients</h1>
-          <p class="subtitle">Manage the people and companies you send quotes and invoices to.</p>
+      <!-- Clients List Subview (default) -->
+      <div id="clientListView" class="client-subview active">
+        <div class="page-header clients-header">
+          <div>
+            <h1>Clients</h1>
+            <p class="subtitle">Manage the people and companies you send quotes and invoices to.</p>
+          </div>
+          <button type="button" id="addClientBtn" class="btn btn-primary">Add Client</button>
         </div>
-        <button type="button" id="addClientBtn" class="btn btn-primary">Add Client</button>
+
+        <div class="clients-toolbar">
+          <input type="text" id="clientSearch" class="search-input" placeholder="Search clients by name, email, company, tag…">
+          <div class="sort-control">
+            <label for="clientTagFilter">Tag</label>
+            <select id="clientTagFilter">
+              <option value="all">All tags</option>
+            </select>
+          </div>
+          <div class="sort-control">
+            <label for="clientSort">Sort by</label>
+            <select id="clientSort">
+              <option value="name">Name</option>
+              <option value="date">Date added</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card clients-table-card">
+          <div id="clientList" class="clients-list">
+            <p class="placeholder">Loading clients…</p>
+          </div>
+        </div>
       </div>
 
-      <div class="clients-toolbar">
-        <input type="text" id="clientSearch" class="search-input" placeholder="Search clients by name, email, company…">
+      <!-- Client Overview / Portal Subview -->
+      <div id="clientOverviewView" class="client-subview">
+        <div class="page-header clients-header">
+          <div>
+            <div class="overview-title-row">
+              <h1 id="overviewClientName">Client Overview</h1>
+              <div id="overviewTagsList" class="client-tags-list"></div>
+            </div>
+            <p id="overviewClientCompany" class="subtitle">—</p>
+          </div>
+          <div class="detail-actions">
+            <button type="button" id="overviewNewQuoteBtn" class="btn btn-primary">+ New Quote</button>
+            <button type="button" id="overviewEditBtn" class="btn btn-secondary">Edit Client</button>
+            <button type="button" id="overviewBackBtn" class="btn btn-secondary">Back to clients</button>
+          </div>
+        </div>
+
+        <!-- Financial KPI Summary Cards -->
+        <div class="client-kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">Total Billed</span>
+            <span id="overviewTotalBilled" class="kpi-value">0.00</span>
+            <span class="kpi-subtext">All historical invoices</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Total Paid</span>
+            <span id="overviewTotalPaid" class="kpi-value text-success">0.00</span>
+            <span class="kpi-subtext">Received payments</span>
+          </div>
+          <div class="kpi-card kpi-highlight">
+            <span class="kpi-label">Outstanding Balance</span>
+            <span id="overviewBalanceDue" class="kpi-value">0.00</span>
+            <span class="kpi-subtext">Currently owed</span>
+          </div>
+        </div>
+
+        <!-- Company & Contact Info Card -->
+        <div class="card">
+          <h2>Client Information</h2>
+          <div class="detail-meta">
+            <div class="detail-field">
+              <span class="detail-label">Email</span>
+              <span id="overviewEmail" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Phone</span>
+              <span id="overviewPhone" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Billing Address</span>
+              <span id="overviewAddress" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Client Notes</span>
+              <span id="overviewNotes" class="detail-value">—</span>
+            </div>
+          </div>
+
+          <div id="overviewContactsSection" class="overview-contacts-wrap">
+            <h3 style="font-size:14px;font-weight:600;margin:16px 0 8px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Contact Persons</h3>
+            <div id="overviewContactsList" class="contacts-grid"></div>
+          </div>
+        </div>
+
+        <!-- Project & Deposit Billing Chains Card -->
+        <div id="overviewChainsCard" class="card">
+          <div class="section-card-header">
+            <h2>Project &amp; Deposit Chains</h2>
+            <span id="overviewChainCount" class="badge">0 chains</span>
+          </div>
+          <p class="subtitle" style="margin-bottom:14px">Connected workflow from Quote ➔ Deposit Invoice ➔ Final Balance Invoice.</p>
+          <div id="overviewChainsList" class="chains-list-container">
+            <p class="empty" style="color:var(--text-muted);font-style:italic;padding:12px 0;">No connected billing chains for this client yet.</p>
+          </div>
+        </div>
+
+        <!-- Quote History Card -->
+        <div class="card">
+          <div class="section-card-header">
+            <h2>Quote History</h2>
+            <span id="overviewQuoteCount" class="badge">0 quotes</span>
+          </div>
+          <div id="overviewQuotesWrap" class="items-table-wrap">
+            <table class="data-table" id="overviewQuotesTable">
+              <thead>
+                <tr>
+                  <th>Quote #</th>
+                  <th>Date</th>
+                  <th>Valid until</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th class="th-actions">Action</th>
+                </tr>
+              </thead>
+              <tbody id="overviewQuotesBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Invoice History Card -->
+        <div class="card">
+          <div class="section-card-header">
+            <h2>Invoice History</h2>
+            <span id="overviewInvoiceCount" class="badge">0 invoices</span>
+          </div>
+          <div id="overviewInvoicesWrap" class="items-table-wrap">
+            <table class="data-table" id="overviewInvoicesTable">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Date</th>
+                  <th>Due date</th>
+                  <th>Total</th>
+                  <th>Paid</th>
+                  <th>Balance</th>
+                  <th>Status</th>
+                  <th class="th-actions">Action</th>
+                </tr>
+              </thead>
+              <tbody id="overviewInvoicesBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Credit Notes Card -->
+        <div class="card">
+          <div class="section-card-header">
+            <h2>Credit Notes</h2>
+            <span id="overviewCreditNoteCount" class="badge">0 credit notes</span>
+          </div>
+          <div id="overviewCreditNotesWrap" class="items-table-wrap">
+            <table class="data-table" id="overviewCreditNotesTable">
+              <thead>
+                <tr>
+                  <th>Credit Note #</th>
+                  <th>Related Invoice</th>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Reason</th>
+                  <th class="th-actions">Action</th>
+                </tr>
+              </thead>
+              <tbody id="overviewCreditNotesBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Activity & Notes Timeline Card -->
+        <div class="card">
+          <h2>Activity &amp; Notes Log</h2>
+          <p class="subtitle" style="margin-bottom:16px">Call notes, meeting summaries, and customer history.</p>
+
+          <form id="overviewNoteForm" class="note-composer-form">
+            <div class="field" style="margin-bottom:8px">
+              <textarea id="overviewNoteInput" rows="2" placeholder="Write a note about this client (e.g. Call summary, meeting follow-up)…"></textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end">
+              <button type="submit" id="overviewNoteSubmitBtn" class="btn btn-primary btn-small">+ Post Note</button>
+            </div>
+          </form>
+
+          <div id="overviewNotesTimeline" class="notes-timeline" style="margin-top:20px"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-items" class="page">
+      <div class="page-header items-header">
+        <div>
+          <h1>Line Item Library</h1>
+          <p class="subtitle">Saved products and services you can quickly insert into quotes and invoices.</p>
+        </div>
+        <button type="button" id="addItemBtn" class="btn btn-primary">+ Add Item</button>
+      </div>
+
+      <div class="items-toolbar">
+        <input type="text" id="itemSearch" class="search-input" placeholder="Search items by name or description…">
         <div class="sort-control">
-          <label for="clientSort">Sort by</label>
-          <select id="clientSort">
+          <label for="itemSort">Sort by</label>
+          <select id="itemSort">
             <option value="name">Name</option>
+            <option value="price">Unit Price</option>
             <option value="date">Date added</option>
           </select>
         </div>
       </div>
 
-      <div class="card clients-table-card">
-        <div id="clientList" class="clients-list">
-          <p class="placeholder">Loading clients…</p>
+      <div class="card items-table-card">
+        <div id="itemList" class="items-list">
+          <p class="placeholder">Loading items…</p>
         </div>
       </div>
     </section>
@@ -186,6 +397,16 @@
 
             <div class="form-row">
               <div class="field">
+                <label for="quoteContact">Contact person (optional)</label>
+                <select id="quoteContact" name="contact_id">
+                  <option value="">Default / No specific contact</option>
+                </select>
+                <span class="hint">Addresses this quote to a specific person at the client.</span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
                 <label for="quoteDate">Quote date</label>
                 <input type="date" id="quoteDate" name="date_created">
                 <span class="field-error" data-error-for="date_created"></span>
@@ -200,9 +421,30 @@
           </div>
 
           <div class="card">
+            <h2>Currency &amp; Exchange Rate</h2>
+            <div class="form-row">
+              <div class="field">
+                <label for="quoteCurrency">Currency</label>
+                <select id="quoteCurrency" name="currency"></select>
+                <span class="hint">Document currency. Defaults to your company setting.</span>
+              </div>
+              <div class="field" id="quoteExchangeRateField">
+                <label for="quoteExchangeRate">Exchange rate (to base currency)</label>
+                <input type="number" id="quoteExchangeRate" name="exchange_rate" min="0.0001" step="0.0001" value="1" placeholder="1.0000">
+                <span class="hint">Used only for dashboard reporting. 1.0 if same as default currency.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
             <div class="quote-items-header">
               <h2>Line items</h2>
-              <button type="button" id="addLineItemBtn" class="btn btn-secondary">Add Line Item</button>
+              <div class="quote-items-actions">
+                <select id="quoteLibrarySelect" class="select-library-item">
+                  <option value="">+ Add from Library…</option>
+                </select>
+                <button type="button" id="addLineItemBtn" class="btn btn-secondary">Add Line Item</button>
+              </div>
             </div>
 
             <div class="items-table-wrap">
@@ -212,6 +454,8 @@
                     <th class="col-description">Description</th>
                     <th class="col-qty">Qty</th>
                     <th class="col-price">Unit price</th>
+                    <th class="col-line-discount">Line discount</th>
+                    <th class="col-tax">Tax %</th>
                     <th class="col-total">Line total</th>
                     <th class="col-remove"></th>
                   </tr>
@@ -223,7 +467,8 @@
           </div>
 
           <div class="card">
-            <h2>Discount &amp; totals</h2>
+            <h2>Document-level discount &amp; totals</h2>
+            <span class="hint" style="display:block;margin-bottom:8px">This discount applies to the net subtotal (after any individual line item discounts above).</span>
 
             <div class="form-row">
               <div class="field">
@@ -240,10 +485,10 @@
                 <span class="field-error" data-error-for="discount_value"></span>
               </div>
               <div class="field">
-                <label for="taxRate">Tax rate (%)</label>
+                <label for="taxRate">Default Tax rate (%)</label>
                 <input type="number" id="taxRate" name="tax_rate" min="0" max="100" step="0.01" placeholder="0">
                 <span class="field-error" data-error-for="tax_rate"></span>
-                <span class="hint">Defaults to your tax rate in Settings. Editable per quote.</span>
+                <span class="hint">Applied to new rows by default. Editable per line item (0% for tax-exempt).</span>
               </div>
             </div>
 
@@ -256,10 +501,7 @@
                 <span>Discount</span>
                 <span id="totalsDiscount" class="total-value">0.00</span>
               </div>
-              <div class="total-row">
-                <span>Tax</span>
-                <span id="totalsTax" class="total-value">0.00</span>
-              </div>
+              <div id="totalsTaxBreakdown" class="tax-breakdown-list"></div>
               <div class="total-row grand-total">
                 <span>Grand total</span>
                 <span id="totalsGrand" class="total-value">0.00</span>
@@ -307,6 +549,12 @@
           </div>
         </div>
 
+        <div id="quoteOldVersionNotice" class="quote-old-version-notice hidden"></div>
+        <div id="quoteVersionBanner" class="quote-version-banner hidden">
+          <div class="version-banner-label">Version history:</div>
+          <div id="quoteVersionList" class="version-pills-list"></div>
+        </div>
+
         <div id="detailConvertResult" class="convert-notice hidden"></div>
         <div class="card">
           <div class="detail-meta">
@@ -315,12 +563,20 @@
               <span id="detailClient" class="detail-value">—</span>
             </div>
             <div class="detail-field">
+              <span class="detail-label">Contact</span>
+              <span id="detailContact" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
               <span class="detail-label">Quote date</span>
               <span id="detailDate" class="detail-value">—</span>
             </div>
             <div class="detail-field">
               <span class="detail-label">Expiry date</span>
               <span id="detailExpiry" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Currency</span>
+              <span id="detailCurrency" class="detail-value badge">—</span>
             </div>
           </div>
         </div>
@@ -334,6 +590,8 @@
                   <th class="col-description">Description</th>
                   <th class="col-qty">Qty</th>
                   <th class="col-price">Unit price</th>
+                  <th class="col-line-discount">Discount</th>
+                  <th class="col-tax">Tax</th>
                   <th class="col-total">Line total</th>
                 </tr>
               </thead>
@@ -350,12 +608,9 @@
               <span>Discount</span>
               <span id="detailDiscount" class="total-value">0.00</span>
             </div>
-            <div class="total-row">
-              <span>Tax</span>
-              <span id="detailTax" class="total-value">0.00</span>
-            </div>
+            <div id="detailTaxBreakdown" class="tax-breakdown-list"></div>
             <div class="total-row grand-total">
-              <span>Grand total</span>
+              <span>Total</span>
               <span id="detailTotal" class="total-value">0.00</span>
             </div>
           </div>
@@ -376,6 +631,8 @@
             <p class="subtitle">Invoices created from accepted quotes. Record payments and track balances.</p>
           </div>
         </div>
+
+        <div id="invoicesRecurringBanner" class="quote-old-version-notice hidden" style="margin-bottom:20px;"></div>
 
         <div class="quotes-toolbar">
           <input type="text" id="invoiceSearch" class="search-input" placeholder="Search by client or invoice number…">
@@ -415,6 +672,8 @@
               </select>
             </div>
             <button type="button" id="invoiceExportBtn" class="btn btn-secondary">Download PDF</button>
+            <button type="button" id="invoiceRecurringBtn" class="btn btn-secondary">Make Recurring</button>
+            <button type="button" id="invoiceIssueCreditBtn" class="btn btn-secondary">Issue Credit Note</button>
             <button type="button" id="invoiceRecordPaymentBtn" class="btn btn-primary">Record Payment</button>
             <button type="button" id="invoiceBackBtn" class="btn btn-secondary">Back to invoices</button>
           </div>
@@ -425,6 +684,10 @@
             <div class="detail-field">
               <span class="detail-label">Client</span>
               <span id="invoiceDetailClient" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Contact</span>
+              <span id="invoiceDetailContact" class="detail-value">—</span>
             </div>
             <div class="detail-field">
               <span class="detail-label">Invoice date</span>
@@ -438,6 +701,71 @@
               <span class="detail-label">Source quote</span>
               <span id="invoiceDetailQuote" class="detail-value">—</span>
             </div>
+            <div class="detail-field">
+              <span class="detail-label">Currency</span>
+              <span id="invoiceDetailCurrency" class="detail-value badge">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deposit / Retainer & Final Invoice Info Card -->
+        <div id="invoiceDepositCard" class="card hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h2 id="invoiceDepositCardTitle" style="margin:0;">Deposit / Retainer Details</h2>
+            <span id="invoiceDepositTypeBadge" class="badge">Deposit Invoice</span>
+          </div>
+          <div class="detail-meta">
+            <div class="detail-field" id="depositQuoteField">
+              <span class="detail-label">Original Quote</span>
+              <span id="depositQuoteDisplay" class="detail-value">—</span>
+            </div>
+            <div class="detail-field" id="depositOriginalTotalField">
+              <span class="detail-label">Full Quote Value</span>
+              <span id="depositOriginalTotalDisplay" class="detail-value">—</span>
+            </div>
+            <div class="detail-field" id="depositAmountField">
+              <span class="detail-label">Deposit Amount Due</span>
+              <span id="depositAmountDisplay" class="detail-value">—</span>
+            </div>
+            <div class="detail-field" id="depositRemainderField">
+              <span class="detail-label">Remaining Balance</span>
+              <span id="depositRemainderDisplay" class="detail-value">—</span>
+            </div>
+          </div>
+          <div id="depositActionRow" class="deposit-action-row" style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button type="button" id="generateFinalInvoiceBtn" class="btn btn-primary hidden">✨ Generate Final Remainder Invoice</button>
+            <div id="linkedFinalInvoiceBanner" class="linked-invoice-banner hidden"></div>
+            <div id="linkedDepositInvoiceBanner" class="linked-invoice-banner hidden"></div>
+          </div>
+        </div>
+
+        <div id="invoiceRecurringCard" class="card hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h2 style="margin:0;">Recurring Retainer Schedule</h2>
+            <span id="recurringStatusBadge" class="badge">Active</span>
+          </div>
+          <div class="detail-meta">
+            <div class="detail-field">
+              <span class="detail-label">Frequency</span>
+              <span id="recurringFrequencyDisplay" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Next occurrence</span>
+              <span id="recurringNextDateDisplay" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">End date</span>
+              <span id="recurringEndDateDisplay" class="detail-value">—</span>
+            </div>
+          </div>
+          <div class="recurring-actions" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="recurringTriggerBtn" class="btn btn-small btn-primary">Generate Next Occurrence Now</button>
+            <button type="button" id="recurringPauseBtn" class="btn btn-small btn-secondary">Pause Series</button>
+            <button type="button" id="recurringCancelBtn" class="btn btn-small btn-danger">Cancel Series</button>
+          </div>
+          <div class="recurring-history" style="margin-top:18px;">
+            <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin-bottom:8px;">Invoices generated in this series</h3>
+            <div id="recurringInvoicesList"></div>
           </div>
         </div>
 
@@ -450,6 +778,8 @@
                   <th class="col-description">Description</th>
                   <th class="col-qty">Qty</th>
                   <th class="col-price">Unit price</th>
+                  <th class="col-line-discount">Discount</th>
+                  <th class="col-tax">Tax</th>
                   <th class="col-total">Line total</th>
                 </tr>
               </thead>
@@ -466,10 +796,7 @@
               <span>Discount</span>
               <span id="invoiceDetailDiscount" class="total-value">0.00</span>
             </div>
-            <div class="total-row">
-              <span>Tax</span>
-              <span id="invoiceDetailTax" class="total-value">0.00</span>
-            </div>
+            <div id="invoiceDetailTaxBreakdown" class="tax-breakdown-list"></div>
             <div class="total-row grand-total">
               <span>Total</span>
               <span id="invoiceDetailTotal" class="total-value">0.00</span>
@@ -477,6 +804,14 @@
             <div class="total-row">
               <span>Amount paid</span>
               <span id="invoiceDetailPaid" class="total-value">0.00</span>
+            </div>
+            <div class="total-row" id="invoiceDetailCreditedRow">
+              <span>Credited (credit notes)</span>
+              <span id="invoiceDetailCredited" class="total-value">0.00</span>
+            </div>
+            <div class="total-row" id="invoiceDetailNetRow">
+              <span>Net paid</span>
+              <span id="invoiceDetailNet" class="total-value">0.00</span>
             </div>
             <div class="total-row">
               <span>Balance due</span>
@@ -494,6 +829,13 @@
           <h2>Payment history</h2>
           <div id="invoicePaymentHistory" class="payments-list">
             <p class="empty">No payments recorded yet.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Credit notes</h2>
+          <div id="invoiceCreditNotesList" class="payments-list">
+            <p class="empty">No credit notes issued against this invoice.</p>
           </div>
         </div>
       </div>
@@ -616,9 +958,19 @@
             <div class="field field-required">
               <label for="default_currency">Default currency</label>
               <select id="default_currency" name="default_currency"></select>
+              <span class="hint">Pre-fills new quotes and item templates.</span>
               <span class="field-error" data-error-for="default_currency"></span>
             </div>
 
+            <div class="field">
+              <label for="reporting_currency">Reporting base currency</label>
+              <select id="reporting_currency" name="reporting_currency"></select>
+              <span class="hint">Used to aggregate dashboard totals. Defaults to your default currency.</span>
+              <span class="field-error" data-error-for="reporting_currency"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
             <div class="field">
               <label for="default_tax_rate">Default tax rate (%)</label>
               <input type="number" id="default_tax_rate" name="default_tax_rate" min="0" max="100" step="0.01" value="0">
@@ -662,6 +1014,19 @@
               <label for="quote_start_number">Quote start number</label>
               <input type="number" id="quote_start_number" name="quote_start_number" min="1" step="1" value="1">
               <span class="field-error" data-error-for="quote_start_number"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="credit_note_prefix">Credit note prefix</label>
+              <input type="text" id="credit_note_prefix" name="credit_note_prefix" value="CN-">
+              <span class="field-error" data-error-for="credit_note_prefix"></span>
+            </div>
+            <div class="field">
+              <label for="credit_note_start_number">Credit note start number</label>
+              <input type="number" id="credit_note_start_number" name="credit_note_start_number" min="1" step="1" value="1">
+              <span class="field-error" data-error-for="credit_note_start_number"></span>
             </div>
           </div>
         </div>
@@ -775,13 +1140,70 @@
         </div>
 
         <div class="field field-span-2">
+          <label for="clientTags">Tags / Categories (optional)</label>
+          <input type="text" id="clientTags" name="tags" placeholder="e.g. VIP, Wholesale, Overdue Risk (comma-separated)" autocomplete="off">
+          <span class="hint">Free-text tags separated by commas.</span>
+        </div>
+
+        <div class="field field-span-2">
           <label for="clientNotes">Notes (optional)</label>
           <textarea id="clientNotes" name="notes" rows="3" placeholder="Free text about this client"></textarea>
+        </div>
+
+        <!-- ── Contact persons ─────────────────────────────────────── -->
+        <div class="field field-span-2 contacts-section">
+          <div class="contacts-header">
+            <label>Contact persons</label>
+            <button type="button" class="btn btn-small btn-secondary" id="addContactRowBtn">+ Add contact</button>
+          </div>
+          <div id="contactRowsList" class="contacts-list"></div>
+          <p class="hint" style="margin-top:4px">The first contact marked "Primary" will be the default addressee on new quotes &amp; invoices.</p>
         </div>
 
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" id="clientCancelBtn">Cancel</button>
           <button type="submit" class="btn btn-primary" id="clientSubmitBtn">Save client</button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <div id="itemModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="itemModalTitle">Add Item to Library</h2>
+        <button type="button" class="modal-close" id="itemModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="itemForm" class="modal-form" novalidate>
+        <div class="field field-required">
+          <label for="itemName">Item name / Title</label>
+          <input type="text" id="itemName" name="name" placeholder="e.g. Web Development Hourly, Logo Design" autocomplete="off">
+          <span class="field-error" data-error-for="name"></span>
+        </div>
+
+        <div class="field">
+          <label for="itemDescription">Description (optional)</label>
+          <textarea id="itemDescription" name="description" rows="3" placeholder="Detailed description that will appear on quote line items"></textarea>
+          <span class="field-error" data-error-for="description"></span>
+        </div>
+
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="itemUnitPrice">Default unit price</label>
+            <input type="number" id="itemUnitPrice" name="unit_price" min="0" step="0.01" placeholder="0.00">
+            <span class="field-error" data-error-for="unit_price"></span>
+          </div>
+          <div class="field">
+            <label for="itemTaxRate">Default tax rate (%)</label>
+            <input type="number" id="itemTaxRate" name="tax_rate" min="0" max="100" step="0.01" placeholder="0">
+            <span class="field-error" data-error-for="tax_rate"></span>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="itemCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="itemSubmitBtn">Save item</button>
         </div>
       </form>
     </div>
@@ -854,6 +1276,141 @@
     </div>
   </div>
 
+    <div id="creditNoteModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="creditNoteModalTitle">Issue Credit Note</h2>
+        <button type="button" class="modal-close" id="creditNoteModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="creditNoteForm" class="modal-form" novalidate>
+        <p class="hint" style="margin-bottom:12px;">Issue a credit note against this invoice — for refunds, corrections, or goodwill adjustments. The amount cannot exceed what has already been paid.</p>
+        <div class="field">
+          <label id="creditNotePaidLabel">Amount already paid</label>
+          <p id="creditNotePaidDisplay" class="payment-balance">—</p>
+        </div>
+        <div class="field field-required">
+          <label for="creditNoteAmount">Credit note amount</label>
+          <input type="number" id="creditNoteAmount" name="amount" min="0.01" step="0.01" placeholder="0.00">
+          <span class="field-error" data-error-for="amount"></span>
+        </div>
+        <div class="field">
+          <label for="creditNoteReason">Reason (optional)</label>
+          <textarea id="creditNoteReason" name="reason" rows="3" placeholder="e.g. Refund for overpayment, service adjustment, goodwill"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="creditNoteCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="creditNoteSubmitBtn">Issue Credit Note</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="recurringModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="recurringModalTitle">Recurring Invoice Schedule</h2>
+        <button type="button" class="modal-close" id="recurringModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="recurringForm" class="modal-form" novalidate>
+        <p class="hint" style="margin-bottom:12px;">Automatically generates a new Draft invoice on the scheduled interval using this invoice as a template.</p>
+        <div class="field field-required">
+          <label for="recurringFrequency">Frequency</label>
+          <select id="recurringFrequency" name="frequency">
+            <option value="weekly">Weekly (every 7 days)</option>
+            <option value="monthly" selected>Monthly (every month)</option>
+            <option value="yearly">Yearly (every year)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="recurringNextDate">Next occurrence date</label>
+            <input type="date" id="recurringNextDate" name="next_issue_date">
+            <span class="field-error" data-error-for="next_issue_date"></span>
+          </div>
+          <div class="field">
+            <label for="recurringEndDate">End date (optional)</label>
+            <input type="date" id="recurringEndDate" name="end_date" placeholder="Optional">
+            <span class="field-error" data-error-for="end_date"></span>
+            <span class="hint">Leave blank for indefinite recurrence.</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="recurringCancelModalBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="recurringSubmitBtn">Save schedule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="convertQuoteModal" class="modal-overlay hidden">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 id="convertQuoteModalTitle">Convert Quote to Invoice</h2>
+        <button type="button" class="modal-close" id="convertQuoteModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="convertQuoteForm" class="modal-form" novalidate>
+        <p class="hint" style="margin-bottom:14px;">Select whether to invoice the full quote amount or create an upfront deposit / retainer invoice.</p>
+        
+        <div class="field">
+          <label>Invoice Type</label>
+          <div class="radio-options-group">
+            <label class="radio-card">
+              <input type="radio" name="conversion_type" value="full" checked>
+              <div class="radio-card-body">
+                <strong>Full Invoice</strong>
+                <span class="hint">Invoice the entire quote total (<span id="convertFullQuoteTotalDisplay">—</span>) now.</span>
+              </div>
+            </label>
+            <label class="radio-card">
+              <input type="radio" name="conversion_type" value="deposit">
+              <div class="radio-card-body">
+                <strong>Deposit / Retainer Invoice</strong>
+                <span class="hint">Invoice a percentage or fixed amount upfront. Generate the final remainder invoice later once paid.</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div id="convertDepositSection" class="convert-deposit-section hidden">
+          <div class="form-row">
+            <div class="field">
+              <label for="convertDepositType">Deposit Calculation</label>
+              <select id="convertDepositType" name="deposit_type">
+                <option value="percent">Percentage (%)</option>
+                <option value="fixed">Fixed Amount</option>
+              </select>
+            </div>
+            <div class="field field-required">
+              <label for="convertDepositValue" id="convertDepositValueLabel">Deposit Percentage (%)</label>
+              <input type="number" id="convertDepositValue" name="deposit_value" min="0.01" step="any" placeholder="e.g. 30" value="30">
+              <span class="field-error" data-error-for="deposit_value"></span>
+            </div>
+          </div>
+
+          <div class="deposit-summary-box">
+            <div class="deposit-summary-row">
+              <span>Full Quote Value:</span>
+              <strong id="depositSummaryQuoteTotal">—</strong>
+            </div>
+            <div class="deposit-summary-row highlight-deposit">
+              <span>Deposit Due Now:</span>
+              <strong id="depositSummaryDueNow">—</strong>
+            </div>
+            <div class="deposit-summary-row">
+              <span>Final Invoice Remainder:</span>
+              <strong id="depositSummaryRemainder">—</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="convertQuoteCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="convertQuoteSubmitBtn">Create Invoice</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="restoreModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -876,6 +1433,7 @@
   <script src="js/utils.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/clients.js"></script>
+  <script src="js/items.js"></script>
   <script src="js/quotes.js"></script>
   <script src="js/invoices.js"></script>
   <script src="js/dashboard.js"></script>

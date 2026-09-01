@@ -16,6 +16,7 @@ const INVOICE_STATUSES = {
 const SEQUENCE_PREFIXES = {
   QUOTE: 'Q',
   INVOICE: 'INV',
+  CREDIT_NOTE: 'CN',
 };
 
 const CURRENCIES = [

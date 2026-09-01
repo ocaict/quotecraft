@@ -205,7 +205,7 @@ function drawDivider(ctx) {
   ctx.y += 24;
 }
 
-function drawClientBlock(ctx, client, label) {
+function drawClientBlock(ctx, client, label, contact) {
   const { doc, W } = ctx;
   let y = ctx.y;
 
@@ -221,6 +221,17 @@ function drawClientBlock(ctx, client, label) {
     y = doc.y + 2;
   }
 
+  if (contact && contact.name) {
+    const contactLine = `Attn: ${contact.name}${contact.role ? ` (${contact.role})` : ''}`;
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(COLORS.ink).text(contactLine, MARGIN, y, { lineGap: 1 });
+    y = doc.y + 2;
+    if (contact.email || contact.phone) {
+      const contactInfo = [contact.email, contact.phone].filter(Boolean).join(' • ');
+      doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted).text(contactInfo, MARGIN, y, { lineGap: 1 });
+      y = doc.y + 3;
+    }
+  }
+
   const clientLines = buildClientLines(client);
   if (clientLines.join('').trim()) {
     doc.font('Helvetica').fontSize(9).fillColor(COLORS.muted);
@@ -233,13 +244,17 @@ function drawClientBlock(ctx, client, label) {
 
 function drawItemsTable(ctx, items, currency) {
   const { doc, W } = ctx;
-  const qtyW = 60;
-  const priceW = 72;
-  const totalW = 88;
-  const descW = W - qtyW - priceW - totalW;
+  const qtyW = 42;
+  const priceW = 62;
+  const discW = 50;
+  const taxW = 46;
+  const totalW = 74;
+  const descW = W - qtyW - priceW - discW - taxW - totalW;
   const qtyX = MARGIN + descW;
   const priceX = qtyX + qtyW;
-  const totalX = priceX + priceW;
+  const discX = priceX + priceW;
+  const taxX = discX + discW;
+  const totalX = taxX + taxW;
   const rowPadY = 5.5;
   const headerH = 22;
 
@@ -249,6 +264,8 @@ function drawItemsTable(ctx, items, currency) {
     doc.text('DESCRIPTION', MARGIN + 6, yPos + 7.5, { width: descW - 12, lineGap: 0 });
     doc.text('QTY', qtyX, yPos + 7.5, { width: qtyW - 8, align: 'right', lineGap: 0 });
     doc.text('UNIT PRICE', priceX, yPos + 7.5, { width: priceW - 8, align: 'right', lineGap: 0 });
+    doc.text('DISC', discX, yPos + 7.5, { width: discW - 8, align: 'right', lineGap: 0 });
+    doc.text('TAX', taxX, yPos + 7.5, { width: taxW - 8, align: 'right', lineGap: 0 });
     doc.text('LINE TOTAL', totalX, yPos + 7.5, { width: totalW - 8, align: 'right', lineGap: 0 });
     doc.moveTo(MARGIN, yPos + headerH).lineTo(MARGIN + W, yPos + headerH).strokeColor(COLORS.line).lineWidth(1).stroke();
   }
@@ -286,6 +303,22 @@ function drawItemsTable(ctx, items, currency) {
     doc.text(desc, MARGIN + 6, ctx.y + rowPadY, { width: descW - 12, lineGap: 1, height: rowH - rowPadY * 2 });
     doc.text(normalizeQty(item.quantity), qtyX, ctx.y + rowPadY + 1.5, { width: qtyW - 8, align: 'right', lineGap: 0 });
     doc.text(money(item.unit_price, currency), priceX, ctx.y + rowPadY + 1.5, { width: priceW - 8, align: 'right', lineGap: 0 });
+
+    // Discount column
+    let discLabel = '\u2014';
+    if (item.discount_type && item.discount_type !== 'none' && Number(item.discount_value) > 0) {
+      discLabel = item.discount_type === 'percent'
+        ? `${Number(item.discount_value)}%`
+        : `\u2212${money(item.discount_value, currency)}`;
+    }
+    doc.font('Helvetica').fontSize(9).fillColor(COLORS.muted);
+    doc.text(discLabel, discX, ctx.y + rowPadY + 1.5, { width: discW - 8, align: 'right', lineGap: 0 });
+
+    // Tax rate column
+    const taxRateLabel = Number(item.tax_rate) > 0 ? `${item.tax_rate}%` : '0%';
+    doc.font('Helvetica').fontSize(9).fillColor(COLORS.muted);
+    doc.text(taxRateLabel, taxX, ctx.y + rowPadY + 1.5, { width: taxW - 8, align: 'right', lineGap: 0 });
+
     doc.font('Helvetica-Bold').fillColor(COLORS.ink);
     doc.text(money(item.amount, currency), totalX, ctx.y + rowPadY + 1.5, { width: totalW - 8, align: 'right', lineGap: 0 });
 
@@ -297,13 +330,63 @@ function drawItemsTable(ctx, items, currency) {
   ctx.y += 20;
 }
 
+function buildPdfTaxRows(lineItems, subtotal, discountAmount, currency) {
+  const subtotalCents = Math.round((Number(subtotal) || 0) * 100);
+  const docDiscCents = Math.round((Number(discountAmount) || 0) * 100);
+  const ratio = subtotalCents > 0 ? (subtotalCents - docDiscCents) / subtotalCents : 1;
+
+  const brackets = new Map();
+  for (const item of (lineItems || [])) {
+    const rate = Number(item.tax_rate) || 0;
+    const amountCents = Math.round((Number(item.amount) || 0) * 100);
+    if (!brackets.has(rate)) {
+      brackets.set(rate, { rate, netCents: 0 });
+    }
+    brackets.get(rate).netCents += amountCents;
+  }
+
+  const list = [];
+  let totalTaxCents = 0;
+  const sortedRates = Array.from(brackets.keys()).sort((a, b) => a - b);
+  for (const rate of sortedRates) {
+    const b = brackets.get(rate);
+    const taxableBasisCents = Math.round(b.netCents * ratio);
+    const taxCents = rate > 0 ? Math.round(taxableBasisCents * rate / 100) : 0;
+    totalTaxCents += taxCents;
+    list.push({
+      rate,
+      taxableBasis: taxableBasisCents / 100,
+      taxAmount: taxCents / 100,
+    });
+  }
+
+  const rows = [];
+  if (list.length === 0) {
+    rows.push(['Tax', money(0, currency)]);
+  } else if (list.length === 1 && list[0].rate === 0) {
+    rows.push([`Tax-exempt (0% on ${money(list[0].taxableBasis, currency)})`, money(0, currency)]);
+  } else {
+    for (const item of list) {
+      if (item.rate === 0) {
+        rows.push([`Tax-exempt (0% on ${money(item.taxableBasis, currency)})`, money(0, currency)]);
+      } else {
+        rows.push([`Tax (${item.rate}% on ${money(item.taxableBasis, currency)})`, money(item.taxAmount, currency)]);
+      }
+    }
+    if (list.length > 1) {
+      rows.push(['Total Tax', money(totalTaxCents / 100, currency)]);
+    }
+  }
+  return rows;
+}
+
 function drawTotals(ctx, opts) {
   const { doc, W } = ctx;
   const { rows, grandLabel, grandValue, extra } = opts;
-  const totalsW = 230;
+  const totalsW = 250;
   const totalsX = MARGIN + W - totalsW;
-  const labelW = totalsW * 0.55;
-  const valueW = totalsW * 0.45;
+  const labelW = totalsW * 0.60;
+  const valueW = totalsW * 0.40;
 
   function totalsRow(label, value) {
     doc.font('Helvetica').fontSize(9.5).fillColor(COLORS.ink);
@@ -390,7 +473,7 @@ function drawFooter(ctx, leftText) {
 // ---------- Quote PDF ----------
 
 function renderQuotePdf(quote, client, profile, opts) {
-  const currency = (opts && opts.currency) || (profile && profile.default_currency) || 'USD';
+  const currency = quote.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
 
   const ctx = createDocument({
@@ -412,12 +495,13 @@ function renderQuotePdf(quote, client, profile, opts) {
     ],
   });
   drawDivider(ctx);
-  drawClientBlock(ctx, client, 'PREPARED FOR');
+  drawClientBlock(ctx, client, 'PREPARED FOR', quote.contact);
   drawItemsTable(ctx, quote.line_items || [], currency);
 
   const totalRows = [['Subtotal', money(quote.subtotal, currency)]];
-  if (Number(quote.discount_amount) > 0) totalRows.push(['Discount', money(quote.discount_amount, currency)]);
-  if (Number(quote.tax_amount) > 0) totalRows.push(['Tax', money(quote.tax_amount, currency)]);
+  if (Number(quote.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(quote.discount_amount, currency)}`]);
+  const taxRows = buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency);
+  taxRows.forEach((r) => totalRows.push(r));
 
   drawTotals(ctx, {
     rows: totalRows,
@@ -441,52 +525,85 @@ function renderQuotePdf(quote, client, profile, opts) {
 // ---------- Invoice PDF ----------
 
 function renderInvoicePdf(invoice, client, profile, opts) {
-  const currency = (opts && opts.currency) || (profile && profile.default_currency) || 'USD';
+  const currency = invoice.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const status = effectiveInvoiceStatus(invoice);
 
+  let docLabel = 'INVOICE';
+  let grandLabel = 'TOTAL DUE';
+  if (invoice.invoice_type === 'deposit') {
+    docLabel = 'DEPOSIT INVOICE';
+    grandLabel = 'DEPOSIT DUE';
+  } else if (invoice.invoice_type === 'final') {
+    docLabel = 'FINAL INVOICE';
+    grandLabel = 'FINAL BALANCE DUE';
+  }
+
   const ctx = createDocument({
-    title: `Invoice ${invoice.invoice_number}`,
+    title: `${docLabel} ${invoice.invoice_number}`,
     author: businessName,
-    subject: 'Invoice',
+    subject: docLabel,
   });
   const { doc } = ctx;
+
+  const metaRows = [
+    ['Issue date', formatDate(invoice.date_created)],
+    ['Due date', formatDate(invoice.date_due)],
+    ['Status', INVOICE_STATUS_LABELS[status] || status || ''],
+  ];
+
+  if (invoice.original_quote_total && (invoice.invoice_type === 'deposit' || invoice.invoice_type === 'final')) {
+    metaRows.push(['Full Quote Value', money(invoice.original_quote_total, currency)]);
+  }
 
   drawHeaderBrand(ctx, {
     profile,
     businessName,
-    rightLabel: 'INVOICE',
+    rightLabel: docLabel,
     rightNumber: invoice.invoice_number || '',
-    metaRows: [
-      ['Issue date', formatDate(invoice.date_created)],
-      ['Due date', formatDate(invoice.date_due)],
-      ['Status', INVOICE_STATUS_LABELS[status] || status || ''],
-    ],
+    metaRows,
   });
   drawDivider(ctx);
-  drawClientBlock(ctx, client, 'BILLED TO');
+  drawClientBlock(ctx, client, 'BILLED TO', invoice.contact);
   drawItemsTable(ctx, invoice.line_items || [], currency);
 
   const totalRows = [['Subtotal', money(invoice.subtotal, currency)]];
-  if (Number(invoice.discount_amount) > 0) totalRows.push(['Discount', money(invoice.discount_amount, currency)]);
-  if (Number(invoice.tax_amount) > 0) totalRows.push(['Tax', money(invoice.tax_amount, currency)]);
+  if (Number(invoice.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(invoice.discount_amount, currency)}`]);
+  const taxRows = buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency);
+  taxRows.forEach((r) => totalRows.push(r));
 
   const paid = Number(invoice.amount_paid) || 0;
+  const credited = Number(invoice.amount_credited) || 0;
   const balance = Number(invoice.balance_due) || 0;
+  const netPaid = Math.max(0, Math.round((paid - credited) * 100) / 100);
   const extraRows = [];
   if (paid > 0.0001) {
     extraRows.push(['Amount paid', money(paid, currency)]);
+    if (credited > 0.0001) {
+      extraRows.push(['Credited', `\u2212${money(credited, currency)}`]);
+      extraRows.push(['Net paid', money(netPaid, currency)]);
+    }
     extraRows.push(['Balance due', money(Math.max(balance, 0), currency)]);
   } else if (balance > 0.0001) {
     extraRows.push(['Balance due', money(balance, currency)]);
+  } else if (credited > 0.0001) {
+    extraRows.push(['Credited', `\u2212${money(credited, currency)}`]);
+    extraRows.push(['Net paid', money(netPaid, currency)]);
   }
 
   drawTotals(ctx, {
     rows: totalRows,
-    grandLabel: 'TOTAL DUE',
+    grandLabel,
     grandValue: money(invoice.total, currency),
     extra: extraRows,
   });
+
+  if (invoice.notes || invoice.terms) {
+    const blocks = [];
+    if (invoice.notes) blocks.push(invoice.notes);
+    if (invoice.terms) blocks.push(invoice.terms);
+    drawTextSection(ctx, 'Notes & Terms', blocks.join('\n\n'));
+  }
 
   drawFooter(ctx, `Prepared by ${businessName}`);
 
@@ -498,4 +615,65 @@ function renderInvoicePdf(invoice, client, profile, opts) {
   return ctx.done;
 }
 
-module.exports = { renderQuotePdf, renderInvoicePdf };
+// ---------- Credit Note PDF ----------
+
+function renderCreditNotePdf(creditNote, invoice, client, profile) {
+  const currency = (invoice && invoice.currency) || (profile && profile.default_currency) || 'USD';
+  const businessName = (profile && profile.business_name) || 'QuoteCraft';
+
+  const ctx = createDocument({
+    title: `Credit Note ${creditNote.credit_note_number}`,
+    author: businessName,
+    subject: 'Credit Note',
+  });
+  const { doc, W } = ctx;
+
+  drawHeaderBrand(ctx, {
+    profile,
+    businessName,
+    rightLabel: 'CREDIT NOTE',
+    rightNumber: creditNote.credit_note_number || '',
+    metaRows: [
+      ['Issue date', formatDate(creditNote.date_created)],
+      ['Related invoice', invoice ? invoice.invoice_number : '—'],
+    ],
+  });
+  drawDivider(ctx);
+  drawClientBlock(ctx, client, 'CREDIT ISSUED TO');
+
+  // Credit note body
+  const creditBody = [
+    `This credit note reduces the outstanding balance on invoice ${invoice ? invoice.invoice_number : '—'}.`,
+  ];
+  if (creditNote.reason) {
+    creditBody.push(`Reason: ${creditNote.reason}`);
+  }
+  drawTextSection(ctx, 'Details', creditBody.join('\n\n'));
+
+  // Simple totals: just the credit amount
+  const totalsW = 250;
+  const totalsX = MARGIN + W - totalsW;
+  const labelW = totalsW * 0.60;
+  const valueW = totalsW * 0.40;
+
+  if (ctx.y + 46 > ctx.pageBottom) {
+    doc.addPage();
+    ctx.y = doc.y;
+  }
+
+  const grandH = 34;
+  doc.rect(totalsX, ctx.y, totalsW, grandH).fill(COLORS.grandFill);
+  doc.moveTo(totalsX, ctx.y).lineTo(totalsX + totalsW, ctx.y).strokeColor(COLORS.ink).lineWidth(1.5).stroke();
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(COLORS.ink);
+  doc.text('CREDIT AMOUNT', totalsX + 10, ctx.y + 11, { width: labelW, lineGap: 0 });
+  doc.text(money(creditNote.amount, currency), totalsX + labelW - 10, ctx.y + 11, { width: valueW + 10, align: 'right', lineGap: 0 });
+  ctx.y += grandH + 8;
+
+  ctx.y += 18;
+
+  drawFooter(ctx, `Prepared by ${businessName}`);
+  doc.end();
+  return ctx.done;
+}
+
+module.exports = { renderQuotePdf, renderInvoicePdf, renderCreditNotePdf };

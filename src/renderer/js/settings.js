@@ -3,6 +3,7 @@
   if (!form) return;
 
   const currencySelect = document.getElementById('default_currency');
+  const reportingCurrencySelect = document.getElementById('reporting_currency');
   const chooseLogoBtn = document.getElementById('chooseLogoBtn');
   const removeLogoBtn = document.getElementById('removeLogoBtn');
   const logoPreview = document.getElementById('logoPreview');
@@ -11,6 +12,22 @@
   let currentLogoPath = null;
 
   window.prepareCurrencySelect(currencySelect, 'USD');
+  if (reportingCurrencySelect) {
+    window.prepareCurrencySelect(reportingCurrencySelect, 'USD');
+  }
+
+  if (currencySelect && reportingCurrencySelect) {
+    let lastDefault = currencySelect.value;
+    currencySelect.addEventListener('change', () => {
+      if (!reportingCurrencySelect.dataset.userChanged || reportingCurrencySelect.value === lastDefault) {
+        reportingCurrencySelect.value = currencySelect.value;
+      }
+      lastDefault = currencySelect.value;
+    });
+    reportingCurrencySelect.addEventListener('change', () => {
+      reportingCurrencySelect.dataset.userChanged = 'true';
+    });
+  }
 
   function clearFieldError(field) {
     const el = form.elements[field];
@@ -59,9 +76,15 @@
       invoice_start_number: 1,
       quote_prefix: 'Q-',
       quote_start_number: 1,
+      credit_note_prefix: 'CN-',
+      credit_note_start_number: 1,
       default_currency: 'USD',
+      reporting_currency: 'USD',
     };
     const data = Object.assign({}, defaults, profile || {});
+    if (!data.reporting_currency) {
+      data.reporting_currency = data.default_currency || 'USD';
+    }
     for (const key of Object.keys(form.elements)) {
       const el = form.elements[key];
       if (el && el.name && el.name !== 'logo_path') {
@@ -69,6 +92,14 @@
       }
     }
     window.prepareCurrencySelect(currencySelect, data.default_currency || 'USD');
+    if (reportingCurrencySelect) {
+      window.prepareCurrencySelect(reportingCurrencySelect, data.reporting_currency || data.default_currency || 'USD');
+      if (data.reporting_currency && data.reporting_currency !== data.default_currency) {
+        reportingCurrencySelect.dataset.userChanged = 'true';
+      } else {
+        delete reportingCurrencySelect.dataset.userChanged;
+      }
+    }
     currentLogoPath = data.logo_path || null;
     updateLogoDisplay(currentLogoPath);
   }
@@ -95,6 +126,7 @@
     data.default_tax_rate = data.default_tax_rate === '' ? '' : Number(data.default_tax_rate);
     data.invoice_start_number = data.invoice_start_number === '' ? '' : Number(data.invoice_start_number);
     data.quote_start_number = data.quote_start_number === '' ? '' : Number(data.quote_start_number);
+    data.credit_note_start_number = data.credit_note_start_number === '' ? '' : Number(data.credit_note_start_number);
     return data;
   }
 

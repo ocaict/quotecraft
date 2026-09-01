@@ -39,6 +39,16 @@
   font-size: 14px;
 }
 
+/* ---------- Credit notes ---------- */
+.credit-note-amount {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.total-value.credited {
+  color: var(--danger);
+}
+
 .convert-notice.notice-ok {
   background: rgba(63,185,80,0.15);
   color: #3fb950;
@@ -49,5 +59,17 @@
   background: rgba(88,166,255,0.12);
   color: var(--accent);
   border: 1px solid rgba(88,166,255,0.35);
+}
+
+.linked-invoice-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(88, 166, 255, 0.08);
+  border: 1px solid rgba(88, 166, 255, 0.25);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text);
 }
 

@@ -28,6 +28,17 @@
   }
 
   function renderStats(stats) {
+    if (stats.reporting_currency) {
+      currencyCode = stats.reporting_currency;
+    }
+    const noticeEl = document.getElementById('dashboardCurrencyNotice');
+    if (noticeEl) {
+      noticeEl.innerHTML = `
+        <span class="currency-notice-icon">ℹ️</span>
+        <span id="dashboardCurrencyNoticeText">Dashboard totals converted to reporting base currency (<strong id="dashBaseCurrencyCode">${currencyCode}</strong>). Multi-currency totals are approximate conversions based on exchange rates entered at invoice creation time.</span>
+      `;
+    }
+
     statOutstanding.textContent = money(stats.outstanding_balance);
     statOverdue.textContent = money(stats.overdue_balance);
     statOverdueCount.textContent = String(stats.overdue_count);
@@ -80,7 +91,7 @@
       side.className = 'activity-side';
       const amount = document.createElement('span');
       amount.className = 'activity-amount';
-      amount.textContent = money(item.total);
+      amount.textContent = window.QuoteCraftUtils.formatCurrency(item.total, item.currency || currencyCode);
       const date = document.createElement('span');
       date.className = 'activity-date';
       date.textContent = window.QuoteCraftUtils.formatDate(item.ts || item.created_at);
@@ -124,18 +135,44 @@
     }
   }
 
+  async function checkDueRecurringDashboard() {
+    const banner = document.getElementById('dashboardRecurringBanner');
+    if (!banner) return;
+    try {
+      const res = await window.electronAPI.checkDueRecurring();
+      if (res && res.ok && res.generatedCount > 0) {
+        banner.classList.remove('hidden');
+        banner.innerHTML = `
+          <span>⚡ <strong>${res.generatedCount}</strong> recurring draft invoice${res.generatedCount > 1 ? 's were' : ' was'} generated automatically.</span>
+          <button type="button" class="btn btn-small btn-primary" id="btnDismissDashBanner">View Invoices</button>
+        `;
+        const btn = banner.querySelector('#btnDismissDashBanner');
+        if (btn) {
+          btn.addEventListener('click', () => {
+            banner.classList.add('hidden');
+            window.QuoteCraftUtils.goToPage('invoices');
+          });
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   async function init() {
     try {
       const profile = await window.electronAPI.getCompanyProfile();
-      if (profile.ok && profile.profile && profile.profile.default_currency) {
-        currencyCode = profile.profile.default_currency;
+      if (profile.ok && profile.profile) {
+        currencyCode = profile.profile.reporting_currency || profile.profile.default_currency || 'USD';
       }
     } catch (e) { /* keep default */ }
+    await checkDueRecurringDashboard();
     await loadStats();
   }
 
-  document.addEventListener('pagechange', (e) => {
-    if (e.detail === 'dashboard') loadStats();
+  document.addEventListener('pagechange', async (e) => {
+    if (e.detail === 'dashboard') {
+      await checkDueRecurringDashboard();
+      loadStats();
+    }
   });
 
   overdueCard.addEventListener('click', () => {
