@@ -5,7 +5,7 @@
   "description": "Professional quote and invoice management for freelancers and small businesses",
   "main": "src/main/main.js",
   "scripts": {
-    "start": "electron .",
+    "dev": "electron .",
     "dist": "electron-builder --win nsis",
     "dist:dir": "electron-builder --win nsis --dir"
   },

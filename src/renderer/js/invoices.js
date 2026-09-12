@@ -457,7 +457,7 @@
     const creditedRow = document.getElementById('invoiceDetailCreditedRow');
     const netRow = document.getElementById('invoiceDetailNetRow');
     if (credited > 0.0001) {
-      document.getElementById('invoiceDetailCredited').textContent = money(credited, invCurr);
+      document.getElementById('invoiceDetailCredited').textContent = '−' + money(credited, invCurr);
       document.getElementById('invoiceDetailNet').textContent = money(netPaid, invCurr);
       if (creditedRow) creditedRow.style.display = '';
       if (netRow) netRow.style.display = '';
@@ -472,6 +472,13 @@
     renderCreditNotes(inv.credit_notes || [], invCurr);
     invoiceRecordPaymentBtn.disabled = Number(inv.balance_due) <= 0.0001;
     currentInvoiceBalance = Number(inv.balance_due) || 0;
+
+    if (invoiceIssueCreditBtn) {
+      invoiceIssueCreditBtn.disabled = netPaid <= 0.0001;
+      invoiceIssueCreditBtn.title = netPaid <= 0.0001
+        ? (Number(inv.amount_paid) <= 0.0001 ? 'No payments recorded on this invoice' : 'Invoice has been fully credited')
+        : 'Issue Credit Note';
+    }
 
     // Recurring profile & series handling
     currentRecurringProfile = inv.recurring_profile || null;
@@ -831,16 +838,29 @@
   function openCreditNoteModal() {
     if (!currentInvoiceId) return;
     const inv = invoices.find((i) => i.id === currentInvoiceId);
-    const paid = inv ? Number(inv.amount_paid) : 0;
+    const paid = inv ? Number(inv.amount_paid || 0) : 0;
+    const credited = inv ? Number(inv.amount_credited || 0) : 0;
+    const creditable = Math.max(0, Math.round((paid - credited) * 100) / 100);
     const curr = (inv && inv.currency) || currentInvoiceCurrency || currencyCode;
-    if (paid <= 0.0001) {
-      toast('This invoice has no payments recorded. A credit note can only be issued against paid amounts.', 'error');
+
+    if (creditable <= 0.0001) {
+      if (paid <= 0.0001) {
+        toast('This invoice has no payments recorded. A credit note can only be issued against paid amounts.', 'error');
+      } else {
+        toast('This invoice has already been fully credited. No remaining paid balance is available to credit.', 'error');
+      }
       return;
     }
+
     creditNoteForm.reset();
     clearCreditNoteErrors();
-    creditNotePaidDisplay.textContent = money(paid, curr);
-    creditNoteAmountInput.max = paid;
+    const paidLabel = document.getElementById('creditNotePaidLabel');
+    if (paidLabel) {
+      paidLabel.textContent = credited > 0 ? 'Remaining creditable amount' : 'Amount already paid';
+    }
+    creditNotePaidDisplay.textContent = money(creditable, curr);
+    creditNoteAmountInput.max = String(creditable);
+    creditNoteAmountInput.placeholder = creditable.toFixed(2);
     creditNoteModal.classList.remove('hidden');
     creditNoteAmountInput.focus();
   }
@@ -860,6 +880,28 @@
     e.preventDefault();
     if (!currentInvoiceId) return;
     clearCreditNoteErrors();
+
+    const inv = invoices.find((i) => i.id === currentInvoiceId);
+    const paid = inv ? Number(inv.amount_paid || 0) : 0;
+    const credited = inv ? Number(inv.amount_credited || 0) : 0;
+    const creditable = Math.max(0, Math.round((paid - credited) * 100) / 100);
+    const curr = (inv && inv.currency) || currentInvoiceCurrency || currencyCode;
+
+    const amt = Number(creditNoteAmountInput.value);
+    if (!(amt > 0)) {
+      const el = creditNoteForm.elements['amount'];
+      if (el) el.classList.add('invalid');
+      const errEl = document.querySelector('[data-error-for="amount"]');
+      if (errEl) errEl.textContent = 'Credit note amount must be greater than zero.';
+      return;
+    }
+    if (amt > creditable + 0.0001) {
+      const el = creditNoteForm.elements['amount'];
+      if (el) el.classList.add('invalid');
+      const errEl = document.querySelector('[data-error-for="amount"]');
+      if (errEl) errEl.textContent = `Credit note amount cannot exceed the remaining creditable amount (${money(creditable, curr)}).`;
+      return;
+    }
 
     const payload = {
       amount: creditNoteAmountInput.value,

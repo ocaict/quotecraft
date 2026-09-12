@@ -10,6 +10,7 @@ window.QuoteCraftUtils = {
   },
 
   // Overdue is calculated, not stored: past due date with a balance still owed.
+  // When money has been refunded via credit notes, net paid (paid - credited) determines partial payment.
   effectiveInvoiceStatus(inv) {
     if (Number(inv.balance_due) <= 0.0001) return 'paid';
     if (inv.date_due) {
@@ -18,6 +19,8 @@ window.QuoteCraftUtils = {
       today.setHours(0, 0, 0, 0);
       if (!isNaN(due.getTime()) && due < today) return 'overdue';
     }
+    const netPaid = Math.max(0, Math.round(((Number(inv.amount_paid) || 0) - (Number(inv.amount_credited) || 0)) * 100) / 100);
+    if (netPaid > 0.0001) return 'partially_paid';
     return inv.status || 'draft';
   },
 

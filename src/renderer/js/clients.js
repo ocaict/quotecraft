@@ -792,7 +792,14 @@
         totalTd.textContent = window.QuoteCraftUtils.formatCurrency(inv.total, invCurr);
 
         const paidTd = document.createElement('td');
-        paidTd.textContent = window.QuoteCraftUtils.formatCurrency(inv.amount_paid, invCurr);
+        const credited = Number(inv.amount_credited) || 0;
+        const netPaid = Math.max(0, Math.round(((Number(inv.amount_paid) || 0) - credited) * 100) / 100);
+        if (credited > 0.0001) {
+          paidTd.innerHTML = `<div>${window.QuoteCraftUtils.formatCurrency(inv.amount_paid, invCurr)}</div>` +
+            `<div class="cell-sub" style="color:var(--text-muted);font-size:11px;">Credited: −${window.QuoteCraftUtils.formatCurrency(credited, invCurr)} (Net: ${window.QuoteCraftUtils.formatCurrency(netPaid, invCurr)})</div>`;
+        } else {
+          paidTd.textContent = window.QuoteCraftUtils.formatCurrency(inv.amount_paid, invCurr);
+        }
 
         const balanceTd = document.createElement('td');
         balanceTd.className = 'cell-balance';
@@ -802,10 +809,12 @@
         let effStatus = inv.status;
         if (Number(inv.balance_due) <= 0.0001) {
           effStatus = 'paid';
-        } else if (Number(inv.amount_paid) > 0.0001) {
+        } else if (netPaid > 0.0001) {
           effStatus = 'partially_paid';
         } else if (inv.date_due && new Date(inv.date_due + 'T00:00:00') < new Date()) {
           effStatus = 'overdue';
+        } else {
+          effStatus = inv.date_sent ? 'sent' : (inv.status || 'draft');
         }
 
         const statusTd = document.createElement('td');

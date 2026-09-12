@@ -976,8 +976,8 @@ function getClientOverview(clientId) {
   });
 
   const totalBilled = invoices.reduce((sum, inv) => sum + ((Number(inv.total) || 0) * (Number(inv.exchange_rate) || 1.0)), 0);
-  const totalPaid = invoices.reduce((sum, inv) => sum + ((Number(inv.amount_paid) || 0) * (Number(inv.exchange_rate) || 1.0)), 0);
-  const outstandingBalance = Math.max(0, Math.round((totalBilled - totalPaid) * 100) / 100);
+  const totalPaid = invoices.reduce((sum, inv) => sum + (((Number(inv.amount_paid) || 0) - (Number(inv.amount_credited) || 0)) * (Number(inv.exchange_rate) || 1.0)), 0);
+  const outstandingBalance = Math.max(0, Math.round(invoices.reduce((sum, inv) => sum + ((Number(inv.balance_due) || 0) * (Number(inv.exchange_rate) || 1.0)), 0) * 100) / 100);
 
   const notes = getClientNotes(clientId);
   const creditNotes = getCreditNotesForClient(clientId);
@@ -2359,11 +2359,11 @@ function issueCreditNote(invoiceId, input) {
   }
 
   const balance = computeInvoiceBalance(invoiceId);
-  const paid = balance.paid;
-  if (amount > paid + 0.0001) {
+  const maxCreditable = Math.max(0, Math.round((balance.paid - balance.credited) * 100) / 100);
+  if (amount > maxCreditable + 0.0001) {
     return {
       ok: false,
-      errors: { amount: `Credit note amount ${amount.toFixed(2)} exceeds the amount already paid (${paid.toFixed(2)}).` },
+      errors: { amount: `Credit note amount ${amount.toFixed(2)} exceeds the remaining creditable amount (${maxCreditable.toFixed(2)}).` },
     };
   }
 
@@ -2381,7 +2381,15 @@ function issueCreditNote(invoiceId, input) {
     );
 
     const b = computeInvoiceBalance(invoiceId);
-    const newStatus = b.balance <= 0.0001 ? 'paid' : (b.paid > 0 ? 'partially_paid' : invoice.status);
+    const netPaid = Math.max(0, Math.round((b.paid - b.credited) * 100) / 100);
+    let newStatus;
+    if (b.balance <= 0.0001) {
+      newStatus = 'paid';
+    } else if (netPaid > 0.0001) {
+      newStatus = 'partially_paid';
+    } else {
+      newStatus = invoice.date_sent ? 'sent' : (invoice.status === 'draft' ? 'draft' : 'sent');
+    }
     db.run(
       `UPDATE invoices SET amount_paid = ?, balance_due = ?, status = ?, updated_at = ? WHERE id = ?`,
       [b.paid, b.balance, newStatus, now, invoiceId]
@@ -2730,8 +2738,13 @@ function getDashboardStats() {
 
   const invoicedMonth = scalar(`SELECT COALESCE(SUM(total * COALESCE(exchange_rate, 1.0)), 0) FROM invoices WHERE strftime('%Y-%m', date_created) = strftime('%Y-%m', 'now')`);
   const invoicedYear = scalar(`SELECT COALESCE(SUM(total * COALESCE(exchange_rate, 1.0)), 0) FROM invoices WHERE strftime('%Y', date_created) = strftime('%Y', 'now')`);
-  const paidMonth = scalar(`SELECT COALESCE(SUM(p.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM payments p JOIN invoices i ON p.invoice_id = i.id WHERE strftime('%Y-%m', p.payment_date) = strftime('%Y-%m', 'now')`);
-  const paidYear = scalar(`SELECT COALESCE(SUM(p.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM payments p JOIN invoices i ON p.invoice_id = i.id WHERE strftime('%Y', p.payment_date) = strftime('%Y', 'now')`);
+  const grossPaidMonth = scalar(`SELECT COALESCE(SUM(p.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM payments p JOIN invoices i ON p.invoice_id = i.id WHERE strftime('%Y-%m', p.payment_date) = strftime('%Y-%m', 'now')`);
+  const creditedMonth = scalar(`SELECT COALESCE(SUM(cn.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM credit_notes cn JOIN invoices i ON cn.invoice_id = i.id WHERE strftime('%Y-%m', cn.date_created) = strftime('%Y-%m', 'now')`);
+  const paidMonth = Math.max(0, Math.round((grossPaidMonth - creditedMonth) * 100) / 100);
+
+  const grossPaidYear = scalar(`SELECT COALESCE(SUM(p.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM payments p JOIN invoices i ON p.invoice_id = i.id WHERE strftime('%Y', p.payment_date) = strftime('%Y', 'now')`);
+  const creditedYear = scalar(`SELECT COALESCE(SUM(cn.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM credit_notes cn JOIN invoices i ON cn.invoice_id = i.id WHERE strftime('%Y', cn.date_created) = strftime('%Y', 'now')`);
+  const paidYear = Math.max(0, Math.round((grossPaidYear - creditedYear) * 100) / 100);
 
   const quoteActivity = rowsToArray(db.exec(
     `SELECT id, quote_number AS number, client_id, status, total, currency,

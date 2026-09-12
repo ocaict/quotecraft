@@ -12,12 +12,15 @@ const { registerIpcHandlers } = require('./ipc-handlers');
 let mainWindow = null;
 
 async function createWindow() {
+  const iconPath = path.join(__dirname, '..', 'renderer', 'assets', 'icons', 'icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 960,
     minHeight: 600,
     title: 'QuoteCraft',
+    icon: iconPath,
     backgroundColor: '#0f1117',
     show: false,
     webPreferences: {
