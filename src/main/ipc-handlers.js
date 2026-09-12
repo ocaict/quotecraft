@@ -58,6 +58,13 @@ const {
   validateBackupBuffer,
   restoreDatabaseFromBuffer,
   PAYMENT_METHODS,
+  EXPENSE_CATEGORIES,
+  createExpense,
+  updateExpense,
+  deleteExpense,
+  getExpense,
+  listExpenses,
+  getExpensesSummary,
 } = require('./database');
 
 const LOGO_DIR = () => path.join(app.getPath('userData'), 'logo');
@@ -616,6 +623,66 @@ function registerIpcHandlers() {
     } catch (err) {
       return { ok: false, errors: { general: `Failed to generate payments report: ${err.message}` } };
     }
+  });
+
+  // ---------- Expenses ----------
+  ipcMain.handle('expenses:list', async (event, filter) => {
+    try {
+      const expenses = listExpenses(filter);
+      return { ok: true, expenses };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to list expenses: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('expenses:get', async (event, id) => {
+    try {
+      const expense = getExpense(id);
+      if (!expense) return { ok: false, errors: { general: 'Expense not found.' } };
+      return { ok: true, expense };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to get expense: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('expenses:create', async (event, data) => {
+    try {
+      const result = createExpense(data);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to create expense: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('expenses:update', async (event, id, data) => {
+    try {
+      const result = updateExpense(id, data);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to update expense: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('expenses:delete', async (event, id) => {
+    try {
+      const result = deleteExpense(id);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to delete expense: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('expenses:summary', async (event, filter) => {
+    try {
+      const summary = getExpensesSummary(filter);
+      return { ok: true, summary };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to get expenses summary: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('expenses:categories', async () => {
+    return { ok: true, categories: EXPENSE_CATEGORIES };
   });
 
   ipcMain.handle('creditNotes:issue', async (event, invoiceId, data) => {

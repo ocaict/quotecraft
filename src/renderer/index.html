@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="styles/invoices.css">
   <link rel="stylesheet" href="styles/dashboard.css">
   <link rel="stylesheet" href="styles/payments.css">
+  <link rel="stylesheet" href="styles/expenses.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -30,6 +31,7 @@
       <a href="#" data-page="quotes">Quotes</a>
       <a href="#" data-page="invoices">Invoices</a>
       <a href="#" data-page="payments">Payments</a>
+      <a href="#" data-page="expenses">Expenses</a>
       <a href="#" data-page="settings">Settings</a>
     </nav>
   </aside>
@@ -92,6 +94,30 @@
           <span class="stat-label">Paid this year</span>
           <span id="statPaidYear" class="stat-value">—</span>
           <span class="stat-sub">Payments received this year</span>
+        </div>
+
+        <div class="card stat-card stat-card-link" id="dashExpensesMonthCard" role="button" tabindex="0">
+          <span class="stat-label">Expenses this month</span>
+          <span id="statExpensesMonth" class="stat-value expense-value">—</span>
+          <span class="stat-sub">Total expenses in current month</span>
+        </div>
+
+        <div class="card stat-card stat-card-link" id="dashExpensesYearCard" role="button" tabindex="0">
+          <span class="stat-label">Expenses this year</span>
+          <span id="statExpensesYear" class="stat-value expense-value">—</span>
+          <span class="stat-sub">Total expenses in current year</span>
+        </div>
+
+        <div class="card stat-card">
+          <span class="stat-label">Net profit this month</span>
+          <span id="statProfitMonth" class="stat-value">—</span>
+          <span class="stat-sub">Cash received minus expenses</span>
+        </div>
+
+        <div class="card stat-card">
+          <span class="stat-label">Net profit this year</span>
+          <span id="statProfitYear" class="stat-value">—</span>
+          <span class="stat-sub">Cash received minus expenses</span>
         </div>
       </div>
 
@@ -953,6 +979,106 @@
       </div>
     </section>
 
+    <section id="page-expenses" class="page">
+      <div class="page-header">
+        <div>
+          <h1>Expenses</h1>
+          <p class="subtitle">Log business expenses to measure real net profit and track overhead.</p>
+        </div>
+        <div class="detail-actions">
+          <button type="button" id="newExpenseBtn" class="btn btn-primary">+ New Expense</button>
+        </div>
+      </div>
+
+      <div class="expenses-toolbar">
+        <div class="filter-group">
+          <label for="expensesDatePreset">Period Preset</label>
+          <select id="expensesDatePreset">
+            <option value="all">All Time</option>
+            <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_year">This Year</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="expensesStartDate">From Date</label>
+          <input type="date" id="expensesStartDate">
+        </div>
+
+        <div class="filter-group">
+          <label for="expensesEndDate">To Date</label>
+          <input type="date" id="expensesEndDate">
+        </div>
+
+        <div class="filter-group">
+          <label for="expensesCategoryFilter">Category</label>
+          <select id="expensesCategoryFilter">
+            <option value="all">All Categories</option>
+            <option value="Software">Software</option>
+            <option value="Supplies">Supplies</option>
+            <option value="Travel">Travel</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="filter-group search-wrapper">
+          <label for="expensesSearch">Search</label>
+          <input type="text" id="expensesSearch" placeholder="Search notes or category…">
+        </div>
+
+        <div class="toolbar-actions">
+          <button type="button" id="expensesResetBtn" class="btn btn-ghost">Reset Filters</button>
+        </div>
+      </div>
+
+      <div class="expenses-kpis">
+        <div class="expenses-kpi-card highlight-expense">
+          <span class="kpi-label">Total Expenses</span>
+          <span id="expensesTotalAmount" class="kpi-value">—</span>
+          <span id="expensesPeriodLabel" class="kpi-sub">All time</span>
+        </div>
+
+        <div class="expenses-kpi-card">
+          <span class="kpi-label">Expense Entries</span>
+          <span id="expensesCount" class="kpi-value">—</span>
+          <span class="kpi-sub">Logged transactions</span>
+        </div>
+      </div>
+
+      <div class="expenses-categories-section">
+        <div class="section-header-row">
+          <h2>Category Breakdown</h2>
+        </div>
+        <div id="expensesCategoriesGrid" class="categories-subtotals-grid">
+          <!-- Dynamically populated category subtotal cards -->
+        </div>
+      </div>
+
+      <div class="card expenses-table-card">
+        <table class="expenses-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Category</th>
+              <th>Notes / Description</th>
+              <th>Amount</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="expensesTableBody">
+            <tr>
+              <td colspan="5" class="expenses-empty">
+                <p>Loading expenses…</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="page-settings" class="page">
       <div class="page-header">
         <h1>Company Profile / Settings</h1>
@@ -1338,6 +1464,66 @@
     </div>
   </div>
 
+  <div id="expenseModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="expenseModalTitle">New Expense</h2>
+        <button type="button" class="modal-close" id="expenseModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="expenseForm" class="modal-form" novalidate>
+        <input type="hidden" id="expenseEditId" value="">
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="expenseAmount">Amount</label>
+            <input type="number" id="expenseAmount" name="amount" min="0" step="0.01" placeholder="0.00" required>
+            <span class="field-error" data-error-for="amount"></span>
+          </div>
+          <div class="field field-required">
+            <label for="expenseDate">Date</label>
+            <input type="date" id="expenseDate" name="date" required>
+            <span class="field-error" data-error-for="date"></span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="expenseCurrency">Currency</label>
+            <select id="expenseCurrency" name="currency"></select>
+          </div>
+          <div class="field" id="expenseExchangeRateField" style="display: none;">
+            <label for="expenseExchangeRate">Exchange Rate</label>
+            <input type="number" id="expenseExchangeRate" name="exchange_rate" step="0.0001" min="0.0001" value="1.0">
+            <span class="hint" id="expenseExchangeRateHint">Rate to base currency</span>
+          </div>
+        </div>
+
+        <div class="field field-required">
+          <label for="expenseCategory">Category</label>
+          <div style="display: flex; gap: 8px;">
+            <select id="expenseCategory" name="category" style="flex: 1;">
+              <option value="Software">Software</option>
+              <option value="Supplies">Supplies</option>
+              <option value="Travel">Travel</option>
+              <option value="Other">Other</option>
+              <option value="__custom__">+ Custom Category…</option>
+            </select>
+            <input type="text" id="expenseCustomCategory" placeholder="Enter category" style="flex: 1; display: none;">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="expenseNotes">Notes / Description (optional)</label>
+          <textarea id="expenseNotes" name="notes" rows="3" placeholder="e.g. GitHub Copilot subscription, Flight to client office"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="expenseCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="expenseSubmitBtn">Save Expense</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="paymentModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -1550,6 +1736,7 @@
   <script src="js/invoices.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/payments.js"></script>
+  <script src="js/expenses.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -296,6 +296,20 @@ function createTables() {
       updated_at      TEXT NOT NULL
     );
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      amount          REAL NOT NULL CHECK (amount > 0),
+      date            TEXT NOT NULL,
+      category        TEXT NOT NULL DEFAULT 'Other',
+      notes           TEXT DEFAULT '',
+      currency        TEXT DEFAULT 'USD',
+      exchange_rate   REAL DEFAULT 1.0,
+      created_at      TEXT NOT NULL,
+      updated_at      TEXT NOT NULL
+    );
+  `);
 }
 
 const MIGRATIONS = [
@@ -1122,6 +1136,192 @@ function deleteLineItemTemplate(id) {
   saveToDisk();
   return { ok: true, deleted };
 }
+
+// ---------- Expenses ----------
+
+const EXPENSE_CATEGORIES = ['Software', 'Supplies', 'Travel', 'Other'];
+
+function validateExpenseInput(input) {
+  const errors = {};
+  const amount = Number(input.amount);
+  if (!(amount > 0)) {
+    errors.amount = 'Expense amount must be greater than zero.';
+  } else if (hasMoreThanTwoDecimals(input.amount)) {
+    errors.amount = 'Expense amount may only have up to 2 decimal places.';
+  }
+
+  const date = (input.date || '').trim();
+  if (!date || !isValidDateString(date)) {
+    errors.date = 'A valid expense date (YYYY-MM-DD) is required.';
+  }
+
+  const category = (input.category || '').trim() || 'Other';
+  const exchangeRate = Number(input.exchange_rate) > 0 ? Number(input.exchange_rate) : 1.0;
+  const currency = (input.currency || '').trim() || 'USD';
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+    data: {
+      amount: Math.round(amount * 100) / 100,
+      date,
+      category,
+      notes: (input.notes || '').trim(),
+      currency,
+      exchange_rate: exchangeRate,
+    },
+  };
+}
+
+function getExpense(id) {
+  const res = db.exec('SELECT * FROM expenses WHERE id = ?', [id]);
+  return rowToObject(res);
+}
+
+function createExpense(input) {
+  const validation = validateExpenseInput(input);
+  if (!validation.valid) {
+    return { ok: false, errors: validation.errors };
+  }
+
+  const { amount, date, category, notes, currency, exchange_rate } = validation.data;
+  const now = new Date().toISOString();
+
+  try {
+    db.run(
+      `INSERT INTO expenses (amount, date, category, notes, currency, exchange_rate, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [amount, date, category, notes, currency, exchange_rate, now, now]
+    );
+
+    const idRes = db.exec('SELECT last_insert_rowid() AS id');
+    const newId = idRes[0].values[0][0];
+    saveToDisk();
+    return { ok: true, expense: getExpense(newId) };
+  } catch (err) {
+    return { ok: false, errors: { general: `Failed to create expense: ${err.message}` } };
+  }
+}
+
+function updateExpense(id, input) {
+  const existing = getExpense(id);
+  if (!existing) {
+    return { ok: false, errors: { general: 'Expense not found.' } };
+  }
+
+  const validation = validateExpenseInput(input);
+  if (!validation.valid) {
+    return { ok: false, errors: validation.errors };
+  }
+
+  const { amount, date, category, notes, currency, exchange_rate } = validation.data;
+  const now = new Date().toISOString();
+
+  try {
+    db.run(
+      `UPDATE expenses
+       SET amount = ?, date = ?, category = ?, notes = ?, currency = ?, exchange_rate = ?, updated_at = ?
+       WHERE id = ?`,
+      [amount, date, category, notes, currency, exchange_rate, now, id]
+    );
+    saveToDisk();
+    return { ok: true, expense: getExpense(id) };
+  } catch (err) {
+    return { ok: false, errors: { general: `Failed to update expense: ${err.message}` } };
+  }
+}
+
+function deleteExpense(id) {
+  const existing = getExpense(id);
+  if (!existing) {
+    return { ok: false, errors: { general: 'Expense not found.' } };
+  }
+
+  try {
+    db.run('DELETE FROM expenses WHERE id = ?', [id]);
+    saveToDisk();
+    return { ok: true, deleted: true };
+  } catch (err) {
+    return { ok: false, errors: { general: `Failed to delete expense: ${err.message}` } };
+  }
+}
+
+function listExpenses(filter = {}) {
+  const { startDate, endDate, category, search } = filter;
+  const conditions = [];
+  const params = [];
+
+  if (startDate && startDate.trim()) {
+    conditions.push('date >= ?');
+    params.push(startDate.trim());
+  }
+
+  if (endDate && endDate.trim()) {
+    conditions.push('date <= ?');
+    params.push(endDate.trim());
+  }
+
+  if (category && category !== 'all') {
+    conditions.push('category = ?');
+    params.push(category.trim());
+  }
+
+  if (search && search.trim()) {
+    const q = `%${search.trim()}%`;
+    conditions.push('(category LIKE ? OR notes LIKE ?)');
+    params.push(q, q);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const sql = `SELECT * FROM expenses ${whereClause} ORDER BY date DESC, id DESC`;
+  return rowsToArray(db.exec(sql, params));
+}
+
+function getExpensesSummary(filter = {}) {
+  const expenses = listExpenses(filter);
+  const profile = getCompanyProfile();
+  const baseCurrency = (profile && (profile.reporting_currency || profile.default_currency)) || 'USD';
+
+  let totalExpenses = 0;
+  const categoryMap = {};
+
+  for (const exp of expenses) {
+    const rate = Number(exp.exchange_rate) || 1.0;
+    const baseAmount = Math.round((Number(exp.amount) || 0) * rate * 100) / 100;
+    totalExpenses += baseAmount;
+
+    const cat = (exp.category || 'Other').trim() || 'Other';
+    if (!categoryMap[cat]) {
+      categoryMap[cat] = { category: cat, totalAmount: 0, count: 0 };
+    }
+    categoryMap[cat].totalAmount += baseAmount;
+    categoryMap[cat].count += 1;
+  }
+
+  totalExpenses = Math.round(totalExpenses * 100) / 100;
+
+  const byCategory = Object.values(categoryMap).map((c) => {
+    const rounded = Math.round(c.totalAmount * 100) / 100;
+    const percentage = totalExpenses > 0 ? Math.round((rounded / totalExpenses) * 1000) / 10 : 0;
+    return {
+      category: c.category,
+      totalAmount: rounded,
+      count: c.count,
+      percentage,
+    };
+  });
+
+  byCategory.sort((a, b) => b.totalAmount - a.totalAmount);
+
+  return {
+    totalExpenses,
+    count: expenses.length,
+    baseCurrency,
+    byCategory,
+    expenses,
+  };
+}
+
 
 // ---------- Quote numbering (monotonic, never reused) ----------
 // Counter is keyed by (prefix, year) in sequence_counters. It only ever
@@ -2881,6 +3081,12 @@ function getDashboardStats() {
   const creditedYear = scalar(`SELECT COALESCE(SUM(cn.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM credit_notes cn JOIN invoices i ON cn.invoice_id = i.id WHERE strftime('%Y', cn.date_created) = strftime('%Y', 'now')`);
   const paidYear = Math.max(0, Math.round((grossPaidYear - creditedYear) * 100) / 100);
 
+  // Expenses & Real Profit
+  const expensesMonth = Math.round(scalar(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1.0)), 0) FROM expenses WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now')`) * 100) / 100;
+  const expensesYear = Math.round(scalar(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1.0)), 0) FROM expenses WHERE strftime('%Y', date) = strftime('%Y', 'now')`) * 100) / 100;
+  const profitMonth = Math.round((paidMonth - expensesMonth) * 100) / 100;
+  const profitYear = Math.round((paidYear - expensesYear) * 100) / 100;
+
   const quoteActivity = rowsToArray(db.exec(
     `SELECT id, quote_number AS number, client_id, status, total, currency,
             COALESCE(updated_at, created_at) AS ts
@@ -2912,6 +3118,10 @@ function getDashboardStats() {
     invoiced_year: invoicedYear,
     paid_month: paidMonth,
     paid_year: paidYear,
+    expenses_month: expensesMonth,
+    expenses_year: expensesYear,
+    profit_month: profitMonth,
+    profit_year: profitYear,
     activity,
   };
 }
@@ -3096,5 +3306,12 @@ module.exports = {
   addLineItemTemplate,
   updateLineItemTemplate,
   deleteLineItemTemplate,
+  EXPENSE_CATEGORIES,
+  createExpense,
+  updateExpense,
+  deleteExpense,
+  getExpense,
+  listExpenses,
+  getExpensesSummary,
   PAYMENT_METHODS,
 };

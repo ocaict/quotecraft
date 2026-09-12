@@ -9,6 +9,12 @@
   const statInvoicedYear = document.getElementById('statInvoicedYear');
   const statPaidMonth = document.getElementById('statPaidMonth');
   const statPaidYear = document.getElementById('statPaidYear');
+  const statExpensesMonth = document.getElementById('statExpensesMonth');
+  const statExpensesYear = document.getElementById('statExpensesYear');
+  const statProfitMonth = document.getElementById('statProfitMonth');
+  const statProfitYear = document.getElementById('statProfitYear');
+  const dashExpensesMonthCard = document.getElementById('dashExpensesMonthCard');
+  const dashExpensesYearCard = document.getElementById('dashExpensesYearCard');
   const activityEl = document.getElementById('dashboardActivity');
   const overdueCard = document.getElementById('overdueCard');
   const dashNewQuoteBtn = document.getElementById('dashNewQuoteBtn');
@@ -46,6 +52,21 @@
     statInvoicedYear.textContent = money(stats.invoiced_year);
     statPaidMonth.textContent = money(stats.paid_month);
     statPaidYear.textContent = money(stats.paid_year);
+
+    if (statExpensesMonth) statExpensesMonth.textContent = money(stats.expenses_month || 0);
+    if (statExpensesYear) statExpensesYear.textContent = money(stats.expenses_year || 0);
+
+    if (statProfitMonth) {
+      const pm = Number(stats.profit_month) || 0;
+      statProfitMonth.textContent = money(pm);
+      statProfitMonth.className = 'stat-value ' + (pm >= 0 ? 'profit-positive' : 'profit-negative');
+    }
+
+    if (statProfitYear) {
+      const py = Number(stats.profit_year) || 0;
+      statProfitYear.textContent = money(py);
+      statProfitYear.className = 'stat-value ' + (py >= 0 ? 'profit-positive' : 'profit-negative');
+    }
   }
 
   function renderActivity(activity) {
@@ -201,6 +222,20 @@
     window.QuoteCraftUtils.goToPage('invoices');
     window.QuoteCraftUtils.showToast('Invoices are created by converting an accepted quote.', 'success');
   });
+
+  if (dashExpensesMonthCard) {
+    dashExpensesMonthCard.addEventListener('click', () => {
+      window.QuoteCraftUtils.goToPage('expenses');
+      window.dispatchEvent(new CustomEvent('qc-set-expenses-preset', { detail: 'this_month' }));
+    });
+  }
+
+  if (dashExpensesYearCard) {
+    dashExpensesYearCard.addEventListener('click', () => {
+      window.QuoteCraftUtils.goToPage('expenses');
+      window.dispatchEvent(new CustomEvent('qc-set-expenses-preset', { detail: 'this_year' }));
+    });
+  }
 
   init();
 })();
