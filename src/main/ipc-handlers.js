@@ -27,6 +27,7 @@ const {
   setInvoiceStatus,
   addPayment,
   getPaymentHistory,
+  getPaymentsReport,
   issueCreditNote,
   getCreditNotesForInvoice,
   getCreditNotesForClient,
@@ -606,6 +607,15 @@ function registerIpcHandlers() {
 
   ipcMain.handle('invoices:methods', async () => {
     return { ok: true, methods: PAYMENT_METHODS };
+  });
+
+  ipcMain.handle('reports:payments', async (event, filter) => {
+    try {
+      const report = getPaymentsReport(filter);
+      return { ok: true, report };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to generate payments report: ${err.message}` } };
+    }
   });
 
   ipcMain.handle('creditNotes:issue', async (event, invoiceId, data) => {

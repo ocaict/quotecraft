@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   recordPayment: (id, payment) => ipcRenderer.invoke('invoices:recordPayment', id, payment),
   getInvoicePayments: (id) => ipcRenderer.invoke('invoices:payments', id),
   getPaymentMethods: () => ipcRenderer.invoke('invoices:methods'),
+  getPaymentsReport: (filters) => ipcRenderer.invoke('reports:payments', filters),
   issueCreditNote: (invoiceId, data) => ipcRenderer.invoke('creditNotes:issue', invoiceId, data),
   getCreditNotesForInvoice: (invoiceId) => ipcRenderer.invoke('creditNotes:forInvoice', invoiceId),
   getCreditNotesForClient: (clientId) => ipcRenderer.invoke('creditNotes:forClient', clientId),

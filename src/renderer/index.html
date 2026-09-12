@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="styles/quotes.css">
   <link rel="stylesheet" href="styles/invoices.css">
   <link rel="stylesheet" href="styles/dashboard.css">
+  <link rel="stylesheet" href="styles/payments.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -28,6 +29,7 @@
       <a href="#" data-page="items">Items</a>
       <a href="#" data-page="quotes">Quotes</a>
       <a href="#" data-page="invoices">Invoices</a>
+      <a href="#" data-page="payments">Payments</a>
       <a href="#" data-page="settings">Settings</a>
     </nav>
   </aside>
@@ -634,6 +636,9 @@
             <h1>Invoices</h1>
             <p class="subtitle">Invoices created from accepted quotes. Record payments and track balances.</p>
           </div>
+          <div class="detail-actions">
+            <button type="button" id="invoicesViewPaymentsBtn" class="btn btn-secondary">Payments Report</button>
+          </div>
         </div>
 
         <div id="invoicesRecurringBanner" class="quote-old-version-notice hidden" style="margin-bottom:20px;"></div>
@@ -842,6 +847,109 @@
             <p class="empty">No credit notes issued against this invoice.</p>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section id="page-payments" class="page">
+      <div class="page-header">
+        <div>
+          <h1>Payments Reconciliation</h1>
+          <p class="subtitle">Reconcile payments received across date ranges and payment methods.</p>
+        </div>
+        <div class="detail-actions">
+          <button type="button" id="paymentsExportCsvBtn" class="btn btn-secondary">Export CSV</button>
+        </div>
+      </div>
+
+      <div class="payments-toolbar">
+        <div class="filter-group">
+          <label for="paymentsDatePreset">Period Preset</label>
+          <select id="paymentsDatePreset">
+            <option value="all">All Time</option>
+            <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_year">This Year</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="paymentsStartDate">From Date</label>
+          <input type="date" id="paymentsStartDate">
+        </div>
+
+        <div class="filter-group">
+          <label for="paymentsEndDate">To Date</label>
+          <input type="date" id="paymentsEndDate">
+        </div>
+
+        <div class="filter-group">
+          <label for="paymentsMethodFilter">Payment Method</label>
+          <select id="paymentsMethodFilter">
+            <option value="all">All Methods</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Cash">Cash</option>
+            <option value="Card">Card</option>
+            <option value="Other">Other</option>
+            <option value="Unspecified">Unspecified</option>
+          </select>
+        </div>
+
+        <div class="filter-group search-wrapper">
+          <label for="paymentsSearch">Search</label>
+          <input type="text" id="paymentsSearch" placeholder="Search client, invoice #, ref, notes…">
+        </div>
+
+        <div class="toolbar-actions">
+          <button type="button" id="paymentsResetBtn" class="btn btn-ghost">Reset Filters</button>
+        </div>
+      </div>
+
+      <div class="payments-kpis">
+        <div class="payments-kpi-card primary">
+          <span class="kpi-label">Total Received</span>
+          <span id="paymentsTotalReceived" class="kpi-value">—</span>
+          <span id="paymentsPeriodLabel" class="kpi-sub">All time</span>
+        </div>
+
+        <div class="payments-kpi-card">
+          <span class="kpi-label">Transactions</span>
+          <span id="paymentsTransactionCount" class="kpi-value">—</span>
+          <span class="kpi-sub">Total payment entries</span>
+        </div>
+      </div>
+
+      <div class="reconciliation-section">
+        <div class="section-header-row">
+          <h2>Payment Method Subtotals</h2>
+        </div>
+        <div id="paymentsMethodsGrid" class="methods-subtotals-grid">
+          <!-- Dynamically populated per-method subtotal cards -->
+        </div>
+      </div>
+
+      <div class="card payments-table-card">
+        <table class="payments-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Invoice #</th>
+              <th>Client</th>
+              <th>Method</th>
+              <th>Reference #</th>
+              <th>Notes</th>
+              <th style="text-align: right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="paymentsTableBody">
+            <tr>
+              <td colspan="7" class="payments-empty">
+                <p>Loading payments…</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -1441,6 +1549,7 @@
   <script src="js/quotes.js"></script>
   <script src="js/invoices.js"></script>
   <script src="js/dashboard.js"></script>
+  <script src="js/payments.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

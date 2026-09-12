@@ -2299,6 +2299,141 @@ function addPayment(invoiceId, input) {
   return { ok: true, invoice: getInvoice(invoiceId) };
 }
 
+// Return payments reconciliation report filtered by date range and payment method.
+// Reads strictly from the existing payments table joined with invoices and clients.
+function getPaymentsReport(filter = {}) {
+  const { startDate, endDate, paymentMethod, search } = filter;
+  const conditions = [];
+  const params = [];
+
+  if (startDate && startDate.trim()) {
+    conditions.push('p.payment_date >= ?');
+    params.push(startDate.trim());
+  }
+
+  if (endDate && endDate.trim()) {
+    conditions.push('p.payment_date <= ?');
+    params.push(endDate.trim());
+  }
+
+  if (paymentMethod && paymentMethod !== 'all') {
+    if (paymentMethod === 'Unspecified') {
+      conditions.push("(p.payment_method IS NULL OR TRIM(p.payment_method) = '')");
+    } else {
+      conditions.push('p.payment_method = ?');
+      params.push(paymentMethod);
+    }
+  }
+
+  if (search && search.trim()) {
+    const q = `%${search.trim()}%`;
+    conditions.push(
+      '(i.invoice_number LIKE ? OR c.name LIKE ? OR c.company_name LIKE ? OR p.reference_number LIKE ? OR p.notes LIKE ?)'
+    );
+    params.push(q, q, q, q, q);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const sql = `
+    SELECT 
+      p.id,
+      p.invoice_id,
+      p.amount,
+      p.payment_date,
+      p.payment_method,
+      p.reference_number,
+      p.notes,
+      p.created_at,
+      i.invoice_number,
+      i.currency,
+      COALESCE(i.exchange_rate, 1.0) AS exchange_rate,
+      c.id AS client_id,
+      c.name AS client_name,
+      c.company_name AS client_company
+    FROM payments p
+    JOIN invoices i ON p.invoice_id = i.id
+    LEFT JOIN clients c ON i.client_id = c.id
+    ${whereClause}
+    ORDER BY p.payment_date DESC, p.id DESC
+  `;
+
+  const payments = rowsToArray(db.exec(sql, params));
+
+  let totalReceived = 0;
+  const methodMap = {};
+  const currencyMap = {};
+
+  for (const item of payments) {
+    const rate = Number(item.exchange_rate) || 1.0;
+    const baseAmount = Math.round((Number(item.amount) || 0) * rate * 100) / 100;
+    totalReceived += baseAmount;
+
+    const rawMethod = (item.payment_method || '').trim();
+    const methodKey = rawMethod ? rawMethod : 'Unspecified';
+    if (!methodMap[methodKey]) {
+      methodMap[methodKey] = {
+        method: methodKey,
+        totalAmount: 0,
+        count: 0,
+      };
+    }
+    methodMap[methodKey].totalAmount += baseAmount;
+    methodMap[methodKey].count += 1;
+
+    const curr = item.currency || 'USD';
+    if (!currencyMap[curr]) {
+      currencyMap[curr] = { currency: curr, totalAmount: 0, count: 0 };
+    }
+    currencyMap[curr].totalAmount += Number(item.amount) || 0;
+    currencyMap[curr].count += 1;
+  }
+
+  totalReceived = Math.round(totalReceived * 100) / 100;
+
+  const allKnownMethods = ['Bank Transfer', 'Cash', 'Card', 'Other'];
+  let distinctMethodsRes = [];
+  try {
+    distinctMethodsRes = rowsToArray(
+      db.exec(`SELECT DISTINCT payment_method FROM payments WHERE payment_method IS NOT NULL AND TRIM(payment_method) != '' ORDER BY payment_method ASC`)
+    ).map((r) => r.payment_method);
+  } catch (_) {}
+
+  const availableMethods = Array.from(new Set([...allKnownMethods, ...distinctMethodsRes]));
+
+  const byMethod = Object.values(methodMap).map((m) => {
+    const rounded = Math.round(m.totalAmount * 100) / 100;
+    const percentage = totalReceived > 0 ? Math.round((rounded / totalReceived) * 1000) / 10 : 0;
+    return {
+      method: m.method,
+      totalAmount: rounded,
+      count: m.count,
+      percentage,
+    };
+  });
+
+  byMethod.sort((a, b) => b.totalAmount - a.totalAmount);
+
+  const byCurrency = Object.values(currencyMap).map((c) => ({
+    currency: c.currency,
+    totalAmount: Math.round(c.totalAmount * 100) / 100,
+    count: c.count,
+  }));
+
+  const companyProfile = getCompanyProfile();
+  const baseCurrency = (companyProfile && companyProfile.base_currency) || 'USD';
+
+  return {
+    totalReceived,
+    count: payments.length,
+    baseCurrency,
+    byMethod,
+    byCurrency,
+    availableMethods,
+    payments,
+  };
+}
+
 // ---------- Credit Notes ----------
 
 function getCreditNotePrefix() {
@@ -2943,6 +3078,7 @@ module.exports = {
   setInvoiceStatus,
   addPayment,
   getPaymentHistory,
+  getPaymentsReport,
   issueCreditNote,
   getCreditNotesForInvoice,
   getCreditNotesForClient,
