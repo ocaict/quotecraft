@@ -2634,6 +2634,306 @@ function getPaymentsReport(filter = {}) {
   };
 }
 
+// Return Profit & Loss report comparing income (Cash vs Accrual) and expenses by month
+// with running cumulative profit for a selected date range.
+function getProfitLossReport(filter = {}) {
+  const { startDate, endDate, basis = 'cash' } = filter;
+  const activeBasis = basis === 'accrual' ? 'accrual' : 'cash';
+
+  const profile = getCompanyProfile();
+  const baseCurrency = (profile && (profile.reporting_currency || profile.default_currency)) || 'USD';
+
+  // Date filters
+  const invConds = [];
+  const invParams = [];
+  const cnConds = [];
+  const cnParams = [];
+  const payConds = [];
+  const payParams = [];
+  const expConds = [];
+  const expParams = [];
+
+  let startMonth = startDate ? startDate.trim().slice(0, 7) : null;
+  let endMonth = endDate ? endDate.trim().slice(0, 7) : null;
+
+  if (startDate && startDate.trim()) {
+    const s = startDate.trim();
+    invConds.push('date_created >= ?');
+    invParams.push(s);
+    cnConds.push('cn.date_created >= ?');
+    cnParams.push(s);
+    payConds.push('p.payment_date >= ?');
+    payParams.push(s);
+    expConds.push('date >= ?');
+    expParams.push(s);
+  }
+
+  if (endDate && endDate.trim()) {
+    const e = endDate.trim();
+    invConds.push('date_created <= ?');
+    invParams.push(e);
+    cnConds.push('cn.date_created <= ?');
+    cnParams.push(e);
+    payConds.push('p.payment_date <= ?');
+    payParams.push(e);
+    expConds.push('date <= ?');
+    expParams.push(e);
+  }
+
+  // If month bounds not explicitly given, discover earliest and latest months
+  if (!startMonth || !endMonth) {
+    const minInvRes = db.exec(`SELECT MIN(strftime('%Y-%m', date_created)) FROM invoices`);
+    const minPayRes = db.exec(`SELECT MIN(strftime('%Y-%m', payment_date)) FROM payments`);
+    const minExpRes = db.exec(`SELECT MIN(strftime('%Y-%m', date)) FROM expenses`);
+
+    const maxInvRes = db.exec(`SELECT MAX(strftime('%Y-%m', date_created)) FROM invoices`);
+    const maxPayRes = db.exec(`SELECT MAX(strftime('%Y-%m', payment_date)) FROM payments`);
+    const maxExpRes = db.exec(`SELECT MAX(strftime('%Y-%m', date)) FROM expenses`);
+
+    const allMins = [
+      minInvRes[0]?.values[0]?.[0],
+      minPayRes[0]?.values[0]?.[0],
+      minExpRes[0]?.values[0]?.[0],
+    ].filter(Boolean);
+
+    const allMaxs = [
+      maxInvRes[0]?.values[0]?.[0],
+      maxPayRes[0]?.values[0]?.[0],
+      maxExpRes[0]?.values[0]?.[0],
+    ].filter(Boolean);
+
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const startOfYear = `${now.getFullYear()}-01`;
+
+    if (!startMonth) {
+      if (allMins.length) {
+        allMins.sort();
+        startMonth = allMins[0] < startOfYear ? allMins[0] : startOfYear;
+      } else {
+        startMonth = startOfYear;
+      }
+    }
+
+    if (!endMonth) {
+      if (allMaxs.length) {
+        allMaxs.sort();
+        const latestRecorded = allMaxs[allMaxs.length - 1];
+        endMonth = latestRecorded > currentMonth ? latestRecorded : currentMonth;
+      } else {
+        endMonth = currentMonth;
+      }
+    }
+  }
+
+  // Ensure chronological order for bounds
+  if (startMonth > endMonth) {
+    const temp = startMonth;
+    startMonth = endMonth;
+    endMonth = temp;
+  }
+
+  // Build array of all months in sequence
+  const monthsList = [];
+  const [sYear, sMo] = startMonth.split('-').map(Number);
+  const [eYear, eMo] = endMonth.split('-').map(Number);
+
+  let curY = sYear;
+  let curM = sMo;
+  while (curY < eYear || (curY === eYear && curM <= eMo)) {
+    monthsList.push(`${curY}-${String(curM).padStart(2, '0')}`);
+    curM++;
+    if (curM > 12) {
+      curM = 1;
+      curY++;
+    }
+  }
+
+  // 1. Invoices grouped by month
+  const invWhere = invConds.length ? `WHERE ${invConds.join(' AND ')}` : '';
+  const invSql = `
+    SELECT 
+      strftime('%Y-%m', date_created) AS m,
+      COUNT(*) AS count,
+      COALESCE(SUM(total * COALESCE(exchange_rate, 1.0)), 0) AS total_invoiced
+    FROM invoices
+    ${invWhere}
+    GROUP BY m
+  `;
+  const invRows = rowsToArray(db.exec(invSql, invParams));
+  const invMap = {};
+  for (const r of invRows) {
+    invMap[r.m] = {
+      count: Number(r.count) || 0,
+      total: Math.round((Number(r.total_invoiced) || 0) * 100) / 100,
+    };
+  }
+
+  // 2. Credit notes grouped by month
+  const cnWhere = cnConds.length ? `WHERE ${cnConds.join(' AND ')}` : '';
+  const cnSql = `
+    SELECT 
+      strftime('%Y-%m', cn.date_created) AS m,
+      COUNT(*) AS count,
+      COALESCE(SUM(cn.amount * COALESCE(i.exchange_rate, 1.0)), 0) AS total_credited
+    FROM credit_notes cn
+    JOIN invoices i ON cn.invoice_id = i.id
+    ${cnWhere}
+    GROUP BY m
+  `;
+  const cnRows = rowsToArray(db.exec(cnSql, cnParams));
+  const cnMap = {};
+  for (const r of cnRows) {
+    cnMap[r.m] = {
+      count: Number(r.count) || 0,
+      total: Math.round((Number(r.total_credited) || 0) * 100) / 100,
+    };
+  }
+
+  // 3. Payments grouped by month
+  const payWhere = payConds.length ? `WHERE ${payConds.join(' AND ')}` : '';
+  const paySql = `
+    SELECT 
+      strftime('%Y-%m', p.payment_date) AS m,
+      COUNT(*) AS count,
+      COALESCE(SUM(p.amount * COALESCE(i.exchange_rate, 1.0)), 0) AS total_paid
+    FROM payments p
+    JOIN invoices i ON p.invoice_id = i.id
+    ${payWhere}
+    GROUP BY m
+  `;
+  const payRows = rowsToArray(db.exec(paySql, payParams));
+  const payMap = {};
+  for (const r of payRows) {
+    payMap[r.m] = {
+      count: Number(r.count) || 0,
+      total: Math.round((Number(r.total_paid) || 0) * 100) / 100,
+    };
+  }
+
+  // 4. Expenses grouped by month
+  const expWhere = expConds.length ? `WHERE ${expConds.join(' AND ')}` : '';
+  const expSql = `
+    SELECT 
+      strftime('%Y-%m', date) AS m,
+      COUNT(*) AS count,
+      COALESCE(SUM(amount * COALESCE(exchange_rate, 1.0)), 0) AS total_expenses
+    FROM expenses
+    ${expWhere}
+    GROUP BY m
+  `;
+  const expRows = rowsToArray(db.exec(expSql, expParams));
+  const expMap = {};
+  for (const r of expRows) {
+    expMap[r.m] = {
+      count: Number(r.count) || 0,
+      total: Math.round((Number(r.total_expenses) || 0) * 100) / 100,
+    };
+  }
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const fullMonthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  let runningProfitCash = 0;
+  let runningProfitAccrual = 0;
+
+  let totalInvoicedPeriod = 0;
+  let totalPaidPeriod = 0;
+  let totalExpensesPeriod = 0;
+
+  const monthsData = [];
+
+  for (const m of monthsList) {
+    const [yr, mo] = m.split('-').map(Number);
+    const monthLabel = `${monthNames[mo - 1]} ${yr}`;
+    const fullMonthLabel = `${fullMonthNames[mo - 1]} ${yr}`;
+
+    const grossInvoiced = invMap[m]?.total || 0;
+    const credited = cnMap[m]?.total || 0;
+    const netInvoiced = Math.max(0, Math.round((grossInvoiced - credited) * 100) / 100);
+    const invoicesCount = invMap[m]?.count || 0;
+
+    const grossPaid = payMap[m]?.total || 0;
+    const netPaid = Math.max(0, Math.round((grossPaid - credited) * 100) / 100);
+    const paymentsCount = payMap[m]?.count || 0;
+
+    const expenses = expMap[m]?.total || 0;
+    const expensesCount = expMap[m]?.count || 0;
+
+    const cashProfit = Math.round((netPaid - expenses) * 100) / 100;
+    const accrualProfit = Math.round((netInvoiced - expenses) * 100) / 100;
+
+    runningProfitCash = Math.round((runningProfitCash + cashProfit) * 100) / 100;
+    runningProfitAccrual = Math.round((runningProfitAccrual + accrualProfit) * 100) / 100;
+
+    totalInvoicedPeriod += netInvoiced;
+    totalPaidPeriod += netPaid;
+    totalExpensesPeriod += expenses;
+
+    const activeIncome = activeBasis === 'accrual' ? netInvoiced : netPaid;
+    const activeProfit = activeBasis === 'accrual' ? accrualProfit : cashProfit;
+    const activeRunningProfit = activeBasis === 'accrual' ? runningProfitAccrual : runningProfitCash;
+    const activeMargin = activeIncome > 0
+      ? Math.round((activeProfit / activeIncome) * 1000) / 10
+      : (activeProfit < 0 ? -100 : 0);
+
+    monthsData.push({
+      month: m,
+      monthLabel,
+      fullMonthLabel,
+      invoiced: netInvoiced,
+      invoicesCount,
+      paid: netPaid,
+      paymentsCount,
+      expenses,
+      expensesCount,
+      cashProfit,
+      accrualProfit,
+      runningProfitCash,
+      runningProfitAccrual,
+      activeIncome,
+      activeProfit,
+      activeRunningProfit,
+      margin: activeMargin,
+    });
+  }
+
+  totalInvoicedPeriod = Math.round(totalInvoicedPeriod * 100) / 100;
+  totalPaidPeriod = Math.round(totalPaidPeriod * 100) / 100;
+  totalExpensesPeriod = Math.round(totalExpensesPeriod * 100) / 100;
+
+  const totalIncome = activeBasis === 'accrual' ? totalInvoicedPeriod : totalPaidPeriod;
+  const netProfit = Math.round((totalIncome - totalExpensesPeriod) * 100) / 100;
+  const netProfitCash = Math.round((totalPaidPeriod - totalExpensesPeriod) * 100) / 100;
+  const netProfitAccrual = Math.round((totalInvoicedPeriod - totalExpensesPeriod) * 100) / 100;
+
+  const profitMargin = totalIncome > 0
+    ? Math.round((netProfit / totalIncome) * 1000) / 10
+    : (netProfit < 0 ? -100 : 0);
+
+  const variance = Math.round((totalInvoicedPeriod - totalPaidPeriod) * 100) / 100;
+
+  return {
+    basis: activeBasis,
+    startDate: startMonth,
+    endDate: endMonth,
+    baseCurrency,
+    totalInvoiced: totalInvoicedPeriod,
+    totalPaid: totalPaidPeriod,
+    totalExpenses: totalExpensesPeriod,
+    totalIncome,
+    netProfit,
+    netProfitCash,
+    netProfitAccrual,
+    profitMargin,
+    variance,
+    months: monthsData,
+  };
+}
+
 // ---------- Credit Notes ----------
 
 function getCreditNotePrefix() {
@@ -3289,6 +3589,7 @@ module.exports = {
   addPayment,
   getPaymentHistory,
   getPaymentsReport,
+  getProfitLossReport,
   issueCreditNote,
   getCreditNotesForInvoice,
   getCreditNotesForClient,

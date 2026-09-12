@@ -237,5 +237,29 @@
     });
   }
 
+  const dashProfitMonthCard = document.getElementById('dashProfitMonthCard');
+  if (dashProfitMonthCard) {
+    dashProfitMonthCard.addEventListener('click', () => {
+      window.QuoteCraftUtils.goToPage('profit-loss');
+      const presetSelect = document.getElementById('plDatePreset');
+      if (presetSelect) {
+        presetSelect.value = 'this_month';
+        presetSelect.dispatchEvent(new Event('change'));
+      }
+    });
+  }
+
+  const dashProfitYearCard = document.getElementById('dashProfitYearCard');
+  if (dashProfitYearCard) {
+    dashProfitYearCard.addEventListener('click', () => {
+      window.QuoteCraftUtils.goToPage('profit-loss');
+      const presetSelect = document.getElementById('plDatePreset');
+      if (presetSelect) {
+        presetSelect.value = 'this_year';
+        presetSelect.dispatchEvent(new Event('change'));
+      }
+    });
+  }
+
   init();
 })();

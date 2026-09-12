@@ -28,6 +28,7 @@ const {
   addPayment,
   getPaymentHistory,
   getPaymentsReport,
+  getProfitLossReport,
   issueCreditNote,
   getCreditNotesForInvoice,
   getCreditNotesForClient,
@@ -622,6 +623,15 @@ function registerIpcHandlers() {
       return { ok: true, report };
     } catch (err) {
       return { ok: false, errors: { general: `Failed to generate payments report: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('reports:profitLoss', async (event, filter) => {
+    try {
+      const report = getProfitLossReport(filter);
+      return { ok: true, report };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to generate Profit & Loss report: ${err.message}` } };
     }
   });
 

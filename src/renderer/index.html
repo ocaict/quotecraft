@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="styles/dashboard.css">
   <link rel="stylesheet" href="styles/payments.css">
   <link rel="stylesheet" href="styles/expenses.css">
+  <link rel="stylesheet" href="styles/profit-loss.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -32,6 +33,7 @@
       <a href="#" data-page="invoices">Invoices</a>
       <a href="#" data-page="payments">Payments</a>
       <a href="#" data-page="expenses">Expenses</a>
+      <a href="#" data-page="profit-loss">Profit &amp; Loss</a>
       <a href="#" data-page="settings">Settings</a>
     </nav>
   </aside>
@@ -108,16 +110,16 @@
           <span class="stat-sub">Total expenses in current year</span>
         </div>
 
-        <div class="card stat-card">
+        <div class="card stat-card stat-card-link" id="dashProfitMonthCard" role="button" tabindex="0">
           <span class="stat-label">Net profit this month</span>
           <span id="statProfitMonth" class="stat-value">—</span>
-          <span class="stat-sub">Cash received minus expenses</span>
+          <span class="stat-sub">Cash received minus expenses &rarr;</span>
         </div>
 
-        <div class="card stat-card">
+        <div class="card stat-card stat-card-link" id="dashProfitYearCard" role="button" tabindex="0">
           <span class="stat-label">Net profit this year</span>
           <span id="statProfitYear" class="stat-value">—</span>
-          <span class="stat-sub">Cash received minus expenses</span>
+          <span class="stat-sub">Cash received minus expenses &rarr;</span>
         </div>
       </div>
 
@@ -1079,6 +1081,167 @@
       </div>
     </section>
 
+    <section id="page-profit-loss" class="page">
+      <div class="page-header pl-header-row">
+        <div>
+          <h1>Profit &amp; Loss</h1>
+          <p class="subtitle">Monthly breakdown of income vs. expenses with running cumulative cash flow.</p>
+        </div>
+        <div class="pl-actions">
+          <button type="button" id="plPrintBtn" class="btn btn-secondary">Print / PDF</button>
+          <button type="button" id="plExportCsvBtn" class="btn btn-secondary">Export CSV</button>
+        </div>
+      </div>
+
+      <!-- Accounting Basis Toggle & Informational Banner -->
+      <div class="pl-basis-card">
+        <div class="pl-basis-header">
+          <div class="pl-basis-title-group">
+            <span class="pl-basis-heading">Accounting Method:</span>
+            <div class="pl-segmented-control" role="group" aria-label="Accounting Method Selection">
+              <button type="button" id="plBasisCashBtn" class="pl-seg-btn active" title="Profit based on actual payments received into your account">
+                <span>💵</span> Cash Basis (Actually Paid)
+              </button>
+              <button type="button" id="plBasisAccrualBtn" class="pl-seg-btn" title="Profit based on invoiced totals regardless of collection date">
+                <span>📄</span> Accrual Basis (Invoiced)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="plBasisExplainer" class="pl-basis-explainer">
+          <span class="pl-explainer-icon">ℹ️</span>
+          <div class="pl-explainer-content">
+            <div id="plBasisExplainerText">
+              <strong>Cash Basis Active:</strong> Income is recognized only when actual payment is received into your account.
+            </div>
+            <div id="plVarianceBadge" class="pl-variance-badge"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters Toolbar -->
+      <div class="pl-toolbar">
+        <div class="filter-group">
+          <label for="plDatePreset">Period</label>
+          <select id="plDatePreset">
+            <option value="this_year" selected>This Year</option>
+            <option value="last_year">Last Year</option>
+            <option value="last_12_months">Last 12 Months</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_month">This Month</option>
+            <option value="all">All Time</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="plStartDate">From</label>
+          <input type="date" id="plStartDate">
+        </div>
+
+        <div class="filter-group">
+          <label for="plEndDate">To</label>
+          <input type="date" id="plEndDate">
+        </div>
+
+        <div class="toolbar-actions">
+          <button type="button" id="plResetBtn" class="btn btn-ghost">Reset</button>
+        </div>
+      </div>
+
+      <!-- Overview KPIs -->
+      <div class="pl-kpis">
+        <div class="pl-kpi-card income-card">
+          <div class="kpi-label-row">
+            <span class="kpi-label">Total Income</span>
+            <span id="plTotalIncomeBadge" class="pl-kpi-badge cash">Cash (Paid)</span>
+          </div>
+          <span id="plTotalIncome" class="kpi-value">—</span>
+          <span id="plTotalIncomeSub" class="kpi-sub">Total revenue recognized in period</span>
+        </div>
+
+        <div class="pl-kpi-card">
+          <div class="kpi-label-row">
+            <span class="kpi-label">Total Expenses</span>
+            <span class="pl-kpi-badge">Outflows</span>
+          </div>
+          <span id="plTotalExpenses" class="kpi-value expense-value">—</span>
+          <span id="plTotalExpensesSub" class="kpi-sub">Total business expenses in period</span>
+        </div>
+
+        <div class="pl-kpi-card profit-card" id="plNetProfitCard">
+          <div class="kpi-label-row">
+            <span class="kpi-label">Net Profit</span>
+            <span class="pl-kpi-badge">Bottom Line</span>
+          </div>
+          <span id="plNetProfit" class="kpi-value">—</span>
+          <span id="plNetProfitSub" class="kpi-sub">Income minus expenses</span>
+        </div>
+
+        <div class="pl-kpi-card" id="plVarianceCard">
+          <div class="kpi-label-row">
+            <span class="kpi-label">Invoiced vs Paid Gap</span>
+            <span class="pl-kpi-badge">Variance</span>
+          </div>
+          <span id="plVarianceValue" class="kpi-value">—</span>
+          <span id="plVarianceSub" class="kpi-sub">Uncollected invoiced balance</span>
+        </div>
+      </div>
+
+      <!-- Monthly Breakdown Table -->
+      <div class="pl-table-card">
+        <div class="pl-table-header">
+          <h2>Monthly Statement &amp; Cumulative Profit</h2>
+          <div class="pl-table-legend">
+            <span class="pl-legend-item"><span class="pl-legend-dot income"></span> Income</span>
+            <span class="pl-legend-item"><span class="pl-legend-dot expense"></span> Expenses</span>
+            <span class="pl-legend-item"><span class="pl-legend-dot running"></span> Running Total</span>
+          </div>
+        </div>
+
+        <div id="plTableWrapper" class="pl-table-wrapper">
+          <table class="pl-table">
+            <thead>
+              <tr>
+                <th class="col-month">Month</th>
+                <th class="col-num">Invoiced (Accrual)</th>
+                <th class="col-num">Paid (Cash)</th>
+                <th class="col-num" id="plThActiveIncome">Active Income (Paid)</th>
+                <th class="col-num">Expenses</th>
+                <th class="col-num">Net Profit</th>
+                <th class="col-num">Margin %</th>
+                <th class="col-num">Running Total</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody id="plTableBody">
+              <!-- Dynamically rendered monthly rows -->
+            </tbody>
+            <tfoot>
+              <tr>
+                <td class="col-month">TOTAL</td>
+                <td class="col-num" id="plTfInvoiced">—</td>
+                <td class="col-num" id="plTfPaid">—</td>
+                <td class="col-num col-active-income" id="plTfActiveIncome">—</td>
+                <td class="col-num expense-value" id="plTfExpenses">—</td>
+                <td class="col-num" id="plTfNetProfit">—</td>
+                <td class="col-num" id="plTfMargin">—</td>
+                <td class="col-num col-running" id="plTfRunning">—</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div id="plEmptyState" class="pl-empty-state" style="display: none;">
+          <div style="font-size: 36px; margin-bottom: 8px;">📊</div>
+          <h3>No financial activity found for this period</h3>
+          <p>Try selecting a broader date range or recording new invoices/expenses.</p>
+        </div>
+      </div>
+    </section>
+
     <section id="page-settings" class="page">
       <div class="page-header">
         <h1>Company Profile / Settings</h1>
@@ -1737,6 +1900,7 @@
   <script src="js/dashboard.js"></script>
   <script src="js/payments.js"></script>
   <script src="js/expenses.js"></script>
+  <script src="js/profit-loss.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
