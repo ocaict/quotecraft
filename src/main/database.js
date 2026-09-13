@@ -2,9 +2,10 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+const { encryptSecret, decryptSecret, getStorageMechanismName } = require('./secure-storage');
 
 const DB_DIR = app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(__dirname, '../../data');
-const DB_FILE = path.join(DB_DIR, 'quotecraft.sqlite');
+const DB_FILE = process.env.TEST_DB_PATH || path.join(DB_DIR, 'quotecraft.sqlite');
 
 let db = null;
 let SQL_PROMISE = null;
@@ -606,6 +607,25 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 19,
+    up: () => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS email_settings (
+          id                      INTEGER PRIMARY KEY CHECK (id = 1),
+          smtp_host               TEXT NOT NULL DEFAULT '',
+          smtp_port               INTEGER NOT NULL DEFAULT 587,
+          smtp_secure             INTEGER NOT NULL DEFAULT 0,
+          smtp_username           TEXT NOT NULL DEFAULT '',
+          smtp_password_encrypted TEXT DEFAULT '',
+          sender_name             TEXT NOT NULL DEFAULT '',
+          sender_email            TEXT NOT NULL DEFAULT '',
+          created_at              TEXT NOT NULL,
+          updated_at              TEXT NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 function runMigrations() {
@@ -724,6 +744,119 @@ function saveCompanyProfile(profile) {
 
   saveToDisk();
   return getCompanyProfile();
+}
+
+// ---------- Email (SMTP) Settings ----------
+
+function getEmailSettings() {
+  const res = db.exec('SELECT * FROM email_settings WHERE id = 1');
+  if (!res.length || res[0].values.length === 0) {
+    return {
+      smtp_host: 'smtp.gmail.com',
+      smtp_port: 465,
+      smtp_secure: 1,
+      smtp_username: '',
+      sender_name: '',
+      sender_email: '',
+      has_password: false,
+      password_saved: false,
+      storage_type: getStorageMechanismName(),
+    };
+  }
+
+  const cols = res[0].columns;
+  const row = res[0].values[0];
+  const obj = {};
+  cols.forEach((col, i) => { obj[col] = row[i]; });
+
+  const hasPassword = Boolean(obj.smtp_password_encrypted && String(obj.smtp_password_encrypted).trim().length > 0);
+  delete obj.smtp_password_encrypted;
+
+  return {
+    smtp_host: obj.smtp_host || '',
+    smtp_port: Number(obj.smtp_port) || 587,
+    smtp_secure: Number(obj.smtp_secure) || 0,
+    smtp_username: obj.smtp_username || '',
+    sender_name: obj.sender_name || '',
+    sender_email: obj.sender_email || '',
+    has_password: hasPassword,
+    password_saved: hasPassword,
+    storage_type: getStorageMechanismName(),
+  };
+}
+
+function getEmailSettingsInternal() {
+  const res = db.exec('SELECT * FROM email_settings WHERE id = 1');
+  if (!res.length || res[0].values.length === 0) {
+    return null;
+  }
+  const cols = res[0].columns;
+  const row = res[0].values[0];
+  const obj = {};
+  cols.forEach((col, i) => { obj[col] = row[i]; });
+
+  let decryptedPass = '';
+  if (obj.smtp_password_encrypted) {
+    decryptedPass = decryptSecret(obj.smtp_password_encrypted);
+  }
+
+  return {
+    smtp_host: obj.smtp_host || '',
+    smtp_port: Number(obj.smtp_port) || 587,
+    smtp_secure: Number(obj.smtp_secure) || 0,
+    smtp_username: obj.smtp_username || '',
+    smtp_password: decryptedPass,
+    sender_name: obj.sender_name || '',
+    sender_email: obj.sender_email || '',
+  };
+}
+
+function saveEmailSettings(settings) {
+  const now = new Date().toISOString();
+  const existingRes = db.exec('SELECT * FROM email_settings WHERE id = 1');
+  let existingEncryptedPass = '';
+  if (existingRes.length && existingRes[0].values.length > 0) {
+    const cols = existingRes[0].columns;
+    const passIdx = cols.indexOf('smtp_password_encrypted');
+    if (passIdx !== -1) {
+      existingEncryptedPass = existingRes[0].values[0][passIdx] || '';
+    }
+  }
+
+  let finalEncryptedPass = existingEncryptedPass;
+  if (settings.smtp_password !== undefined && settings.smtp_password !== null && settings.smtp_password !== '') {
+    finalEncryptedPass = encryptSecret(settings.smtp_password);
+  } else if (settings.clear_password) {
+    finalEncryptedPass = '';
+  }
+
+  const host = String(settings.smtp_host || '').trim();
+  const port = Number(settings.smtp_port) || 587;
+  const secure = settings.smtp_secure ? 1 : 0;
+  const username = String(settings.smtp_username || '').trim();
+  const senderName = String(settings.sender_name || '').trim();
+  const senderEmail = String(settings.sender_email || '').trim();
+
+  if (existingRes.length && existingRes[0].values.length > 0) {
+    db.run(
+      `UPDATE email_settings SET
+         smtp_host = ?, smtp_port = ?, smtp_secure = ?, smtp_username = ?,
+         smtp_password_encrypted = ?, sender_name = ?, sender_email = ?, updated_at = ?
+       WHERE id = 1`,
+      [host, port, secure, username, finalEncryptedPass, senderName, senderEmail, now]
+    );
+  } else {
+    db.run(
+      `INSERT INTO email_settings (
+         id, smtp_host, smtp_port, smtp_secure, smtp_username,
+         smtp_password_encrypted, sender_name, sender_email, created_at, updated_at
+       ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [host, port, secure, username, finalEncryptedPass, senderName, senderEmail, now, now]
+    );
+  }
+
+  saveToDisk();
+  return { ok: true, settings: getEmailSettings() };
 }
 
 function getClients() {
@@ -3615,4 +3748,7 @@ module.exports = {
   listExpenses,
   getExpensesSummary,
   PAYMENT_METHODS,
+  getEmailSettings,
+  getEmailSettingsInternal,
+  saveEmailSettings,
 };

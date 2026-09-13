@@ -1,4 +1,4 @@
-const { ipcMain, dialog, app } = require('electron');
+const { ipcMain, dialog, app, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { renderQuotePdf, renderInvoicePdf, renderCreditNotePdf } = require('./pdf-export');
@@ -66,7 +66,11 @@ const {
   getExpense,
   listExpenses,
   getExpensesSummary,
+  getEmailSettings,
+  getEmailSettingsInternal,
+  saveEmailSettings,
 } = require('./database');
+const { sendTestEmail } = require('./email-service');
 
 const LOGO_DIR = () => path.join(app.getPath('userData'), 'logo');
 const BACKUPS_DIR = () => path.join(app.getPath('userData'), 'backups');
@@ -897,6 +901,59 @@ function registerIpcHandlers() {
       return { ok: true, autoBackupPath: autoPath };
     } catch (err) {
       return { ok: false, errors: { general: `Could not restore backup: ${err.message}` } };
+    }
+  });
+
+  // ---------- Email Settings ----------
+  ipcMain.handle('email:getSettings', async () => {
+    try {
+      const settings = getEmailSettings();
+      return { ok: true, settings };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to load email settings: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('email:saveSettings', async (event, settings) => {
+    try {
+      const result = saveEmailSettings(settings);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to save email settings: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('email:sendTest', async (event, recipient) => {
+    try {
+      const config = getEmailSettingsInternal();
+      if (!config) {
+        return { ok: false, error: 'No email settings configured yet. Please save your SMTP settings first.' };
+      }
+      const result = await sendTestEmail(config, recipient);
+      return result;
+    } catch (err) {
+      return { ok: false, error: `Failed to send test email: ${err.message}` };
+    }
+  });
+
+  // ---------- Shell: Open External URLs ----------
+  ipcMain.handle('shell:openExternal', async (event, url) => {
+    try {
+      const allowed = [
+        'https://myaccount.google.com/apppasswords',
+        'https://account.live.com/proofs/manage',
+        'https://login.yahoo.com/account/security',
+        'https://appleid.apple.com/account/manage',
+        'https://ethereal.email',
+      ];
+      const isAllowed = allowed.some((prefix) => url.startsWith(prefix));
+      if (!isAllowed && !url.startsWith('https://')) {
+        return { ok: false, error: 'Only https:// URLs may be opened externally.' };
+      }
+      await shell.openExternal(url);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
   });
 }

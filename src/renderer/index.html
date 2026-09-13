@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="styles/payments.css">
   <link rel="stylesheet" href="styles/expenses.css">
   <link rel="stylesheet" href="styles/profit-loss.css">
+  <link rel="stylesheet" href="styles/email-settings.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -35,6 +36,7 @@
       <a href="#" data-page="expenses">Expenses</a>
       <a href="#" data-page="profit-loss">Profit &amp; Loss</a>
       <a href="#" data-page="settings">Settings</a>
+      <a href="#" data-page="email-settings">Email Settings</a>
     </nav>
   </aside>
 
@@ -1458,6 +1460,134 @@
         </div>
       </form>
     </section>
+
+    <section id="page-email-settings" class="page">
+      <div class="page-header email-header">
+        <div>
+          <h1>Email Configuration</h1>
+          <p class="subtitle">Send quotes and invoices directly from your own email account. No third-party servers, no credentials stored off-device — everything stays local.</p>
+        </div>
+        <div class="email-header-actions">
+          <button type="button" id="es-save-btn" class="btn btn-primary">💾 Save Settings</button>
+        </div>
+      </div>
+
+      <div class="card email-settings-full">
+        <h2>Quick Presets</h2>
+        <p class="subtitle">Select your email provider to auto-fill recommended server hosts and ports:</p>
+        <div id="email-provider-pills" class="provider-presets"></div>
+
+        <div id="es-app-password-notice" class="app-password-notice" style="display: none;">
+          <div class="notice-header">
+            <span class="notice-icon">🔐</span>
+            <span class="notice-title">App Password Required / Recommended</span>
+          </div>
+          <p id="es-app-password-text"></p>
+          <div id="es-app-password-links" class="provider-links"></div>
+        </div>
+      </div>
+
+      <div id="email-settings-section" class="email-settings-grid">
+        <!-- Card 1: Sender Identity -->
+        <div class="card">
+          <h2>Sender Identity</h2>
+          <p class="subtitle">How your emails will appear to clients in their inbox.</p>
+
+          <div class="form-row">
+            <div class="field field-required">
+              <label for="es-sender-name">Sender Name</label>
+              <input type="text" id="es-sender-name" placeholder="e.g. Acme Studio or Jane Doe">
+              <span class="hint">The display name clients see on received messages.</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field field-required">
+              <label for="es-sender-email">Sender Email Address</label>
+              <input type="email" id="es-sender-email" placeholder="e.g. billing@mybusiness.com">
+              <span class="hint">Your email address. Replies will be delivered here.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: SMTP Outgoing Server -->
+        <div class="card">
+          <h2>Outgoing Server (SMTP)</h2>
+          <p class="subtitle">Connection parameters provided by your mail host.</p>
+
+          <div class="form-row">
+            <div class="field field-required">
+              <label for="es-smtp-host">SMTP Host</label>
+              <input type="text" id="es-smtp-host" value="smtp.gmail.com" placeholder="e.g. smtp.gmail.com">
+            </div>
+            <div class="field field-required" style="max-width: 140px;">
+              <label for="es-smtp-port">Port</label>
+              <input type="number" id="es-smtp-port" min="1" max="65535" value="465">
+            </div>
+          </div>
+
+          <div class="ssl-toggle-row">
+            <label class="toggle-switch">
+              <input type="checkbox" id="es-smtp-secure" checked>
+              <span class="toggle-track"></span>
+            </label>
+            <label for="es-smtp-secure">Use SSL/TLS (Port 465). Unchecked for STARTTLS (Port 587/25).</label>
+          </div>
+        </div>
+
+        <!-- Card 3: Authentication & Encryption -->
+        <div class="card">
+          <h2>Authentication &amp; Credentials</h2>
+          <p class="subtitle">Credentials used to authenticate with your SMTP server.</p>
+
+          <div class="form-row">
+            <div class="field field-required">
+              <label for="es-smtp-username">SMTP Username</label>
+              <input type="text" id="es-smtp-username" placeholder="e.g. user@gmail.com" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="es-smtp-password">
+                Password or App Password
+                <span id="es-password-badge" class="password-saved-badge" style="display: none;">🔒 Stored Securely</span>
+              </label>
+              <div class="password-input-wrap">
+                <input type="password" id="es-smtp-password" placeholder="Enter password (leave blank to keep current)" autocomplete="new-password">
+                <button type="button" id="es-toggle-password" class="password-toggle-btn" title="Toggle password visibility" aria-label="Toggle password visibility">👁️</button>
+              </div>
+              <span class="hint">Most modern email providers (Gmail, Outlook, Yahoo, Apple) require an <strong>App Password</strong> rather than your primary password.</span>
+            </div>
+          </div>
+
+          <div class="secure-storage-badge">
+            <span class="shield-icon">🛡️</span>
+            <span><strong>OS Secure Vault:</strong> Your password is encrypted at rest using your operating system's native credentials vault (Windows DPAPI / macOS Keychain / Linux Secret Service) — never stored in plaintext.</span>
+          </div>
+        </div>
+
+        <!-- Card 4: Send Test Email -->
+        <div class="card">
+          <h2>Verify Connection</h2>
+          <p class="subtitle">Send a test email to confirm your SMTP configuration works before sending invoices.</p>
+
+          <div class="test-email-row">
+            <div class="field">
+              <label for="es-test-recipient">Send Test Email To</label>
+              <input type="email" id="es-test-recipient" placeholder="e.g. you@example.com">
+            </div>
+            <button type="button" id="es-test-btn" class="btn btn-secondary">📨 Send Test Email</button>
+          </div>
+
+          <div id="es-test-result" class="test-result-alert" style="display: none;"></div>
+        </div>
+      </div>
+
+      <div class="email-bottom-actions">
+        <button type="button" id="es-save-btn-bottom" class="btn btn-primary">💾 Save Settings</button>
+      </div>
+    </section>
   </main>
 
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
@@ -1901,6 +2031,7 @@
   <script src="js/payments.js"></script>
   <script src="js/expenses.js"></script>
   <script src="js/profit-loss.js"></script>
+  <script src="js/email-settings.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

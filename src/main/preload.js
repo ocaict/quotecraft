@@ -71,4 +71,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportBackup: () => ipcRenderer.invoke('backup:export'),
   prepareRestore: () => ipcRenderer.invoke('backup:prepareRestore'),
   restoreBackup: (filePath) => ipcRenderer.invoke('backup:restore', filePath),
+
+  getEmailSettings: () => ipcRenderer.invoke('email:getSettings'),
+  saveEmailSettings: (settings) => ipcRenderer.invoke('email:saveSettings', settings),
+  sendTestEmail: (recipient) => ipcRenderer.invoke('email:sendTest', recipient),
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
 });
