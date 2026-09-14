@@ -1,7 +1,7 @@
 const { ipcMain, dialog, app, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { renderQuotePdf, renderInvoicePdf, renderCreditNotePdf } = require('./pdf-export');
+const { renderQuotePdf, renderInvoicePdf, renderCreditNotePdf, renderQuoteHtml } = require('./pdf-export');
 const {
   getCompanyProfile,
   saveCompanyProfile,
@@ -19,6 +19,8 @@ const {
   getQuoteVersionHistory,
   listQuotes,
   setQuoteStatus,
+  markQuoteAccepted,
+  markQuoteDeclined,
   convertQuoteToInvoice,
   createFinalInvoiceFromDeposit,
   getInvoice,
@@ -541,6 +543,50 @@ function registerIpcHandlers() {
       return { ok: true, savedPath: result.filePath };
     } catch (err) {
       return { ok: false, errors: { general: `Could not export PDF: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('quotes:markAccepted', async (event, id, data) => {
+    try {
+      const result = markQuoteAccepted(id, data);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to mark quote accepted: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('quotes:markDeclined', async (event, id, data) => {
+    try {
+      const result = markQuoteDeclined(id, data);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to mark quote declined: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('quotes:exportShareableHtml', async (event, quoteId) => {
+    try {
+      const quote = getQuote(quoteId);
+      if (!quote) {
+        return { ok: false, errors: { general: 'Quote not found.' } };
+      }
+      const client = getClient(quote.client_id);
+      const profile = getCompanyProfile();
+      const html = renderQuoteHtml(quote, client, profile);
+
+      const safeNumber = String(quote.quote_number || 'quote').replace(/[^\w-]+/g, '_');
+      const result = await dialog.showSaveDialog({
+        title: 'Export Shareable Quote (HTML)',
+        defaultPath: `Quote_${safeNumber}.html`,
+        filters: [{ name: 'HTML Document', extensions: ['html', 'htm'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { ok: true, cancelled: true };
+      }
+      fs.writeFileSync(result.filePath, html, 'utf-8');
+      return { ok: true, savedPath: result.filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not export HTML: ${err.message}` } };
     }
   });
 

@@ -589,6 +589,7 @@
             <p class="subtitle">Read-only view of this quote.</p>
           </div>
           <div class="detail-actions">
+            <button type="button" id="detailMarkAcceptedBtn" class="btn btn-success" title="Record client acceptance with confirmation method and paper trail">✓ Mark as Accepted</button>
             <div class="status-change">
               <label for="detailStatusSelect">Status</label>
               <select id="detailStatusSelect">
@@ -598,6 +599,7 @@
                 <option value="declined">Declined</option>
               </select>
             </div>
+            <button type="button" id="detailShareQuoteBtn" class="btn btn-secondary" title="Share PDF or standalone HTML quote with acceptance instructions">📤 Share Quote</button>
             <button type="button" id="detailEditBtn" class="btn btn-secondary">Edit</button>
             <button type="button" id="detailExportBtn" class="btn btn-secondary">Download PDF</button>
             <button type="button" id="detailSendEmailBtn" class="btn btn-secondary">✉️ Send by Email</button>
@@ -639,6 +641,43 @@
               <span class="detail-label">Last sent</span>
               <span id="quoteDetailSent" class="detail-value">—</span>
             </div>
+          </div>
+        </div>
+
+        <!-- Acceptance Paper Trail Card (rendered when quote is accepted) -->
+        <div id="quoteAcceptanceCard" class="card quote-acceptance-card hidden">
+          <div class="acceptance-card-header">
+            <div class="acceptance-badge">
+              <span class="check-icon">✓</span> Verified Local Acceptance
+            </div>
+            <span id="quoteAcceptanceDate" class="acceptance-date">—</span>
+          </div>
+          <div class="acceptance-card-body">
+            <div class="acceptance-meta-grid">
+              <div class="acceptance-meta-item">
+                <span class="meta-label">Confirmation Method</span>
+                <span id="quoteAcceptanceMethod" class="meta-value">—</span>
+              </div>
+              <div class="acceptance-meta-item">
+                <span class="meta-label">Authorized By</span>
+                <span id="quoteAcceptedBy" class="meta-value">—</span>
+              </div>
+            </div>
+            <div id="quoteAcceptanceNoteRow" class="acceptance-note-row hidden">
+              <span class="meta-label">Paper Trail Note</span>
+              <p id="quoteAcceptanceNote" class="acceptance-note-text">—</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Declined Card (rendered when quote is declined) -->
+        <div id="quoteDeclinedCard" class="card quote-declined-card hidden">
+          <div class="declined-card-header">
+            <span class="declined-badge">✕ Quote Declined</span>
+          </div>
+          <div class="declined-card-body">
+            <span class="meta-label">Reason / Notes</span>
+            <p id="quoteDeclinedNote" class="declined-note-text">—</p>
           </div>
         </div>
 
@@ -1432,6 +1471,14 @@
               <span class="hint">Pre-fills on new invoices. Can be overridden per invoice.</span>
             </div>
           </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="default_quote_acceptance_instructions">Default Quote Acceptance Instructions</label>
+              <input type="text" id="default_quote_acceptance_instructions" name="default_quote_acceptance_instructions" placeholder="To accept this quote, please reply to confirm via email or phone.">
+              <span class="hint">Printed on all shareable quote PDFs and HTML exports instructing clients how to confirm offline.</span>
+            </div>
+          </div>
         </div>
 
         <div class="card">
@@ -2075,6 +2122,124 @@
           <button type="submit" class="btn btn-primary" id="convertQuoteSubmitBtn">Create Invoice</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Mark Quote Accepted Modal -->
+  <div id="quoteAcceptModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="quoteAcceptModalTitle">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 id="quoteAcceptModalTitle">Mark Quote as Accepted</h2>
+        <button type="button" class="modal-close" id="quoteAcceptModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="quoteAcceptForm" class="modal-form" novalidate>
+        <div class="offline-callout-card">
+          <div class="offline-callout-badge">🔒 100% Offline Architecture</div>
+          <p class="offline-callout-text">
+            QuoteCraft operates locally on your device without cloud databases or web logins. Because there are no web servers to capture an online button-click or digital e-signature link, client acceptance is recorded here manually via email, phone, or signed document to maintain an authentic paper trail.
+          </p>
+        </div>
+
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="quoteAcceptMethod">Confirmation Method</label>
+            <select id="quoteAcceptMethod" name="acceptance_method" required>
+              <option value="email">Email reply (client replied to quote email)</option>
+              <option value="phone">Phone call / Verbal confirmation</option>
+              <option value="signed_document">Signed PDF / Written agreement</option>
+              <option value="purchase_order">Purchase Order (PO) issued</option>
+              <option value="in_person">In-person confirmation</option>
+              <option value="other">Other direct confirmation</option>
+            </select>
+          </div>
+          <div class="field field-required">
+            <label for="quoteAcceptDate">Confirmation Date</label>
+            <input type="date" id="quoteAcceptDate" name="date_accepted" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="quoteAcceptedBy">Confirmed By (Contact Name)</label>
+            <input type="text" id="quoteAcceptedBy" name="accepted_by" placeholder="e.g. Jane Doe (Procurement)">
+            <span class="hint">The individual at the client who confirmed acceptance.</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="quoteAcceptNote">Paper Trail Notes</label>
+          <textarea id="quoteAcceptNote" name="acceptance_note" rows="3" placeholder="e.g. Confirmed by email reply on Sep 14: 'Approved to proceed, please invoice under PO #1049'"></textarea>
+          <div class="quick-tags" id="quoteAcceptQuickTags">
+            <button type="button" class="quick-tag-btn" data-tag="Confirmed via email reply">✉️ Email reply</button>
+            <button type="button" class="quick-tag-btn" data-tag="Client confirmed via phone call">📞 Phone call</button>
+            <button type="button" class="quick-tag-btn" data-tag="Client sent signed PDF">📄 Signed PDF</button>
+            <button type="button" class="quick-tag-btn" data-tag="Purchase order issued: PO #">🏷️ PO issued</button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="quoteAcceptCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-success" id="quoteAcceptSubmitBtn">✓ Confirm &amp; Mark as Accepted</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Share Quote Modal -->
+  <div id="shareQuoteModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="shareQuoteModalTitle">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 id="shareQuoteModalTitle">Share Quote with Client</h2>
+        <button type="button" class="modal-close" id="shareQuoteModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="offline-callout-card">
+          <div class="offline-callout-badge">🔒 Privacy &amp; Offline Guarantee</div>
+          <p class="offline-callout-text">
+            This quotation includes clear, printed offline confirmation instructions for your client. It avoids confusing live links, keeping your financial files 100% private and independent.
+          </p>
+        </div>
+
+        <div class="share-options-list">
+          <div class="share-option-card">
+            <div class="share-option-icon">📄</div>
+            <div class="share-option-content">
+              <h4>Shareable PDF Document</h4>
+              <p>Standard PDF export with formal printed Acceptance &amp; Confirmation section and signature lines.</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-small" id="btnShareDownloadPdf">Download PDF</button>
+          </div>
+
+          <div class="share-option-card">
+            <div class="share-option-icon">🌐</div>
+            <div class="share-option-content">
+              <h4>Standalone HTML Quote</h4>
+              <p>Self-contained responsive web page the client can open in any browser, inspect, or print locally.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-small" id="btnShareDownloadHtml">Export HTML</button>
+          </div>
+
+          <div class="share-option-card">
+            <div class="share-option-icon">✉️</div>
+            <div class="share-option-content">
+              <h4>Send via Email</h4>
+              <p>Send directly to the client's email address with quote attached and acceptance instructions prefilled.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-small" id="btnShareSendEmail">Send Email</button>
+          </div>
+        </div>
+
+        <div class="share-instructions-preview">
+          <label>Printed Acceptance Text</label>
+          <div class="share-text-box">
+            <p id="shareInstructionsText">—</p>
+            <button type="button" class="btn btn-small btn-secondary" id="btnCopyShareInstructions" title="Copy text to clipboard">📋 Copy Text</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="shareQuoteModalCloseBtn">Close</button>
+      </div>
     </div>
   </div>
 

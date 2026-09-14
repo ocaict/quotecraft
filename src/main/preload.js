@@ -35,7 +35,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getQuote: (id) => ipcRenderer.invoke('quotes:get', id),
   getQuoteVersionHistory: (quoteId) => ipcRenderer.invoke('quotes:getVersionHistory', quoteId),
   setQuoteStatus: (id, status) => ipcRenderer.invoke('quotes:setStatus', id, status),
+  markQuoteAccepted: (id, data) => ipcRenderer.invoke('quotes:markAccepted', id, data),
+  markQuoteDeclined: (id, data) => ipcRenderer.invoke('quotes:markDeclined', id, data),
   exportQuotePdf: (quoteId) => ipcRenderer.invoke('quotes:exportPdf', quoteId),
+  exportShareableQuoteHtml: (quoteId) => ipcRenderer.invoke('quotes:exportShareableHtml', quoteId),
 
   convertQuoteToInvoice: (quoteId, overrides) => ipcRenderer.invoke('invoices:convertFromQuote', quoteId, overrides),
   createFinalInvoiceFromDeposit: (depositInvoiceId, overrides) => ipcRenderer.invoke('invoices:createFinalFromDeposit', depositInvoiceId, overrides),

@@ -40,6 +40,41 @@
   const detailStatusSelect = document.getElementById('detailStatusSelect');
   const detailConvertBtn = document.getElementById('detailConvertBtn');
   const detailConvertResult = document.getElementById('detailConvertResult');
+  const detailMarkAcceptedBtn = document.getElementById('detailMarkAcceptedBtn');
+  const detailShareQuoteBtn = document.getElementById('detailShareQuoteBtn');
+
+  // Acceptance Paper Trail elements
+  const quoteAcceptanceCard = document.getElementById('quoteAcceptanceCard');
+  const quoteAcceptanceDate = document.getElementById('quoteAcceptanceDate');
+  const quoteAcceptanceMethod = document.getElementById('quoteAcceptanceMethod');
+  const quoteAcceptedBy = document.getElementById('quoteAcceptedBy');
+  const quoteAcceptanceNoteRow = document.getElementById('quoteAcceptanceNoteRow');
+  const quoteAcceptanceNote = document.getElementById('quoteAcceptanceNote');
+  const quoteDeclinedCard = document.getElementById('quoteDeclinedCard');
+  const quoteDeclinedNote = document.getElementById('quoteDeclinedNote');
+
+  // Mark Quote Accepted Modal elements
+  const quoteAcceptModal = document.getElementById('quoteAcceptModal');
+  const quoteAcceptModalClose = document.getElementById('quoteAcceptModalClose');
+  const quoteAcceptCancelBtn = document.getElementById('quoteAcceptCancelBtn');
+  const quoteAcceptForm = document.getElementById('quoteAcceptForm');
+  const quoteAcceptMethod = document.getElementById('quoteAcceptMethod');
+  const quoteAcceptDate = document.getElementById('quoteAcceptDate');
+  const quoteAcceptedByInput = document.getElementById('quoteAcceptedBy');
+  const quoteAcceptNote = document.getElementById('quoteAcceptNote');
+  const quoteAcceptQuickTags = document.getElementById('quoteAcceptQuickTags');
+
+  // Share Quote Modal elements
+  const shareQuoteModal = document.getElementById('shareQuoteModal');
+  const shareQuoteModalClose = document.getElementById('shareQuoteModalClose');
+  const shareQuoteModalCloseBtn = document.getElementById('shareQuoteModalCloseBtn');
+  const btnShareDownloadPdf = document.getElementById('btnShareDownloadPdf');
+  const btnShareDownloadHtml = document.getElementById('btnShareDownloadHtml');
+  const btnShareSendEmail = document.getElementById('btnShareSendEmail');
+  const shareInstructionsText = document.getElementById('shareInstructionsText');
+  const btnCopyShareInstructions = document.getElementById('btnCopyShareInstructions');
+
+  let currentDetailQuote = null;
 
   // Convert to Invoice Modal elements
   const convertQuoteModal = document.getElementById('convertQuoteModal');
@@ -1280,6 +1315,53 @@
       }
     }
 
+    currentDetailQuote = q;
+
+    // Mark as Accepted button visibility
+    if (detailMarkAcceptedBtn) {
+      detailMarkAcceptedBtn.style.display = q.status === 'accepted' ? 'none' : '';
+    }
+
+    // Acceptance Paper Trail card
+    const acceptMethodLabels = {
+      email: 'Email reply',
+      phone: 'Phone call / Verbal confirmation',
+      signed_document: 'Signed document / PDF',
+      purchase_order: 'Purchase Order (PO)',
+      in_person: 'In-person confirmation',
+      other: 'Direct confirmation',
+    };
+
+    if (q.status === 'accepted') {
+      if (quoteAcceptanceCard) {
+        quoteAcceptanceCard.classList.remove('hidden');
+        if (quoteAcceptanceDate) quoteAcceptanceDate.textContent = window.QuoteCraftUtils.formatDate(q.date_accepted);
+        if (quoteAcceptanceMethod) quoteAcceptanceMethod.textContent = acceptMethodLabels[q.acceptance_method] || q.acceptance_method || 'Direct confirmation';
+        if (quoteAcceptedBy) quoteAcceptedBy.textContent = q.accepted_by || (q.contact ? q.contact.name : clientDisplayName(q.client));
+        if (quoteAcceptanceNoteRow && quoteAcceptanceNote) {
+          if (q.acceptance_note) {
+            quoteAcceptanceNoteRow.classList.remove('hidden');
+            quoteAcceptanceNote.textContent = q.acceptance_note;
+          } else {
+            quoteAcceptanceNoteRow.classList.add('hidden');
+            quoteAcceptanceNote.textContent = '—';
+          }
+        }
+      }
+    } else {
+      if (quoteAcceptanceCard) quoteAcceptanceCard.classList.add('hidden');
+    }
+
+    // Declined Card
+    if (q.status === 'declined') {
+      if (quoteDeclinedCard) {
+        quoteDeclinedCard.classList.remove('hidden');
+        if (quoteDeclinedNote) quoteDeclinedNote.textContent = q.acceptance_note || 'Declined by client.';
+      }
+    } else {
+      if (quoteDeclinedCard) quoteDeclinedCard.classList.add('hidden');
+    }
+
     // Email Activity history list
     const emailListEl = document.getElementById('quoteEmailActivityList');
     if (window.QuoteCraftDocumentEmail && emailListEl) {
@@ -1491,8 +1573,202 @@
 
   detailStatusSelect.addEventListener('change', () => {
     if (!currentDetailId) return;
-    changeStatus(currentDetailId, detailStatusSelect.value);
+    const chosen = detailStatusSelect.value;
+    if (chosen === 'accepted') {
+      if (currentDetailQuote) {
+        detailStatusSelect.value = currentDetailQuote.status;
+      }
+      openAcceptModal(currentDetailQuote);
+      return;
+    }
+    changeStatus(currentDetailId, chosen);
   });
+
+  if (detailMarkAcceptedBtn) {
+    detailMarkAcceptedBtn.addEventListener('click', () => {
+      if (!currentDetailQuote) return;
+      openAcceptModal(currentDetailQuote);
+    });
+  }
+
+  // ---------- Mark Quote Accepted Modal logic ----------
+  function openAcceptModal(q) {
+    if (!q) return;
+    if (quoteAcceptDate) {
+      quoteAcceptDate.value = new Date().toISOString().slice(0, 10);
+    }
+    if (quoteAcceptedByInput) {
+      quoteAcceptedByInput.value = (q.contact && q.contact.name) || (q.client && q.client.name) || '';
+    }
+    if (quoteAcceptMethod) {
+      quoteAcceptMethod.value = 'email';
+    }
+    if (quoteAcceptNote) {
+      quoteAcceptNote.value = '';
+    }
+    if (quoteAcceptModal) {
+      quoteAcceptModal.classList.remove('hidden');
+    }
+  }
+
+  function closeAcceptModal() {
+    if (quoteAcceptModal) {
+      quoteAcceptModal.classList.add('hidden');
+    }
+  }
+
+  if (quoteAcceptQuickTags) {
+    quoteAcceptQuickTags.addEventListener('click', (e) => {
+      const btn = e.target.closest('.quick-tag-btn');
+      if (!btn) return;
+      const tag = btn.getAttribute('data-tag');
+      if (!tag) return;
+      if (quoteAcceptNote) {
+        const current = quoteAcceptNote.value.trim();
+        quoteAcceptNote.value = current ? `${current}\n${tag}` : tag;
+        quoteAcceptNote.focus();
+      }
+    });
+  }
+
+  if (quoteAcceptForm) {
+    quoteAcceptForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentDetailId) return;
+      const method = quoteAcceptMethod ? quoteAcceptMethod.value : 'email';
+      const date_accepted = quoteAcceptDate && quoteAcceptDate.value ? quoteAcceptDate.value : new Date().toISOString().slice(0, 10);
+      const accepted_by = quoteAcceptedByInput ? quoteAcceptedByInput.value.trim() : '';
+      const note = quoteAcceptNote ? quoteAcceptNote.value.trim() : '';
+
+      window.QuoteCraftUtils.showBusy('Marking quote accepted…');
+      try {
+        const res = await window.electronAPI.markQuoteAccepted(currentDetailId, {
+          method,
+          date_accepted,
+          accepted_by,
+          note,
+        });
+        if (res.ok) {
+          toast('Quote marked as Accepted with verified paper trail.', 'success');
+          closeAcceptModal();
+          await loadQuotes();
+          if (currentDetailId) {
+            const d = await window.electronAPI.getQuote(currentDetailId);
+            if (d.ok && d.quote) renderDetail(d.quote);
+          }
+        } else {
+          toast(res.errors && res.errors.general ? res.errors.general : 'Could not accept quote.', 'error');
+        }
+      } catch (err) {
+        toast('Error accepting quote: ' + err.message, 'error');
+      } finally {
+        window.QuoteCraftUtils.hideBusy();
+      }
+    });
+  }
+
+  if (quoteAcceptModalClose) quoteAcceptModalClose.addEventListener('click', closeAcceptModal);
+  if (quoteAcceptCancelBtn) quoteAcceptCancelBtn.addEventListener('click', closeAcceptModal);
+  if (quoteAcceptModal) {
+    quoteAcceptModal.addEventListener('click', (e) => {
+      if (e.target === quoteAcceptModal) closeAcceptModal();
+    });
+  }
+
+  // ---------- Share Quote Modal logic ----------
+  async function openShareModal(q) {
+    if (!q) return;
+    let instructions = q.acceptance_instructions;
+    if (!instructions) {
+      try {
+        const prof = await window.electronAPI.getCompanyProfile();
+        if (prof && prof.profile && prof.profile.default_quote_acceptance_instructions) {
+          instructions = prof.profile.default_quote_acceptance_instructions;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    if (!instructions) {
+      instructions = 'To accept this quote, please reply to confirm via email or phone.';
+    }
+
+    if (shareInstructionsText) {
+      shareInstructionsText.textContent = instructions;
+    }
+    if (shareQuoteModal) {
+      shareQuoteModal.classList.remove('hidden');
+    }
+  }
+
+  function closeShareModal() {
+    if (shareQuoteModal) {
+      shareQuoteModal.classList.add('hidden');
+    }
+  }
+
+  if (detailShareQuoteBtn) {
+    detailShareQuoteBtn.addEventListener('click', () => {
+      if (!currentDetailQuote) return;
+      openShareModal(currentDetailQuote);
+    });
+  }
+
+  if (shareQuoteModalClose) shareQuoteModalClose.addEventListener('click', closeShareModal);
+  if (shareQuoteModalCloseBtn) shareQuoteModalCloseBtn.addEventListener('click', closeShareModal);
+  if (shareQuoteModal) {
+    shareQuoteModal.addEventListener('click', (e) => {
+      if (e.target === shareQuoteModal) closeShareModal();
+    });
+  }
+
+  if (btnShareDownloadPdf) {
+    btnShareDownloadPdf.addEventListener('click', () => {
+      closeShareModal();
+      detailExportBtn.click();
+    });
+  }
+
+  if (btnShareDownloadHtml) {
+    btnShareDownloadHtml.addEventListener('click', async () => {
+      if (!currentDetailId) return;
+      window.QuoteCraftUtils.showBusy('Exporting shareable HTML quote…');
+      try {
+        const res = await window.electronAPI.exportShareableQuoteHtml(currentDetailId);
+        if (res.ok && res.cancelled) return;
+        if (res.ok) {
+          toast('Shareable HTML quote saved to ' + res.savedPath, 'success');
+          closeShareModal();
+        } else {
+          toast(res.errors && res.errors.general ? res.errors.general : 'Could not export HTML quote.', 'error');
+        }
+      } catch (e) {
+        toast('Could not export HTML quote: ' + e.message, 'error');
+      } finally {
+        window.QuoteCraftUtils.hideBusy();
+      }
+    });
+  }
+
+  if (btnShareSendEmail) {
+    btnShareSendEmail.addEventListener('click', () => {
+      closeShareModal();
+      if (detailSendEmailBtn) detailSendEmailBtn.click();
+    });
+  }
+
+  if (btnCopyShareInstructions) {
+    btnCopyShareInstructions.addEventListener('click', async () => {
+      const text = shareInstructionsText ? shareInstructionsText.textContent : '';
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('Acceptance instructions copied to clipboard!', 'success');
+      } catch (e) {
+        toast('Could not copy to clipboard: ' + e.message, 'error');
+      }
+    });
+  }
 
   detailConvertBtn.addEventListener('click', handleOpenConvertModal);
 

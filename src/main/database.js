@@ -82,6 +82,7 @@ function createTables() {
       quote_start_number INTEGER NOT NULL DEFAULT 1,
       default_terms   TEXT DEFAULT '',
       payment_details TEXT DEFAULT '',
+      default_quote_acceptance_instructions TEXT DEFAULT 'To accept this quote, please reply to confirm via email or phone.',
       created_at      TEXT NOT NULL,
       updated_at      TEXT NOT NULL
     );
@@ -154,6 +155,10 @@ function createTables() {
       terms           TEXT DEFAULT '',
       currency        TEXT NOT NULL DEFAULT 'USD',
       exchange_rate   REAL NOT NULL DEFAULT 1.0,
+      acceptance_method TEXT DEFAULT NULL,
+      acceptance_note TEXT DEFAULT NULL,
+      accepted_by     TEXT DEFAULT NULL,
+      acceptance_instructions TEXT DEFAULT NULL,
       created_at      TEXT NOT NULL,
       updated_at      TEXT NOT NULL
     );
@@ -741,6 +746,29 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 22,
+    up: () => {
+      const qCols = new Set(db.exec(`PRAGMA table_info(quotes)`)[0].values.map((v) => v[1]));
+      if (!qCols.has('acceptance_method')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN acceptance_method TEXT DEFAULT NULL`);
+      }
+      if (!qCols.has('acceptance_note')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN acceptance_note TEXT DEFAULT NULL`);
+      }
+      if (!qCols.has('accepted_by')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN accepted_by TEXT DEFAULT NULL`);
+      }
+      if (!qCols.has('acceptance_instructions')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN acceptance_instructions TEXT DEFAULT NULL`);
+      }
+
+      const cpCols = new Set(db.exec(`PRAGMA table_info(company_profile)`)[0].values.map((v) => v[1]));
+      if (!cpCols.has('default_quote_acceptance_instructions')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN default_quote_acceptance_instructions TEXT DEFAULT 'To accept this quote, please reply to confirm via email or phone.'`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -816,6 +844,9 @@ function saveCompanyProfile(profile) {
     payment_details: profile.payment_details !== undefined ? profile.payment_details : (existing && existing.payment_details) || '',
     credit_note_prefix: profile.credit_note_prefix || 'CN-',
     credit_note_start_number: Number(profile.credit_note_start_number || 1),
+    default_quote_acceptance_instructions: profile.default_quote_acceptance_instructions !== undefined
+      ? profile.default_quote_acceptance_instructions
+      : (existing && existing.default_quote_acceptance_instructions) || 'To accept this quote, please reply to confirm via email or phone.',
   };
 
   if (existing) {
@@ -826,7 +857,7 @@ function saveCompanyProfile(profile) {
         website = ?, tax_id = ?, default_currency = ?, reporting_currency = ?, default_tax_rate = ?,
         invoice_prefix = ?, invoice_start_number = ?, quote_prefix = ?,
         quote_start_number = ?, default_terms = ?, payment_details = ?,
-        credit_note_prefix = ?, credit_note_start_number = ?, updated_at = ?
+        credit_note_prefix = ?, credit_note_start_number = ?, default_quote_acceptance_instructions = ?, updated_at = ?
        WHERE id = 1`,
       [
         fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
@@ -834,7 +865,7 @@ function saveCompanyProfile(profile) {
         fields.website, fields.tax_id, fields.default_currency, fields.reporting_currency, fields.default_tax_rate,
         fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
-        fields.credit_note_prefix, fields.credit_note_start_number, now,
+        fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions, now,
       ]
     );
   } else {
@@ -844,15 +875,15 @@ function saveCompanyProfile(profile) {
         postal_code, country, phone, email, website, tax_id, default_currency,
         reporting_currency, default_tax_rate, invoice_prefix, invoice_start_number, quote_prefix,
         quote_start_number, default_terms, payment_details,
-        credit_note_prefix, credit_note_start_number, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         1, fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
         fields.website, fields.tax_id, fields.default_currency, fields.reporting_currency, fields.default_tax_rate,
         fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
-        fields.credit_note_prefix, fields.credit_note_start_number, now, now,
+        fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions, now, now,
       ]
     );
   }
@@ -2343,12 +2374,32 @@ function setQuoteStatus(id, status) {
     fields.push('date_accepted = ?');
     params.push(now);
   }
-  if (status !== 'sent') {
+  if (status === 'draft') {
     fields.push('date_sent = ?');
     params.push(null);
-  }
-  if (status !== 'accepted') {
     fields.push('date_accepted = ?');
+    params.push(null);
+    fields.push('acceptance_method = ?');
+    params.push(null);
+    fields.push('acceptance_note = ?');
+    params.push(null);
+    fields.push('accepted_by = ?');
+    params.push(null);
+  } else if (status === 'sent') {
+    fields.push('date_accepted = ?');
+    params.push(null);
+    fields.push('acceptance_method = ?');
+    params.push(null);
+    fields.push('acceptance_note = ?');
+    params.push(null);
+    fields.push('accepted_by = ?');
+    params.push(null);
+  } else if (status === 'declined') {
+    fields.push('date_accepted = ?');
+    params.push(null);
+    fields.push('acceptance_method = ?');
+    params.push(null);
+    fields.push('accepted_by = ?');
     params.push(null);
   }
   fields.push('updated_at = ?');
@@ -2357,6 +2408,62 @@ function setQuoteStatus(id, status) {
   db.run(
     `UPDATE quotes SET status = ?, ${fields.join(', ')} WHERE id = ?`,
     [status, ...params, id]
+  );
+  saveToDisk();
+  return { ok: true, quote: getQuote(id) };
+}
+
+function markQuoteAccepted(id, { method, note, accepted_by, date_accepted, acceptance_instructions } = {}) {
+  const existing = getQuote(id);
+  if (!existing) {
+    return { ok: false, errors: { general: 'Quote not found.' } };
+  }
+  const now = new Date().toISOString();
+  const acceptedDate = date_accepted ? String(date_accepted) : now;
+  const accMethod = method || 'email';
+  const accNote = note !== undefined ? String(note).trim() : '';
+  const accBy = accepted_by !== undefined ? String(accepted_by).trim() : '';
+
+  const fields = [
+    'status = ?',
+    'date_accepted = ?',
+    'acceptance_method = ?',
+    'acceptance_note = ?',
+    'accepted_by = ?',
+    'updated_at = ?',
+  ];
+  const params = [
+    'accepted',
+    acceptedDate,
+    accMethod,
+    accNote,
+    accBy,
+    now,
+  ];
+
+  if (acceptance_instructions !== undefined) {
+    fields.push('acceptance_instructions = ?');
+    params.push(acceptance_instructions);
+  }
+
+  params.push(id);
+
+  db.run(`UPDATE quotes SET ${fields.join(', ')} WHERE id = ?`, params);
+  saveToDisk();
+  return { ok: true, quote: getQuote(id) };
+}
+
+function markQuoteDeclined(id, { note, date_declined } = {}) {
+  const existing = getQuote(id);
+  if (!existing) {
+    return { ok: false, errors: { general: 'Quote not found.' } };
+  }
+  const now = new Date().toISOString();
+  const decNote = note !== undefined ? String(note).trim() : '';
+
+  db.run(
+    `UPDATE quotes SET status = 'declined', acceptance_note = ?, updated_at = ? WHERE id = ?`,
+    [decNote, now, id]
   );
   saveToDisk();
   return { ok: true, quote: getQuote(id) };
@@ -4200,6 +4307,8 @@ module.exports = {
   getQuoteVersionHistory,
   listQuotes,
   setQuoteStatus,
+  markQuoteAccepted,
+  markQuoteDeclined,
   parsePaymentTermsDays,
   convertQuoteToInvoice,
   createFinalInvoiceFromDeposit,

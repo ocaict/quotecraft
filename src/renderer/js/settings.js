@@ -71,6 +71,7 @@
       website: '',
       default_tax_rate: 0,
       default_terms: '',
+      default_quote_acceptance_instructions: 'To accept this quote, please reply to confirm via email or phone.',
       payment_details: '',
       invoice_prefix: 'INV-',
       invoice_start_number: 1,

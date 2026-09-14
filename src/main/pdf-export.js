@@ -473,6 +473,101 @@ function drawFooter(ctx, leftText) {
   }
 }
 
+function drawQuoteAcceptanceSection(ctx, quote, client, profile) {
+  const { doc, W } = ctx;
+  const isAccepted = quote.status === 'accepted';
+  const estimatedH = isAccepted ? 65 : 100;
+  if (ctx.y + estimatedH > ctx.pageBottom) {
+    doc.addPage();
+    ctx.y = doc.y;
+  } else {
+    ctx.y += 14;
+  }
+
+  const boxW = W;
+  const boxPadding = 12;
+
+  // Section Header
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.muted).text('ACCEPTANCE & CONFIRMATION', MARGIN, ctx.y, { lineGap: 0 });
+  ctx.y = doc.y + 6;
+
+  if (isAccepted) {
+    const acceptMethodLabels = {
+      email: 'Email reply',
+      phone: 'Phone call',
+      signed_document: 'Signed document',
+      purchase_order: 'Purchase Order',
+      in_person: 'In-person confirmation',
+      other: 'Direct confirmation',
+    };
+    const methodStr = acceptMethodLabels[quote.acceptance_method] || quote.acceptance_method || 'Direct confirmation';
+    const acceptedByStr = quote.accepted_by ? ` by ${quote.accepted_by}` : '';
+    const acceptedDateStr = formatDate(quote.date_accepted);
+
+    const bannerH = quote.acceptance_note ? 48 : 36;
+    doc.rect(MARGIN, ctx.y, boxW, bannerH).fill('#F0FDF4');
+    doc.rect(MARGIN, ctx.y, boxW, bannerH).strokeColor('#86EFAC').lineWidth(1).stroke();
+
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#166534');
+    doc.text(`\u2713 FORMALLY ACCEPTED (${methodStr}${acceptedByStr} on ${acceptedDateStr})`, MARGIN + 12, ctx.y + 9, { width: boxW - 24 });
+
+    if (quote.acceptance_note) {
+      doc.font('Helvetica').fontSize(8.5).fillColor('#14532D');
+      doc.text(`Paper Trail Note: ${quote.acceptance_note}`, MARGIN + 12, ctx.y + 25, { width: boxW - 24 });
+    }
+    ctx.y += bannerH + 10;
+  } else {
+    const boxInnerH = 92;
+    doc.rect(MARGIN, ctx.y, boxW, boxInnerH).fill('#F9FAFB');
+    doc.rect(MARGIN, ctx.y, boxW, boxInnerH).strokeColor(COLORS.line).lineWidth(1).stroke();
+
+    const instructions = quote.acceptance_instructions
+      || (profile && profile.default_quote_acceptance_instructions)
+      || 'To accept this quote, please reply to confirm via email or phone.';
+
+    const senderEmail = (profile && profile.email) || '';
+    const senderPhone = (profile && profile.phone) || '';
+    let contactLine = '';
+    if (senderEmail && senderPhone) {
+      contactLine = `Reply to: ${senderEmail}  |  Phone: ${senderPhone}`;
+    } else if (senderEmail) {
+      contactLine = `Reply to: ${senderEmail}`;
+    } else if (senderPhone) {
+      contactLine = `Phone: ${senderPhone}`;
+    }
+
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.ink);
+    doc.text(instructions, MARGIN + boxPadding, ctx.y + 8, { width: boxW - boxPadding * 2 });
+
+    if (contactLine) {
+      doc.font('Helvetica').fontSize(8).fillColor(COLORS.muted);
+      doc.text(contactLine, MARGIN + boxPadding, doc.y + 2, { width: boxW - boxPadding * 2 });
+    }
+
+    const sigY = ctx.y + 44;
+    const colW = (boxW - boxPadding * 3) / 2;
+    const col1X = MARGIN + boxPadding;
+    const col2X = col1X + colW + boxPadding;
+
+    // Line 1: Signature & Date
+    doc.moveTo(col1X, sigY + 14).lineTo(col1X + colW - 10, sigY + 14).strokeColor('#CBD5E1').lineWidth(0.8).stroke();
+    doc.font('Helvetica').fontSize(7.5).fillColor(COLORS.muted).text('Authorized Client Signature', col1X, sigY + 17);
+
+    doc.moveTo(col2X, sigY + 14).lineTo(col2X + colW - 10, sigY + 14).strokeColor('#CBD5E1').lineWidth(0.8).stroke();
+    doc.font('Helvetica').fontSize(7.5).fillColor(COLORS.muted).text('Date', col2X, sigY + 17);
+
+    // Line 2: Printed Name & PO / Ref
+    const sigY2 = sigY + 28;
+    doc.moveTo(col1X, sigY2 + 14).lineTo(col1X + colW - 10, sigY2 + 14).strokeColor('#CBD5E1').lineWidth(0.8).stroke();
+    doc.font('Helvetica').fontSize(7.5).fillColor(COLORS.muted).text('Printed Name & Title', col1X, sigY2 + 17);
+
+    doc.moveTo(col2X, sigY2 + 14).lineTo(col2X + colW - 10, sigY2 + 14).strokeColor('#CBD5E1').lineWidth(0.8).stroke();
+    doc.font('Helvetica').fontSize(7.5).fillColor(COLORS.muted).text('PO / Reference # (optional)', col2X, sigY2 + 17);
+
+    ctx.y += boxInnerH + 10;
+  }
+}
+
 // ---------- Quote PDF ----------
 
 function renderQuotePdf(quote, client, profile, opts) {
@@ -519,6 +614,8 @@ function renderQuotePdf(quote, client, profile, opts) {
     if (quote.terms) blocks.push(quote.terms);
     drawTextSection(ctx, 'Notes & Terms', blocks.join('\n\n'));
   }
+
+  drawQuoteAcceptanceSection(ctx, quote, client, profile);
 
   drawFooter(ctx, `Prepared by ${businessName}`);
   doc.end();
@@ -679,4 +776,487 @@ function renderCreditNotePdf(creditNote, invoice, client, profile) {
   return ctx.done;
 }
 
-module.exports = { renderQuotePdf, renderInvoicePdf, renderCreditNotePdf };
+// ---------- Shareable Standalone HTML Quote ----------
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderQuoteHtml(quote, client, profile) {
+  const currency = quote.currency || (profile && profile.default_currency) || 'USD';
+  const businessName = (profile && profile.business_name) || 'QuoteCraft';
+  const isAccepted = quote.status === 'accepted';
+  const instructions = quote.acceptance_instructions
+    || (profile && profile.default_quote_acceptance_instructions)
+    || 'To accept this quote, please reply to confirm via email or phone.';
+
+  const companyLines = buildCompanyLines(profile);
+  const clientLines = buildClientLines(client);
+
+  const totalRows = [['Subtotal', money(quote.subtotal, currency)]];
+  if (Number(quote.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(quote.discount_amount, currency)}`]);
+  const taxRows = buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency);
+  taxRows.forEach((r) => totalRows.push(r));
+
+  const acceptMethodLabels = {
+    email: 'Email reply',
+    phone: 'Phone call',
+    signed_document: 'Signed document',
+    purchase_order: 'Purchase Order',
+    in_person: 'In-person confirmation',
+    other: 'Direct confirmation',
+  };
+
+  const lineItemsHtml = (quote.line_items || []).map((item) => {
+    let discText = '—';
+    if (item.discount_type === 'percent' && Number(item.discount_value) > 0) {
+      discText = `${item.discount_value}% (${money(item.discount_amount, currency)})`;
+    } else if (item.discount_type === 'amount' && Number(item.discount_value) > 0) {
+      discText = money(item.discount_amount, currency);
+    }
+    const taxText = Number(item.tax_rate) > 0 ? `${item.tax_rate}%` : '0% (Exempt)';
+    return `
+      <tr>
+        <td class="col-desc">${escapeHtml(item.description)}</td>
+        <td class="col-qty">${normalizeQty(item.quantity)}</td>
+        <td class="col-price">${money(item.unit_price, currency)}</td>
+        <td class="col-disc">${escapeHtml(discText)}</td>
+        <td class="col-tax">${escapeHtml(taxText)}</td>
+        <td class="col-total">${money(item.amount, currency)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const totalsHtml = totalRows.map(([label, val]) => `
+    <div class="totals-row">
+      <span class="label">${escapeHtml(label)}</span>
+      <span class="value">${escapeHtml(val)}</span>
+    </div>
+  `).join('');
+
+  let acceptanceBlockHtml = '';
+  if (isAccepted) {
+    const methodStr = acceptMethodLabels[quote.acceptance_method] || quote.acceptance_method || 'Direct confirmation';
+    const acceptedByStr = quote.accepted_by ? ` by <strong>${escapeHtml(quote.accepted_by)}</strong>` : '';
+    const acceptedDateStr = formatDate(quote.date_accepted);
+    acceptanceBlockHtml = `
+      <div class="acceptance-card accepted">
+        <div class="badge-status accepted">&#10003; Formally Accepted</div>
+        <p class="acceptance-summary">Confirmed via <strong>${escapeHtml(methodStr)}</strong>${acceptedByStr} on <strong>${escapeHtml(acceptedDateStr)}</strong>.</p>
+        ${quote.acceptance_note ? `<div class="acceptance-note"><strong>Paper Trail Note:</strong> ${escapeHtml(quote.acceptance_note)}</div>` : ''}
+      </div>
+    `;
+  } else {
+    const senderEmail = (profile && profile.email) || '';
+    const senderPhone = (profile && profile.phone) || '';
+    let contactHtml = '';
+    if (senderEmail && senderPhone) {
+      contactHtml = `<p class="contact-line">Reply directly to: <a href="mailto:${escapeHtml(senderEmail)}">${escapeHtml(senderEmail)}</a> &bull; Phone: <strong>${escapeHtml(senderPhone)}</strong></p>`;
+    } else if (senderEmail) {
+      contactHtml = `<p class="contact-line">Reply directly to: <a href="mailto:${escapeHtml(senderEmail)}">${escapeHtml(senderEmail)}</a></p>`;
+    } else if (senderPhone) {
+      contactHtml = `<p class="contact-line">Phone: <strong>${escapeHtml(senderPhone)}</strong></p>`;
+    }
+
+    acceptanceBlockHtml = `
+      <div class="acceptance-card pending">
+        <h3>Acceptance &amp; Confirmation</h3>
+        <div class="offline-callout">
+          <span class="callout-icon">&#128274;</span>
+          <p><strong>Offline Quotation:</strong> QuoteCraft operates 100% locally with no cloud servers or tracking. To formally accept this quote, please reply directly or sign below.</p>
+        </div>
+        <div class="instruction-box">
+          <p class="instruction-text">${escapeHtml(instructions)}</p>
+          ${contactHtml}
+        </div>
+        <div class="signoff-grid">
+          <div class="signoff-field">
+            <div class="line"></div>
+            <label>Authorized Client Signature</label>
+          </div>
+          <div class="signoff-field">
+            <div class="line"></div>
+            <label>Date</label>
+          </div>
+          <div class="signoff-field">
+            <div class="line"></div>
+            <label>Printed Name &amp; Title</label>
+          </div>
+          <div class="signoff-field">
+            <div class="line"></div>
+            <label>Purchase Order / Reference # (optional)</label>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quote ${escapeHtml(quote.quote_number)} - ${escapeHtml(businessName)}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #F8FAFC;
+      color: #1E293B;
+      line-height: 1.5;
+      padding: 32px 16px;
+    }
+    .quote-container {
+      max-width: 860px;
+      margin: 0 auto;
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+      padding: 40px;
+    }
+    .quote-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #F1F5F9;
+      padding-bottom: 28px;
+      margin-bottom: 28px;
+    }
+    .company-info h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-bottom: 6px;
+    }
+    .company-details, .client-details {
+      font-size: 13.5px;
+      color: #64748B;
+      line-height: 1.6;
+    }
+    .doc-meta {
+      text-align: right;
+    }
+    .doc-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: #EFF6FF;
+      color: #2563EB;
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .doc-number {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-bottom: 6px;
+    }
+    .meta-table {
+      margin-left: auto;
+      font-size: 13.5px;
+    }
+    .meta-table td {
+      padding: 2px 4px;
+    }
+    .meta-table td:first-child {
+      color: #64748B;
+      text-align: right;
+      padding-right: 8px;
+    }
+    .meta-table td:last-child {
+      font-weight: 600;
+      color: #1E293B;
+    }
+    .parties-section {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      gap: 24px;
+    }
+    .client-card {
+      flex: 1;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94A3B8;
+      margin-bottom: 6px;
+    }
+    .client-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-bottom: 4px;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-size: 13.5px;
+    }
+    .items-table th {
+      background: #F8FAFC;
+      color: #475569;
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 12px;
+      border-top: 1px solid #E2E8F0;
+      border-bottom: 1px solid #CBD5E1;
+    }
+    .items-table td {
+      padding: 12px;
+      border-bottom: 1px solid #F1F5F9;
+    }
+    .items-table tr:nth-child(even) { background-color: #FAFAFA; }
+    .col-qty, .col-price, .col-disc, .col-tax, .col-total { text-align: right; }
+    .items-table th.col-qty, .items-table th.col-price, .items-table th.col-disc, .items-table th.col-tax, .items-table th.col-total { text-align: right; }
+    .col-desc { font-weight: 500; }
+    .totals-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 32px;
+    }
+    .totals-box {
+      width: 320px;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 14px 18px;
+    }
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13.5px;
+      padding: 4px 0;
+      color: #475569;
+    }
+    .totals-row.grand {
+      border-top: 2px solid #E2E8F0;
+      margin-top: 8px;
+      padding-top: 8px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .notes-terms {
+      margin-bottom: 32px;
+      padding: 16px;
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+    }
+    .notes-terms h4 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748B;
+      margin-bottom: 6px;
+    }
+    .notes-terms p {
+      font-size: 13.5px;
+      color: #334155;
+      white-space: pre-wrap;
+    }
+    .acceptance-card {
+      border-radius: 8px;
+      padding: 24px;
+      margin-top: 32px;
+    }
+    .acceptance-card.pending {
+      background: #F8FAFC;
+      border: 1px solid #CBD5E1;
+    }
+    .acceptance-card.accepted {
+      background: #F0FDF4;
+      border: 1px solid #86EFAC;
+    }
+    .acceptance-card h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .offline-callout {
+      display: flex;
+      align-items: flex-start;
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 12.5px;
+      color: #1E40AF;
+    }
+    .callout-icon { margin-right: 8px; font-size: 16px; line-height: 1.2; }
+    .instruction-box {
+      margin-bottom: 24px;
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 6px;
+      padding: 12px 16px;
+    }
+    .instruction-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1E293B;
+      margin-bottom: 4px;
+    }
+    .contact-line {
+      font-size: 13px;
+      color: #64748B;
+    }
+    .contact-line a { color: #2563EB; text-decoration: none; }
+    .signoff-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px 32px;
+      margin-top: 20px;
+    }
+    .signoff-field .line {
+      height: 1px;
+      background: #94A3B8;
+      margin-bottom: 6px;
+      margin-top: 28px;
+    }
+    .signoff-field label {
+      font-size: 11.5px;
+      color: #64748B;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .badge-status.accepted {
+      display: inline-block;
+      background: #DCFCE7;
+      color: #15803D;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .acceptance-summary {
+      font-size: 14px;
+      color: #166534;
+      margin-bottom: 6px;
+    }
+    .acceptance-note {
+      font-size: 13px;
+      color: #14532D;
+      background: #DCFCE7;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+    .footer-note {
+      text-align: center;
+      font-size: 12px;
+      color: #94A3B8;
+      margin-top: 32px;
+      border-top: 1px solid #E2E8F0;
+      padding-top: 16px;
+    }
+    @media print {
+      body { background: #FFF; padding: 0; }
+      .quote-container { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+      .acceptance-card { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="quote-container">
+    <div class="quote-header">
+      <div class="company-info">
+        <h1>${escapeHtml(businessName)}</h1>
+        <div class="company-details">
+          ${companyLines.map(l => `<div>${escapeHtml(l)}</div>`).join('')}
+          ${profile && profile.phone ? `<div>Tel: ${escapeHtml(profile.phone)}</div>` : ''}
+          ${profile && profile.email ? `<div>Email: ${escapeHtml(profile.email)}</div>` : ''}
+          ${profile && profile.tax_id ? `<div>Tax ID: ${escapeHtml(profile.tax_id)}</div>` : ''}
+        </div>
+      </div>
+      <div class="doc-meta">
+        <div class="doc-badge">Quotation</div>
+        <div class="doc-number">${escapeHtml(quote.quote_number)}</div>
+        <table class="meta-table">
+          <tr><td>Issue Date:</td><td>${escapeHtml(formatDate(quote.date_created))}</td></tr>
+          <tr><td>Valid Until:</td><td>${escapeHtml(formatDate(quote.valid_until))}</td></tr>
+          <tr><td>Status:</td><td>${escapeHtml(QUOTE_STATUS_LABELS[quote.status] || quote.status)}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="parties-section">
+      <div class="client-card">
+        <div class="card-label">Prepared For</div>
+        <div class="client-name">${escapeHtml(client ? client.name : 'Client')}</div>
+        ${client && client.company_name ? `<div>${escapeHtml(client.company_name)}</div>` : ''}
+        ${quote.contact ? `<div>Attn: ${escapeHtml(quote.contact.name)}${quote.contact.role ? ` (${escapeHtml(quote.contact.role)})` : ''}</div>` : ''}
+        <div class="client-details">
+          ${clientLines.map(l => `<div>${escapeHtml(l)}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th class="col-desc">Description</th>
+          <th class="col-qty">Qty</th>
+          <th class="col-price">Unit Price</th>
+          <th class="col-disc">Discount</th>
+          <th class="col-tax">Tax</th>
+          <th class="col-total">Line Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lineItemsHtml}
+      </tbody>
+    </table>
+
+    <div class="totals-wrapper">
+      <div class="totals-box">
+        ${totalsHtml}
+        <div class="totals-row grand">
+          <span class="label">Grand Total</span>
+          <span class="value">${money(quote.total, currency)}</span>
+        </div>
+      </div>
+    </div>
+
+    ${quote.notes || quote.terms ? `
+      <div class="notes-terms">
+        <h4>Notes &amp; Terms</h4>
+        <p>${escapeHtml([quote.notes, quote.terms].filter(Boolean).join('\n\n'))}</p>
+      </div>
+    ` : ''}
+
+    ${acceptanceBlockHtml}
+
+    <div class="footer-note">
+      Prepared by ${escapeHtml(businessName)} &bull; Generated locally with QuoteCraft
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+module.exports = { renderQuotePdf, renderInvoicePdf, renderCreditNotePdf, renderQuoteHtml };
