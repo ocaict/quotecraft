@@ -178,6 +178,198 @@
     } catch (e) { /* ignore */ }
   }
 
+  let currentDueReminders = [];
+
+  async function checkDueRemindersDashboard() {
+    const card = document.getElementById('dashboardRemindersCard');
+    const listEl = document.getElementById('dashboardRemindersList');
+    const badgeEl = document.getElementById('dashRemindersCountBadge');
+    const countEl = document.getElementById('dashSendAllCount');
+    const sendAllBtn = document.getElementById('dashSendAllRemindersBtn');
+    if (!card || !listEl) return;
+
+    try {
+      try {
+        const autoRes = await window.electronAPI.checkAutoSendReminders();
+        if (autoRes && autoRes.ok && autoRes.sentCount > 0) {
+          window.QuoteCraftUtils.showToast(`⚡ Automatically dispatched ${autoRes.sentCount} payment reminder${autoRes.sentCount > 1 ? 's' : ''}`, 'info');
+        }
+      } catch (e) {
+        /* ignore */
+      }
+
+      const res = await window.electronAPI.getDueReminders();
+      if (!res || !res.ok) {
+        card.classList.add('hidden');
+        return;
+      }
+
+      currentDueReminders = res.reminders || [];
+      if (!currentDueReminders.length) {
+        card.classList.add('hidden');
+        return;
+      }
+
+      card.classList.remove('hidden');
+      if (badgeEl) badgeEl.textContent = `${currentDueReminders.length} due`;
+      if (countEl) countEl.textContent = String(currentDueReminders.length);
+      if (sendAllBtn) sendAllBtn.disabled = false;
+
+      listEl.innerHTML = '';
+      for (const item of currentDueReminders) {
+        const row = document.createElement('div');
+        row.className = 'reminder-item-card';
+
+        let badgeClass = 'before';
+        let badgeText = '';
+        if (item.timing_type === 'before_due') {
+          badgeText = `⏳ Due in ${item.days_until_due} day${item.days_until_due === 1 ? '' : 's'}`;
+          badgeClass = 'before';
+        } else if (item.timing_type === 'on_due') {
+          badgeText = `📅 Due Today`;
+          badgeClass = 'on_due';
+        } else if (item.timing_type === 'after_due') {
+          badgeText = `⚠️ ${item.days_overdue} day${item.days_overdue === 1 ? '' : 's'} overdue`;
+          badgeClass = 'overdue';
+        }
+
+        const formattedBal = window.QuoteCraftUtils.formatCurrency(item.balance_due, item.currency || currencyCode);
+        const formattedDue = item.date_due ? window.QuoteCraftUtils.formatDate(item.date_due) : '—';
+
+        row.innerHTML = `
+          <div class="reminder-item-main">
+            <span class="reminder-timing-badge ${badgeClass}">${badgeText}</span>
+            <div>
+              <a href="#" class="reminder-item-number" data-invoice-id="${item.invoice_id}">${item.invoice_number}</a>
+              <div class="reminder-item-client">${item.client_name || 'Client'}</div>
+              <div class="reminder-item-email">${item.recipient_to || '<span class="text-danger" style="color:var(--danger)">No email on file</span>'}</div>
+            </div>
+          </div>
+          <div class="reminder-item-amounts">
+            <div class="reminder-item-balance">${formattedBal}</div>
+            <div class="reminder-item-duedate">Due: ${formattedDue}</div>
+          </div>
+          <div class="reminder-item-actions">
+            <button type="button" class="btn btn-small btn-ghost btn-review-reminder" data-invoice-id="${item.invoice_id}" title="Review drafted reminder email before sending">✏️ Review & Send</button>
+            <button type="button" class="btn btn-small btn-primary btn-send-now-reminder" data-invoice-id="${item.invoice_id}">🚀 Send Now</button>
+          </div>
+        `;
+
+        const numLink = row.querySelector('.reminder-item-number');
+        if (numLink) {
+          numLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('qc-open-invoice', { detail: item.invoice_id }));
+            window.QuoteCraftUtils.goToPage('invoices');
+          });
+        }
+
+        const reviewBtn = row.querySelector('.btn-review-reminder');
+        if (reviewBtn) {
+          reviewBtn.addEventListener('click', async () => {
+            const invRes = await window.electronAPI.getInvoice(item.invoice_id);
+            if (!invRes || !invRes.ok || !invRes.invoice) {
+              window.QuoteCraftUtils.showToast('Could not load invoice details', 'error');
+              return;
+            }
+            window.QuoteCraftDocumentEmail.openSendModal({
+              documentType: 'invoice',
+              documentId: item.invoice_id,
+              doc: invRes.invoice,
+              modalTitle: `Payment Reminder: ${item.invoice_number}`,
+              prefillTo: item.recipient_to,
+              prefillSubject: item.subject,
+              prefillMessage: item.message,
+              reminderRuleId: item.rule_id,
+              onSuccess: async () => {
+                await checkDueRemindersDashboard();
+                loadStats();
+              },
+            });
+          });
+        }
+
+        const sendNowBtn = row.querySelector('.btn-send-now-reminder');
+        if (sendNowBtn) {
+          sendNowBtn.addEventListener('click', async () => {
+            if (!item.recipient_to) {
+              window.QuoteCraftUtils.showToast('No recipient email found for this client/contact. Click Review & Send to enter an email.', 'error');
+              return;
+            }
+            sendNowBtn.disabled = true;
+            sendNowBtn.innerHTML = '<span class="btn-spinner"></span>';
+            try {
+              const res = await window.electronAPI.sendReminder({
+                invoiceId: item.invoice_id,
+                ruleId: item.rule_id,
+                to: item.recipient_to,
+                cc: item.recipient_cc,
+                subject: item.subject,
+                message: item.message,
+              });
+
+              if (res && res.ok) {
+                window.QuoteCraftUtils.showToast(`Reminder sent to ${item.recipient_to}`, 'success');
+                await checkDueRemindersDashboard();
+                loadStats();
+              } else {
+                window.QuoteCraftUtils.showToast(res?.error || 'Failed to send reminder', 'error');
+                sendNowBtn.disabled = false;
+                sendNowBtn.innerHTML = '🚀 Send Now';
+              }
+            } catch (err) {
+              window.QuoteCraftUtils.showToast(err.message, 'error');
+              sendNowBtn.disabled = false;
+              sendNowBtn.innerHTML = '🚀 Send Now';
+            }
+          });
+        }
+
+        listEl.appendChild(row);
+      }
+    } catch (err) {
+      console.error('Error in checkDueRemindersDashboard:', err);
+      card.classList.add('hidden');
+    }
+  }
+
+  const sendAllRemindersBtn = document.getElementById('dashSendAllRemindersBtn');
+  if (sendAllRemindersBtn) {
+    sendAllRemindersBtn.addEventListener('click', async () => {
+      if (!currentDueReminders.length) return;
+      const count = currentDueReminders.length;
+      const confirm = await window.QuoteCraftUtils.confirmAction({
+        title: `Send All ${count} Payment Reminders?`,
+        message: `QuoteCraft will attach the invoice PDFs and dispatch ${count} reminder email${count > 1 ? 's' : ''} to the primary contacts on file. Continue?`,
+        confirmText: `Send All (${count})`,
+      });
+      if (!confirm) return;
+
+      sendAllRemindersBtn.disabled = true;
+      sendAllRemindersBtn.innerHTML = '<span class="btn-spinner"></span> Sending batch...';
+
+      try {
+        const res = await window.electronAPI.sendBatchReminders(currentDueReminders);
+        if (res && res.ok) {
+          if (res.failedCount > 0) {
+            window.QuoteCraftUtils.showToast(`Sent ${res.sentCount} reminder(s), ${res.failedCount} failed. Check email settings.`, 'warning');
+          } else {
+            window.QuoteCraftUtils.showToast(`All ${res.sentCount} payment reminder(s) sent successfully!`, 'success');
+          }
+          await checkDueRemindersDashboard();
+          loadStats();
+        } else {
+          window.QuoteCraftUtils.showToast(res?.error || 'Batch sending failed', 'error');
+        }
+      } catch (err) {
+        window.QuoteCraftUtils.showToast(err.message, 'error');
+      } finally {
+        sendAllRemindersBtn.disabled = false;
+        sendAllRemindersBtn.innerHTML = `📨 Send All (<span id="dashSendAllCount">${currentDueReminders.length}</span>)`;
+      }
+    });
+  }
+
   async function init() {
     try {
       const profile = await window.electronAPI.getCompanyProfile();
@@ -186,12 +378,14 @@
       }
     } catch (e) { /* keep default */ }
     await checkDueRecurringDashboard();
+    await checkDueRemindersDashboard();
     await loadStats();
   }
 
   document.addEventListener('pagechange', async (e) => {
     if (e.detail === 'dashboard') {
       await checkDueRecurringDashboard();
+      await checkDueRemindersDashboard();
       loadStats();
     }
   });

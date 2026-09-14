@@ -67,6 +67,7 @@ async function initEmailSettings() {
   renderProviderPills();
   bindEvents();
   await loadSettings();
+  await initReminderRules();
 }
 
 // ── Render provider quick-fill pills ──────────────────────────────────────
@@ -479,3 +480,339 @@ function escapeHtml(str) {
 
 // ── Entry point ────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', initEmailSettings);
+
+document.addEventListener('pagechange', async (e) => {
+  if (e.detail === 'email-settings') {
+    await loadSettings();
+    await loadReminderSettingsAndRules();
+  }
+});
+
+// ── Payment Reminder Rules & Engine ───────────────────────────────────────
+
+let loadedReminderRules = [];
+
+async function initReminderRules() {
+  bindReminderEvents();
+  await loadReminderSettingsAndRules();
+}
+
+async function loadReminderSettingsAndRules() {
+  try {
+    const [settingsRes, rulesRes] = await Promise.all([
+      window.electronAPI.getReminderSettings(),
+      window.electronAPI.getReminderRules(),
+    ]);
+
+    if (settingsRes && settingsRes.ok) {
+      const autoToggle = document.getElementById('es-auto-send-toggle');
+      if (autoToggle) {
+        autoToggle.checked = Boolean(settingsRes.settings?.auto_send_reminders);
+      }
+    }
+
+    if (rulesRes && rulesRes.ok) {
+      loadedReminderRules = rulesRes.rules || [];
+      renderReminderRulesList(loadedReminderRules);
+    }
+  } catch (err) {
+    console.error('Failed to load reminder rules:', err);
+  }
+}
+
+function renderReminderRulesList(rules) {
+  const container = document.getElementById('reminderRulesContainer');
+  if (!container) return;
+
+  if (!rules || !rules.length) {
+    container.innerHTML = '<p class="empty" style="text-align:center;padding:20px;">No reminder rules configured. Click "+ Add Reminder Rule" or "Reset Defaults".</p>';
+    return;
+  }
+
+  container.innerHTML = rules.map((r) => {
+    let timingLabel = '';
+    let badgeClass = '';
+    if (r.timing_type === 'before_due') {
+      timingLabel = `${r.days} day${r.days === 1 ? '' : 's'} before due date`;
+      badgeClass = 'before';
+    } else if (r.timing_type === 'on_due') {
+      timingLabel = 'On due date';
+      badgeClass = 'on_due';
+    } else if (r.timing_type === 'after_due') {
+      timingLabel = `${r.days} day${r.days === 1 ? '' : 's'} after due date (overdue)`;
+      badgeClass = 'overdue';
+    }
+
+    const isEnabled = Boolean(r.is_enabled);
+    const isDefault = [1, 2, 3].includes(r.id);
+
+    return `
+      <div class="reminder-rule-card ${isEnabled ? '' : 'disabled'}" data-rule-id="${r.id}">
+        <div class="reminder-rule-info">
+          <div class="reminder-rule-header">
+            <span class="reminder-rule-title">${escapeHtml(r.name)}</span>
+            <span class="reminder-timing-badge ${badgeClass}">${escapeHtml(timingLabel)}</span>
+          </div>
+          <div class="reminder-rule-subject">
+            <strong>Subject:</strong> ${escapeHtml(r.subject_template)}
+          </div>
+        </div>
+        <div class="reminder-rule-actions">
+          <label class="toggle-switch" title="${isEnabled ? 'Disable rule' : 'Enable rule'}">
+            <input type="checkbox" class="rule-status-toggle" data-rule-id="${r.id}" ${isEnabled ? 'checked' : ''}>
+            <span class="toggle-track"></span>
+          </label>
+          <button type="button" class="btn btn-small btn-secondary btn-edit-rule" data-rule-id="${r.id}">Edit</button>
+          ${!isDefault ? `<button type="button" class="btn btn-small btn-danger btn-delete-rule" data-rule-id="${r.id}">Delete</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.rule-status-toggle').forEach((chk) => {
+    chk.addEventListener('change', async () => {
+      const ruleId = Number(chk.dataset.ruleId);
+      const targetRule = loadedReminderRules.find((r) => r.id === ruleId);
+      if (!targetRule) return;
+      targetRule.is_enabled = chk.checked;
+      const res = await window.electronAPI.saveReminderRule(targetRule);
+      if (res && res.ok) {
+        loadedReminderRules = res.rules;
+        renderReminderRulesList(loadedReminderRules);
+        window.QuoteCraftUtils.showToast(chk.checked ? `Enabled "${targetRule.name}"` : `Disabled "${targetRule.name}"`, 'info');
+      }
+    });
+  });
+
+  container.querySelectorAll('.btn-edit-rule').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const ruleId = Number(btn.dataset.ruleId);
+      const targetRule = loadedReminderRules.find((r) => r.id === ruleId);
+      if (targetRule) openRuleModal(targetRule);
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-rule').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const ruleId = Number(btn.dataset.ruleId);
+      const targetRule = loadedReminderRules.find((r) => r.id === ruleId);
+      if (!targetRule) return;
+      const confirm = await window.QuoteCraftUtils.confirmAction({
+        title: 'Delete Reminder Rule',
+        message: `Are you sure you want to delete the rule "${targetRule.name}"?`,
+        confirmText: 'Delete Rule',
+        danger: true,
+      });
+      if (!confirm) return;
+
+      const res = await window.electronAPI.deleteReminderRule(ruleId);
+      if (res && res.ok) {
+        loadedReminderRules = res.rules;
+        renderReminderRulesList(loadedReminderRules);
+        window.QuoteCraftUtils.showToast('Reminder rule deleted', 'success');
+      }
+    });
+  });
+}
+
+function bindReminderEvents() {
+  const autoToggle = document.getElementById('es-auto-send-toggle');
+  if (autoToggle) {
+    autoToggle.addEventListener('change', async () => {
+      const isEnabled = autoToggle.checked;
+      if (isEnabled) {
+        const confirm = await window.QuoteCraftUtils.confirmAction({
+          title: 'Enable Fully Automatic Sending?',
+          message: 'When enabled, QuoteCraft will automatically send payment reminder emails in the background whenever due, using your configured email settings without asking for confirmation each time. Are you sure you want to enable this?',
+          confirmText: 'Enable Automatic Sending',
+        });
+        if (!confirm) {
+          autoToggle.checked = false;
+          return;
+        }
+      }
+      const res = await window.electronAPI.saveReminderSettings({ auto_send_reminders: isEnabled });
+      if (res && res.ok) {
+        window.QuoteCraftUtils.showToast(isEnabled ? 'Automatic reminder sending enabled' : 'Automatic reminder sending disabled', 'info');
+      }
+    });
+  }
+
+  const btnReset = document.getElementById('btnResetReminderRules');
+  if (btnReset) {
+    btnReset.addEventListener('click', async () => {
+      const confirm = await window.QuoteCraftUtils.confirmAction({
+        title: 'Reset Reminder Rules to Defaults',
+        message: 'This will reset your reminder timing rules to the 3 standard defaults (3 days before, on due date, 7 days after). Any custom rules will be removed. Continue?',
+        confirmText: 'Reset to Defaults',
+      });
+      if (!confirm) return;
+
+      const res = await window.electronAPI.resetDefaultReminderRules();
+      if (res && res.ok) {
+        loadedReminderRules = res.rules;
+        renderReminderRulesList(loadedReminderRules);
+        window.QuoteCraftUtils.showToast('Reminder rules reset to defaults', 'success');
+      }
+    });
+  }
+
+  const btnAdd = document.getElementById('btnAddReminderRule');
+  if (btnAdd) {
+    btnAdd.addEventListener('click', () => {
+      openRuleModal(null);
+    });
+  }
+
+  const modalClose = document.getElementById('reminderRuleModalClose');
+  const cancelBtn = document.getElementById('reminderRuleCancelBtn');
+  const form = document.getElementById('reminderRuleForm');
+  const timingSelect = document.getElementById('ruleTimingType');
+  const daysField = document.getElementById('ruleDaysField');
+  const daysInput = document.getElementById('ruleDays');
+  const bodyTextarea = document.getElementById('ruleBody');
+
+  if (modalClose) modalClose.addEventListener('click', closeRuleModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeRuleModal);
+
+  if (timingSelect && daysField) {
+    timingSelect.addEventListener('change', () => {
+      if (timingSelect.value === 'on_due') {
+        daysField.style.display = 'none';
+        if (daysInput) daysInput.value = '0';
+      } else {
+        daysField.style.display = 'block';
+        if (daysInput && Number(daysInput.value) === 0) {
+          daysInput.value = timingSelect.value === 'before_due' ? '3' : '7';
+        }
+      }
+    });
+  }
+
+  document.querySelectorAll('.template-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const tag = chip.dataset.tag;
+      if (!tag || !bodyTextarea) return;
+      const start = bodyTextarea.selectionStart || bodyTextarea.value.length;
+      const end = bodyTextarea.selectionEnd || bodyTextarea.value.length;
+      const val = bodyTextarea.value;
+      bodyTextarea.value = val.substring(0, start) + tag + val.substring(end);
+      bodyTextarea.focus();
+      bodyTextarea.selectionStart = bodyTextarea.selectionEnd = start + tag.length;
+    });
+  });
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('ruleEditId').value;
+      const name = document.getElementById('ruleName').value.trim();
+      const timingType = document.getElementById('ruleTimingType').value;
+      const days = timingType === 'on_due' ? 0 : parseInt(document.getElementById('ruleDays').value, 10) || 0;
+      const subject = document.getElementById('ruleSubject').value.trim();
+      const body = document.getElementById('ruleBody').value.trim();
+      const isEnabled = document.getElementById('ruleEnabled').checked;
+
+      if (!name) {
+        showRuleModalError('Please enter a rule name.');
+        return;
+      }
+      if (!subject) {
+        showRuleModalError('Please enter an email subject template.');
+        return;
+      }
+      if (!body) {
+        showRuleModalError('Please enter a message body template.');
+        return;
+      }
+
+      hideRuleModalError();
+      const payload = {
+        id: id ? Number(id) : null,
+        name,
+        timing_type: timingType,
+        days,
+        subject_template: subject,
+        body_template: body,
+        is_enabled: isEnabled,
+      };
+
+      const res = await window.electronAPI.saveReminderRule(payload);
+      if (res && res.ok) {
+        loadedReminderRules = res.rules;
+        renderReminderRulesList(loadedReminderRules);
+        closeRuleModal();
+        window.QuoteCraftUtils.showToast(id ? 'Reminder rule updated' : 'New reminder rule created', 'success');
+      } else {
+        showRuleModalError(res?.error || 'Failed to save reminder rule.');
+      }
+    });
+  }
+}
+
+function openRuleModal(rule) {
+  const modal = document.getElementById('reminderRuleModal');
+  const title = document.getElementById('reminderRuleModalTitle');
+  const idInput = document.getElementById('ruleEditId');
+  const nameInput = document.getElementById('ruleName');
+  const timingSelect = document.getElementById('ruleTimingType');
+  const daysField = document.getElementById('ruleDaysField');
+  const daysInput = document.getElementById('ruleDays');
+  const subjectInput = document.getElementById('ruleSubject');
+  const bodyInput = document.getElementById('ruleBody');
+  const enabledInput = document.getElementById('ruleEnabled');
+
+  hideRuleModalError();
+
+  if (rule) {
+    if (title) title.textContent = `Edit Rule: ${rule.name}`;
+    if (idInput) idInput.value = rule.id;
+    if (nameInput) nameInput.value = rule.name;
+    if (timingSelect) timingSelect.value = rule.timing_type;
+    if (daysInput) daysInput.value = rule.days;
+    if (subjectInput) subjectInput.value = rule.subject_template;
+    if (bodyInput) bodyInput.value = rule.body_template;
+    if (enabledInput) enabledInput.checked = Boolean(rule.is_enabled);
+  } else {
+    if (title) title.textContent = 'Add Reminder Rule';
+    if (idInput) idInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (timingSelect) timingSelect.value = 'before_due';
+    if (daysInput) daysInput.value = '3';
+    if (subjectInput) subjectInput.value = 'Payment Reminder: Invoice {invoice_number}';
+    if (bodyInput) {
+      bodyInput.value = `Dear {client_name},\n\nThis is a friendly reminder that Invoice {invoice_number} for {amount_due} is due on {due_date}.\n\nPlease find attached a copy of the invoice for your records.\n\nBest regards,\n{sender_name}\n{company_name}`;
+    }
+    if (enabledInput) enabledInput.checked = true;
+  }
+
+  if (timingSelect && daysField) {
+    daysField.style.display = timingSelect.value === 'on_due' ? 'none' : 'block';
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeRuleModal() {
+  const modal = document.getElementById('reminderRuleModal');
+  if (modal) modal.classList.add('hidden');
+  hideRuleModalError();
+}
+
+function showRuleModalError(msg) {
+  const el = document.getElementById('ruleErrorNotice');
+  if (el) {
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    el.style.display = 'block';
+  }
+}
+
+function hideRuleModalError() {
+  const el = document.getElementById('ruleErrorNotice');
+  if (el) {
+    el.textContent = '';
+    el.classList.add('hidden');
+    el.style.display = 'none';
+  }
+}

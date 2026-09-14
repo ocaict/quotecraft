@@ -661,6 +661,86 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 21,
+    up: () => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS reminder_rules (
+          id               INTEGER PRIMARY KEY AUTOINCREMENT,
+          name             TEXT NOT NULL,
+          timing_type      TEXT NOT NULL CHECK (timing_type IN ('before_due', 'on_due', 'after_due')),
+          days             INTEGER NOT NULL DEFAULT 0,
+          is_enabled       INTEGER NOT NULL DEFAULT 1,
+          subject_template TEXT NOT NULL,
+          body_template    TEXT NOT NULL,
+          created_at       TEXT NOT NULL,
+          updated_at       TEXT NOT NULL
+        );
+      `);
+
+      const emailCols = new Set(db.exec(`PRAGMA table_info(email_settings)`)[0].values.map((v) => v[1]));
+      if (!emailCols.has('auto_send_reminders')) {
+        db.run(`ALTER TABLE email_settings ADD COLUMN auto_send_reminders INTEGER NOT NULL DEFAULT 0`);
+      }
+
+      db.run(`
+        CREATE TABLE IF NOT EXISTS invoice_reminder_logs (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          invoice_id      INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+          rule_id         INTEGER NOT NULL REFERENCES reminder_rules(id) ON DELETE CASCADE,
+          sent_at         TEXT NOT NULL,
+          recipient_to    TEXT NOT NULL,
+          status          TEXT NOT NULL DEFAULT 'sent'
+        );
+      `);
+      db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_inv_reminder_unique ON invoice_reminder_logs(invoice_id, rule_id);`);
+
+      const countRes = db.exec(`SELECT COUNT(*) FROM reminder_rules`);
+      const existingCount = countRes && countRes.length ? Number(countRes[0].values[0][0]) : 0;
+      if (existingCount === 0) {
+        const now = new Date().toISOString();
+        db.run(
+          `INSERT INTO reminder_rules (id, name, timing_type, days, is_enabled, subject_template, body_template, created_at, updated_at)
+           VALUES (1, ?, ?, ?, 1, ?, ?, ?, ?)`,
+          [
+            'Upcoming Payment (3 days before)',
+            'before_due',
+            3,
+            'Upcoming Payment Reminder: Invoice {invoice_number} due in {days_until_due} days',
+            `Dear {client_name},\n\nThis is a friendly reminder that Invoice {invoice_number} for {amount_due} is due on {due_date} (in {days_until_due} days).\n\nPlease find attached a copy of the invoice for your records. If you have already processed payment, please disregard this notice.\n\nBest regards,\n{sender_name}\n{company_name}`,
+            now,
+            now,
+          ]
+        );
+        db.run(
+          `INSERT INTO reminder_rules (id, name, timing_type, days, is_enabled, subject_template, body_template, created_at, updated_at)
+           VALUES (2, ?, ?, ?, 1, ?, ?, ?, ?)`,
+          [
+            'Payment Due Today',
+            'on_due',
+            0,
+            'Payment Due Today: Invoice {invoice_number}',
+            `Dear {client_name},\n\nThis is a reminder that Invoice {invoice_number} for {amount_due} is due today, {due_date}.\n\nA copy of your invoice is attached for reference. Please arrange for payment today. If you have already sent payment, thank you!\n\nBest regards,\n{sender_name}\n{company_name}`,
+            now,
+            now,
+          ]
+        );
+        db.run(
+          `INSERT INTO reminder_rules (id, name, timing_type, days, is_enabled, subject_template, body_template, created_at, updated_at)
+           VALUES (3, ?, ?, ?, 1, ?, ?, ?, ?)`,
+          [
+            'Overdue Notice (7 days after)',
+            'after_due',
+            7,
+            'Overdue Payment Notice: Invoice {invoice_number} ({days_overdue} days overdue)',
+            `Dear {client_name},\n\nOur records indicate that Invoice {invoice_number} for {amount_due} was due on {due_date} and is now {days_overdue} days overdue.\n\nPlease arrange for payment at your earliest convenience. If there are any issues with this invoice or if payment has already been made, please contact us right away.\n\nBest regards,\n{sender_name}\n{company_name}`,
+            now,
+            now,
+          ]
+        );
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -814,6 +894,7 @@ function getEmailSettings() {
     smtp_username: obj.smtp_username || '',
     sender_name: obj.sender_name || '',
     sender_email: obj.sender_email || '',
+    auto_send_reminders: Number(obj.auto_send_reminders) === 1,
     has_password: hasPassword,
     password_saved: hasPassword,
     storage_type: getStorageMechanismName(),
@@ -871,22 +952,36 @@ function saveEmailSettings(settings) {
   const username = String(settings.smtp_username || '').trim();
   const senderName = String(settings.sender_name || '').trim();
   const senderEmail = String(settings.sender_email || '').trim();
+  const autoSendReminders = settings.auto_send_reminders !== undefined
+    ? (settings.auto_send_reminders ? 1 : 0)
+    : undefined;
 
   if (existingRes.length && existingRes[0].values.length > 0) {
-    db.run(
-      `UPDATE email_settings SET
-         smtp_host = ?, smtp_port = ?, smtp_secure = ?, smtp_username = ?,
-         smtp_password_encrypted = ?, sender_name = ?, sender_email = ?, updated_at = ?
-       WHERE id = 1`,
-      [host, port, secure, username, finalEncryptedPass, senderName, senderEmail, now]
-    );
+    if (autoSendReminders !== undefined) {
+      db.run(
+        `UPDATE email_settings SET
+           smtp_host = ?, smtp_port = ?, smtp_secure = ?, smtp_username = ?,
+           smtp_password_encrypted = ?, sender_name = ?, sender_email = ?,
+           auto_send_reminders = ?, updated_at = ?
+         WHERE id = 1`,
+        [host, port, secure, username, finalEncryptedPass, senderName, senderEmail, autoSendReminders, now]
+      );
+    } else {
+      db.run(
+        `UPDATE email_settings SET
+           smtp_host = ?, smtp_port = ?, smtp_secure = ?, smtp_username = ?,
+           smtp_password_encrypted = ?, sender_name = ?, sender_email = ?, updated_at = ?
+         WHERE id = 1`,
+        [host, port, secure, username, finalEncryptedPass, senderName, senderEmail, now]
+      );
+    }
   } else {
     db.run(
       `INSERT INTO email_settings (
          id, smtp_host, smtp_port, smtp_secure, smtp_username,
-         smtp_password_encrypted, sender_name, sender_email, created_at, updated_at
-       ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [host, port, secure, username, finalEncryptedPass, senderName, senderEmail, now, now]
+         smtp_password_encrypted, sender_name, sender_email, auto_send_reminders, created_at, updated_at
+       ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [host, port, secure, username, finalEncryptedPass, senderName, senderEmail, autoSendReminders !== undefined ? autoSendReminders : 0, now, now]
     );
   }
 
@@ -935,6 +1030,319 @@ function getDocumentEmailLogs(document_type, document_id) {
     [document_type, Number(document_id)]
   );
   return rowsToArray(res);
+}
+
+// ---------- Payment Reminder Rules & Engine ----------
+
+const DEFAULT_REMINDER_RULES = [
+  {
+    id: 1,
+    name: 'Upcoming Payment (3 days before)',
+    timing_type: 'before_due',
+    days: 3,
+    is_enabled: 1,
+    subject_template: 'Upcoming Payment Reminder: Invoice {invoice_number} due in {days_until_due} days',
+    body_template: 'Dear {client_name},\n\nThis is a friendly reminder that Invoice {invoice_number} for {amount_due} is due on {due_date} (in {days_until_due} days).\n\nPlease find attached a copy of the invoice for your records. If you have already processed payment, please disregard this notice.\n\nBest regards,\n{sender_name}\n{company_name}',
+  },
+  {
+    id: 2,
+    name: 'Payment Due Today',
+    timing_type: 'on_due',
+    days: 0,
+    is_enabled: 1,
+    subject_template: 'Payment Due Today: Invoice {invoice_number}',
+    body_template: 'Dear {client_name},\n\nThis is a reminder that Invoice {invoice_number} for {amount_due} is due today, {due_date}.\n\nA copy of your invoice is attached for reference. Please arrange for payment today. If you have already sent payment, thank you!\n\nBest regards,\n{sender_name}\n{company_name}',
+  },
+  {
+    id: 3,
+    name: 'Overdue Notice (7 days after)',
+    timing_type: 'after_due',
+    days: 7,
+    is_enabled: 1,
+    subject_template: 'Overdue Payment Notice: Invoice {invoice_number} ({days_overdue} days overdue)',
+    body_template: 'Dear {client_name},\n\nOur records indicate that Invoice {invoice_number} for {amount_due} was due on {due_date} and is now {days_overdue} days overdue.\n\nPlease arrange for payment at your earliest convenience. If there are any issues with this invoice or if payment has already been made, please contact us right away.\n\nBest regards,\n{sender_name}\n{company_name}',
+  },
+];
+
+function getReminderSettings() {
+  const s = getEmailSettings();
+  return {
+    auto_send_reminders: Boolean(s && s.auto_send_reminders),
+  };
+}
+
+function saveReminderSettings({ auto_send_reminders }) {
+  const flag = auto_send_reminders ? 1 : 0;
+  const now = new Date().toISOString();
+  const existingRes = db.exec('SELECT * FROM email_settings WHERE id = 1');
+  if (existingRes.length && existingRes[0].values.length > 0) {
+    db.run(`UPDATE email_settings SET auto_send_reminders = ?, updated_at = ? WHERE id = 1`, [flag, now]);
+  } else {
+    db.run(
+      `INSERT INTO email_settings (
+         id, smtp_host, smtp_port, smtp_secure, smtp_username,
+         smtp_password_encrypted, sender_name, sender_email, auto_send_reminders, created_at, updated_at
+       ) VALUES (1, '', 587, 0, '', '', '', '', ?, ?, ?)`,
+      [flag, now, now]
+    );
+  }
+  saveToDisk();
+  return { ok: true, auto_send_reminders: flag === 1 };
+}
+
+function getReminderRules() {
+  const res = db.exec(`SELECT * FROM reminder_rules ORDER BY CASE timing_type WHEN 'before_due' THEN 1 WHEN 'on_due' THEN 2 WHEN 'after_due' THEN 3 END ASC, days ASC, id ASC`);
+  return rowsToArray(res).map((r) => ({
+    ...r,
+    days: Number(r.days),
+    is_enabled: Number(r.is_enabled) === 1,
+  }));
+}
+
+function saveReminderRule(rule) {
+  const now = new Date().toISOString();
+  const id = rule.id ? Number(rule.id) : null;
+  const name = String(rule.name || '').trim();
+  const timing_type = String(rule.timing_type || 'before_due').trim();
+  const days = Math.max(0, parseInt(rule.days, 10) || 0);
+  const is_enabled = rule.is_enabled ? 1 : 0;
+  const subject_template = String(rule.subject_template || '').trim();
+  const body_template = String(rule.body_template || '').trim();
+
+  if (!name) return { ok: false, error: 'Rule name is required.' };
+  if (!subject_template) return { ok: false, error: 'Subject template is required.' };
+  if (!body_template) return { ok: false, error: 'Message body template is required.' };
+  if (!['before_due', 'on_due', 'after_due'].includes(timing_type)) {
+    return { ok: false, error: 'Invalid timing type.' };
+  }
+
+  if (id) {
+    db.run(
+      `UPDATE reminder_rules
+       SET name = ?, timing_type = ?, days = ?, is_enabled = ?, subject_template = ?, body_template = ?, updated_at = ?
+       WHERE id = ?`,
+      [name, timing_type, days, is_enabled, subject_template, body_template, now, id]
+    );
+  } else {
+    db.run(
+      `INSERT INTO reminder_rules (name, timing_type, days, is_enabled, subject_template, body_template, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, timing_type, days, is_enabled, subject_template, body_template, now, now]
+    );
+  }
+  saveToDisk();
+  return { ok: true, rules: getReminderRules() };
+}
+
+function deleteReminderRule(id) {
+  db.run(`DELETE FROM reminder_rules WHERE id = ?`, [Number(id)]);
+  saveToDisk();
+  return { ok: true, rules: getReminderRules() };
+}
+
+function resetDefaultReminderRules() {
+  const now = new Date().toISOString();
+  db.run(`DELETE FROM reminder_rules`);
+  for (const r of DEFAULT_REMINDER_RULES) {
+    db.run(
+      `INSERT INTO reminder_rules (id, name, timing_type, days, is_enabled, subject_template, body_template, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [r.id, r.name, r.timing_type, r.days, r.is_enabled, r.subject_template, r.body_template, now, now]
+    );
+  }
+  saveToDisk();
+  return { ok: true, rules: getReminderRules() };
+}
+
+function formatReminderDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(String(dateStr) + 'T00:00:00');
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch (e) {
+    return String(dateStr);
+  }
+}
+
+function formatReminderMoney(amount, currency = 'USD') {
+  const num = Number(amount) || 0;
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(num);
+  } catch (e) {
+    return `${currency} ${num.toFixed(2)}`;
+  }
+}
+
+function interpolateReminderTemplate(template, vars) {
+  if (!template) return '';
+  return template.replace(/\{(\w+)\}/g, (match, key) => {
+    return vars[key] !== undefined && vars[key] !== null ? String(vars[key]) : match;
+  });
+}
+
+function resolveDocumentRecipientEmail(doc, client) {
+  if (doc && doc.contact && doc.contact.email && doc.contact.email.trim()) {
+    return doc.contact.email.trim();
+  }
+  if (client && Array.isArray(client.contacts)) {
+    const primary = client.contacts.find((c) => c.is_primary && c.email && c.email.trim());
+    if (primary) return primary.email.trim();
+    const any = client.contacts.find((c) => c.email && c.email.trim());
+    if (any) return any.email.trim();
+  }
+  if (client && client.email && client.email.trim()) {
+    return client.email.trim();
+  }
+  return '';
+}
+
+function getDueReminders(referenceDate = null) {
+  const rules = getReminderRules().filter((r) => r.is_enabled);
+  if (!rules.length) return [];
+
+  const now = referenceDate ? new Date(referenceDate) : new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const today = new Date(todayStr + 'T00:00:00');
+
+  const profile = getCompanyProfile() || {};
+  const emailSettings = getEmailSettings() || {};
+  const companyName = profile.business_name || profile.company_name || 'QuoteCraft';
+  const senderName = emailSettings.sender_name || profile.business_name || profile.company_name || 'Accounts';
+
+  const sentLogsRes = db.exec(`SELECT invoice_id, rule_id FROM invoice_reminder_logs`);
+  const sentSet = new Set();
+  if (sentLogsRes.length && sentLogsRes[0].values.length) {
+    for (const [invId, rId] of sentLogsRes[0].values) {
+      sentSet.add(`${invId}_${rId}`);
+    }
+  }
+
+  const invoices = listInvoices().filter((inv) => {
+    const bal = Number(inv.balance_due) || 0;
+    const isUnpaid = bal > 0.0001;
+    const isSentOrOverdue = ['sent', 'partially_paid', 'overdue'].includes(inv.status);
+    return isUnpaid && isSentOrOverdue && inv.date_due;
+  });
+
+  const dueReminders = [];
+
+  for (const inv of invoices) {
+    const due = new Date(String(inv.date_due) + 'T00:00:00');
+    if (isNaN(due.getTime())) continue;
+
+    const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const daysOverdue = Math.max(0, -diffDays);
+    const daysUntilDue = Math.max(0, diffDays);
+
+    for (const rule of rules) {
+      if (sentSet.has(`${inv.id}_${rule.id}`)) {
+        continue;
+      }
+
+      let matches = false;
+      if (rule.timing_type === 'before_due') {
+        if (diffDays > 0 && diffDays <= rule.days) {
+          matches = true;
+        }
+      } else if (rule.timing_type === 'on_due') {
+        if (diffDays === 0) {
+          matches = true;
+        }
+      } else if (rule.timing_type === 'after_due') {
+        if (daysOverdue >= rule.days) {
+          matches = true;
+        }
+      }
+
+      if (!matches) continue;
+
+      const fullInv = getInvoice(inv.id);
+      const client = fullInv ? fullInv.client : getClient(inv.client_id);
+      const recipientTo = resolveDocumentRecipientEmail(fullInv, client);
+      const clientName = client ? (client.company_name ? `${client.name} (${client.company_name})` : client.name) : 'Valued Client';
+      let primaryContact = null;
+      if (fullInv && fullInv.contact) {
+        primaryContact = fullInv.contact;
+      } else if (client && Array.isArray(client.contacts)) {
+        primaryContact = client.contacts.find((c) => c.is_primary) || client.contacts[0] || null;
+      }
+      const contactName = primaryContact ? primaryContact.name : (client ? client.name : 'Valued Client');
+
+      const invCurrency = inv.currency || profile.default_currency || 'USD';
+      const balanceDue = Number(inv.balance_due) || 0;
+      const formattedAmount = formatReminderMoney(balanceDue, invCurrency);
+      const formattedTotal = formatReminderMoney(inv.total, invCurrency);
+      const formattedDue = formatReminderDate(inv.date_due);
+
+      const templateVars = {
+        client_name: contactName || clientName,
+        contact_name: contactName,
+        invoice_number: inv.invoice_number,
+        amount_due: formattedAmount,
+        balance_due: formattedAmount,
+        total: formattedTotal,
+        due_date: formattedDue,
+        days_until_due: daysUntilDue,
+        days_overdue: daysOverdue,
+        company_name: companyName,
+        sender_name: senderName,
+      };
+
+      const renderedSubject = interpolateReminderTemplate(rule.subject_template, templateVars);
+      const renderedBody = interpolateReminderTemplate(rule.body_template, templateVars);
+
+      dueReminders.push({
+        invoice_id: inv.id,
+        invoice_number: inv.invoice_number,
+        client_id: inv.client_id,
+        client_name: clientName,
+        contact_id: inv.contact_id,
+        contact_name: contactName,
+        recipient_to: recipientTo,
+        recipient_cc: '',
+        total: inv.total,
+        amount_paid: inv.amount_paid,
+        balance_due: balanceDue,
+        currency: invCurrency,
+        date_created: inv.date_created,
+        date_due: inv.date_due,
+        diff_days: diffDays,
+        days_overdue: daysOverdue,
+        days_until_due: daysUntilDue,
+        rule_id: rule.id,
+        rule_name: rule.name,
+        timing_type: rule.timing_type,
+        rule_days: rule.days,
+        subject: renderedSubject,
+        message: renderedBody,
+      });
+
+      break;
+    }
+  }
+
+  return dueReminders;
+}
+
+function logReminderSent(invoiceId, ruleId, { recipient_to, recipient_cc, subject, message_id, sent_at }) {
+  const now = sent_at || new Date().toISOString();
+  db.run(
+    `INSERT OR REPLACE INTO invoice_reminder_logs (invoice_id, rule_id, sent_at, recipient_to, status)
+     VALUES (?, ?, ?, ?, 'sent')`,
+    [Number(invoiceId), Number(ruleId), now, String(recipient_to || '').trim()]
+  );
+  logDocumentEmail({
+    document_type: 'invoice',
+    document_id: invoiceId,
+    recipient_to: recipient_to,
+    recipient_cc: recipient_cc,
+    subject: subject,
+    message_id: message_id,
+    sent_at: now,
+  });
+  saveToDisk();
+  return { ok: true };
 }
 
 function getClients() {
@@ -3833,4 +4241,12 @@ module.exports = {
   saveEmailSettings,
   logDocumentEmail,
   getDocumentEmailLogs,
+  getReminderSettings,
+  saveReminderSettings,
+  getReminderRules,
+  saveReminderRule,
+  deleteReminderRule,
+  resetDefaultReminderRules,
+  getDueReminders,
+  logReminderSent,
 };

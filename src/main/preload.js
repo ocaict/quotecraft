@@ -78,4 +78,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendDocumentEmail: (payload) => ipcRenderer.invoke('email:sendDocument', payload),
   getDocumentEmailLogs: (documentType, documentId) => ipcRenderer.invoke('email:getDocumentLogs', documentType, documentId),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+
+  getReminderRules: () => ipcRenderer.invoke('reminders:getRules'),
+  saveReminderRule: (rule) => ipcRenderer.invoke('reminders:saveRule', rule),
+  deleteReminderRule: (id) => ipcRenderer.invoke('reminders:deleteRule', id),
+  resetDefaultReminderRules: () => ipcRenderer.invoke('reminders:resetDefaults'),
+  getReminderSettings: () => ipcRenderer.invoke('reminders:getSettings'),
+  saveReminderSettings: (settings) => ipcRenderer.invoke('reminders:saveSettings', settings),
+  getDueReminders: (referenceDate) => ipcRenderer.invoke('reminders:getDue', referenceDate),
+  sendReminder: (payload) => ipcRenderer.invoke('reminders:send', payload),
+  sendBatchReminders: (list) => ipcRenderer.invoke('reminders:sendBatch', list),
+  checkAutoSendReminders: () => ipcRenderer.invoke('reminders:checkAutoSend'),
 });
+

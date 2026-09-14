@@ -449,3 +449,252 @@
   margin-bottom: 16px;
 }
 
+/* Payment Reminder Rules & Engine Styles */
+
+.auto-send-toggle-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.auto-send-toggle-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.auto-send-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.auto-send-warning-badge {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(210, 153, 34, 0.1);
+  border: 1px solid rgba(210, 153, 34, 0.3);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.auto-send-warning-badge strong {
+  color: var(--warning);
+}
+
+.reminder-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reminder-rule-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transition: border-color 0.15s ease;
+}
+
+.reminder-rule-card:hover {
+  border-color: var(--border-hover);
+}
+
+.reminder-rule-card.disabled {
+  opacity: 0.6;
+}
+
+.reminder-rule-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.reminder-rule-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.reminder-rule-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.reminder-timing-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+}
+
+.reminder-timing-badge.before {
+  background: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+  border-color: rgba(88, 166, 255, 0.3);
+}
+
+.reminder-timing-badge.on_due {
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--warning);
+  border-color: rgba(210, 153, 34, 0.3);
+}
+
+.reminder-timing-badge.overdue {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+  border-color: rgba(248, 81, 73, 0.3);
+}
+
+.reminder-rule-subject {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 500px;
+}
+
+.reminder-rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Template Chips */
+.field-header-flex {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.template-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.template-chip {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.template-chip:hover {
+  background: rgba(88, 166, 255, 0.2);
+  border-color: var(--accent);
+}
+
+/* Dashboard Reminders Due Today Card */
+.reminders-card {
+  border: 1px solid rgba(210, 153, 34, 0.4) !important;
+  background: linear-gradient(180deg, rgba(210, 153, 34, 0.04) 0%, var(--bg-card) 100%);
+}
+
+.reminders-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reminders-icon {
+  font-size: 24px;
+}
+
+.badge-warning {
+  background: rgba(210, 153, 34, 0.2);
+  color: #d29922;
+  border: 1px solid rgba(210, 153, 34, 0.4);
+}
+
+.dashboard-reminders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.reminder-item-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reminder-item-card:hover {
+  border-color: var(--border-hover);
+}
+
+.reminder-item-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.reminder-item-number {
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.reminder-item-client {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.reminder-item-email {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.reminder-item-amounts {
+  text-align: right;
+  min-width: 120px;
+}
+
+.reminder-item-balance {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.reminder-item-duedate {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.reminder-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+

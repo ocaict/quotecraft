@@ -55,6 +55,26 @@
 
       <div id="dashboardRecurringBanner" class="quote-old-version-notice hidden" style="margin-bottom:20px;"></div>
 
+      <!-- Reminders Due Today Card -->
+      <div id="dashboardRemindersCard" class="card reminders-card hidden" style="margin-bottom: 20px;">
+        <div class="card-header-flex">
+          <div class="reminders-title-wrap">
+            <span class="reminders-icon">📬</span>
+            <div>
+              <h2 style="margin:0;display:flex;align-items:center;gap:8px;">
+                Payment Reminders Due Today
+                <span id="dashRemindersCountBadge" class="badge badge-warning">0</span>
+              </h2>
+              <p class="subtitle" style="margin:2px 0 0 0;">Review drafted payment reminders for overdue and soon-due invoices.</p>
+            </div>
+          </div>
+          <div class="card-header-actions">
+            <button type="button" id="dashSendAllRemindersBtn" class="btn btn-primary btn-small">📨 Send All (<span id="dashSendAllCount">0</span>)</button>
+          </div>
+        </div>
+        <div id="dashboardRemindersList" class="dashboard-reminders-list"></div>
+      </div>
+
       <div id="dashboardCurrencyNotice" class="dashboard-currency-notice">
         <span class="currency-notice-icon">ℹ️</span>
         <span id="dashboardCurrencyNoticeText">Dashboard totals converted to reporting base currency (<strong id="dashBaseCurrencyCode">USD</strong>). Multi-currency totals are approximate conversions based on the rate entered at invoice time.</span>
@@ -1608,6 +1628,38 @@
         </div>
       </div>
 
+      <!-- Card 5: Payment Reminder Timing Rules & Drafts -->
+      <div class="card email-settings-full" style="margin-top: 24px;">
+        <div class="card-header-flex">
+          <div>
+            <h2>Automatic Payment Reminder Rules</h2>
+            <p class="subtitle">Configure automatic drafting rules for upcoming and overdue invoice reminders.</p>
+          </div>
+          <div class="card-header-actions" style="display: flex; gap: 8px;">
+            <button type="button" id="btnResetReminderRules" class="btn btn-ghost btn-small" title="Reset to default rules">↺ Reset Defaults</button>
+            <button type="button" id="btnAddReminderRule" class="btn btn-secondary btn-small">+ Add Reminder Rule</button>
+          </div>
+        </div>
+
+        <div class="auto-send-toggle-card">
+          <div class="auto-send-toggle-header">
+            <label class="toggle-switch">
+              <input type="checkbox" id="es-auto-send-toggle">
+              <span class="toggle-track"></span>
+            </label>
+            <div>
+              <label for="es-auto-send-toggle" class="auto-send-title">Fully Automatic Sending</label>
+              <p class="hint" style="margin: 2px 0 0 0;">Automatically send payment reminders in the background without requiring manual review.</p>
+            </div>
+          </div>
+          <div class="auto-send-warning-badge">
+            <span>⚠️ <strong>Off by default.</strong> QuoteCraft automatically drafts reminders and presents them in a <strong>Reminders Due Today</strong> list on your Dashboard for review. Turn this ON only if you want reminders sent directly without confirmation.</span>
+          </div>
+        </div>
+
+        <div id="reminderRulesContainer" class="reminder-rules-list"></div>
+      </div>
+
       <div class="email-bottom-actions">
         <button type="button" id="es-save-btn-bottom" class="btn btn-primary">💾 Save Settings</button>
       </div>
@@ -2069,10 +2121,83 @@
         <div id="sendEmailErrorNotice" class="convert-notice alert-error hidden" style="margin-bottom:14px;"></div>
 
         <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" id="sendEmailCancelBtn">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="sendEmailSubmitBtn">
+          <button type="button" id="sendEmailCancelBtn" class="btn btn-ghost">Cancel</button>
+          <button type="submit" id="sendEmailSubmitBtn" class="btn btn-primary">
             <span class="btn-text">✉️ Send Email</span>
           </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="reminderRuleModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reminderRuleModalTitle">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 id="reminderRuleModalTitle">Edit Reminder Rule</h2>
+        <button type="button" class="modal-close" id="reminderRuleModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="reminderRuleForm" class="modal-form" novalidate>
+        <input type="hidden" id="ruleEditId" value="">
+
+        <div class="field field-required">
+          <label for="ruleName">Rule Name</label>
+          <input type="text" id="ruleName" name="name" placeholder="e.g. 3 Days Before Due Date" required autocomplete="off">
+          <span class="field-error" data-error-for="name"></span>
+        </div>
+
+        <div class="form-row">
+          <div class="field field-required" style="flex: 2;">
+            <label for="ruleTimingType">Timing Rule</label>
+            <select id="ruleTimingType" name="timing_type">
+              <option value="before_due">Days before due date</option>
+              <option value="on_due">On due date</option>
+              <option value="after_due">Days after due date (overdue)</option>
+            </select>
+          </div>
+          <div class="field field-required" id="ruleDaysField" style="flex: 1;">
+            <label for="ruleDays">Days</label>
+            <input type="number" id="ruleDays" name="days" min="0" max="365" value="3">
+          </div>
+        </div>
+
+        <div class="field field-required">
+          <label for="ruleSubject">Email Subject</label>
+          <input type="text" id="ruleSubject" name="subject_template" placeholder="e.g. Payment Reminder: Invoice {invoice_number}" required>
+          <span class="field-error" data-error-for="subject_template"></span>
+        </div>
+
+        <div class="field field-required">
+          <div class="field-header-flex">
+            <label for="ruleBody">Message Body</label>
+            <span class="hint">Click placeholders to insert:</span>
+          </div>
+          <div class="template-chips-wrap">
+            <button type="button" class="template-chip" data-tag="{client_name}">{client_name}</button>
+            <button type="button" class="template-chip" data-tag="{invoice_number}">{invoice_number}</button>
+            <button type="button" class="template-chip" data-tag="{amount_due}">{amount_due}</button>
+            <button type="button" class="template-chip" data-tag="{due_date}">{due_date}</button>
+            <button type="button" class="template-chip" data-tag="{days_overdue}">{days_overdue}</button>
+            <button type="button" class="template-chip" data-tag="{days_until_due}">{days_until_due}</button>
+            <button type="button" class="template-chip" data-tag="{company_name}">{company_name}</button>
+            <button type="button" class="template-chip" data-tag="{sender_name}">{sender_name}</button>
+          </div>
+          <textarea id="ruleBody" name="body_template" rows="7" style="resize:vertical;" required></textarea>
+          <span class="field-error" data-error-for="body_template"></span>
+        </div>
+
+        <div class="ssl-toggle-row" style="margin-top: 6px;">
+          <label class="toggle-switch">
+            <input type="checkbox" id="ruleEnabled" checked>
+            <span class="toggle-track"></span>
+          </label>
+          <label for="ruleEnabled">Enable this reminder rule</label>
+        </div>
+
+        <div id="ruleErrorNotice" class="convert-notice alert-error hidden" style="margin-top:14px;"></div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="reminderRuleCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="reminderRuleSubmitBtn">Save Rule</button>
         </div>
       </form>
     </div>

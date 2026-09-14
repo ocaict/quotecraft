@@ -71,6 +71,14 @@ const {
   saveEmailSettings,
   logDocumentEmail,
   getDocumentEmailLogs,
+  getReminderSettings,
+  saveReminderSettings,
+  getReminderRules,
+  saveReminderRule,
+  deleteReminderRule,
+  resetDefaultReminderRules,
+  getDueReminders,
+  logReminderSent,
 } = require('./database');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
 
@@ -1036,6 +1044,270 @@ function registerIpcHandlers() {
     try {
       const logs = getDocumentEmailLogs(documentType, documentId);
       return { ok: true, logs };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // ---------- Payment Reminder Handlers ----------
+
+  ipcMain.handle('reminders:getRules', async () => {
+    try {
+      return { ok: true, rules: getReminderRules() };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('reminders:saveRule', async (event, rule) => {
+    try {
+      return saveReminderRule(rule);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('reminders:deleteRule', async (event, id) => {
+    try {
+      return deleteReminderRule(id);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('reminders:resetDefaults', async () => {
+    try {
+      return resetDefaultReminderRules();
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('reminders:getSettings', async () => {
+    try {
+      return { ok: true, settings: getReminderSettings() };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('reminders:saveSettings', async (event, settings) => {
+    try {
+      return saveReminderSettings(settings);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('reminders:getDue', async (event, referenceDate) => {
+    try {
+      return { ok: true, reminders: getDueReminders(referenceDate) };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('reminders:send', async (event, payload) => {
+    try {
+      const { invoiceId, ruleId, to, cc, subject, message } = payload;
+      const config = getEmailSettingsInternal();
+      if (!config || !config.smtp_host || !config.smtp_username || !config.smtp_password) {
+        return { ok: false, error: 'Email settings are incomplete. Please configure SMTP in Email Settings.' };
+      }
+
+      const inv = getInvoice(invoiceId);
+      if (!inv) return { ok: false, error: 'Invoice not found.' };
+
+      const client = getClient(inv.client_id);
+      const profile = getCompanyProfile();
+      const buffer = await renderInvoicePdf(inv, client, profile);
+      const safeNumber = String(inv.invoice_number || 'invoice').replace(/[^\w-]+/g, '_');
+      const filename = `Invoice_${safeNumber}.pdf`;
+
+      const recipientTo = to ? to.trim() : '';
+      if (!recipientTo) {
+        return { ok: false, error: 'No recipient email address found for this reminder.' };
+      }
+
+      const sendResult = await sendDocumentEmail(config, {
+        to: recipientTo,
+        cc: cc && cc.trim() ? cc.trim() : undefined,
+        subject: subject || `Payment Reminder: Invoice ${inv.invoice_number}`,
+        text: message || '',
+        attachments: [
+          {
+            filename,
+            content: buffer,
+            contentType: 'application/pdf',
+          },
+        ],
+      });
+
+      if (!sendResult.ok) {
+        return { ok: false, error: sendResult.error || 'Failed to send reminder email.' };
+      }
+
+      logReminderSent(invoiceId, ruleId, {
+        recipient_to: recipientTo,
+        recipient_cc: cc && cc.trim() ? cc.trim() : null,
+        subject: subject || `Payment Reminder: Invoice ${inv.invoice_number}`,
+        message_id: sendResult.messageId || null,
+        sent_at: new Date().toISOString(),
+      });
+
+      return { ok: true, messageId: sendResult.messageId };
+    } catch (err) {
+      return { ok: false, error: `Failed to send reminder: ${err.message}` };
+    }
+  });
+
+  ipcMain.handle('reminders:sendBatch', async (event, reminderList) => {
+    try {
+      const items = Array.isArray(reminderList) ? reminderList : getDueReminders();
+      let sentCount = 0;
+      let failedCount = 0;
+      const errors = [];
+
+      for (const item of items) {
+        try {
+          const config = getEmailSettingsInternal();
+          if (!config || !config.smtp_host || !config.smtp_username || !config.smtp_password) {
+            failedCount++;
+            errors.push(`${item.invoice_number}: Email settings not configured`);
+            continue;
+          }
+
+          const inv = getInvoice(item.invoice_id);
+          if (!inv) {
+            failedCount++;
+            errors.push(`${item.invoice_number}: Invoice not found`);
+            continue;
+          }
+
+          const to = item.recipient_to ? item.recipient_to.trim() : '';
+          if (!to) {
+            failedCount++;
+            errors.push(`${item.invoice_number}: No recipient email address`);
+            continue;
+          }
+
+          const client = getClient(inv.client_id);
+          const profile = getCompanyProfile();
+          const buffer = await renderInvoicePdf(inv, client, profile);
+          const safeNumber = String(inv.invoice_number || 'invoice').replace(/[^\w-]+/g, '_');
+          const filename = `Invoice_${safeNumber}.pdf`;
+
+          const sendResult = await sendDocumentEmail(config, {
+            to,
+            cc: item.recipient_cc && item.recipient_cc.trim() ? item.recipient_cc.trim() : undefined,
+            subject: item.subject,
+            text: item.message,
+            attachments: [
+              {
+                filename,
+                content: buffer,
+                contentType: 'application/pdf',
+              },
+            ],
+          });
+
+          if (sendResult.ok) {
+            sentCount++;
+            logReminderSent(item.invoice_id, item.rule_id, {
+              recipient_to: to,
+              recipient_cc: item.recipient_cc,
+              subject: item.subject,
+              message_id: sendResult.messageId || null,
+              sent_at: new Date().toISOString(),
+            });
+          } else {
+            failedCount++;
+            errors.push(`${item.invoice_number}: ${sendResult.error}`);
+          }
+        } catch (itemErr) {
+          failedCount++;
+          errors.push(`${item.invoice_number}: ${itemErr.message}`);
+        }
+      }
+
+      return { ok: true, sentCount, failedCount, errors };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('reminders:checkAutoSend', async () => {
+    try {
+      const s = getReminderSettings();
+      if (!s.auto_send_reminders) {
+        return { ok: true, autoSendEnabled: false, sentCount: 0 };
+      }
+
+      const config = getEmailSettingsInternal();
+      if (!config || !config.smtp_host || !config.smtp_username || !config.smtp_password) {
+        return { ok: false, error: 'Email configuration is incomplete for automatic reminder sending.' };
+      }
+
+      const due = getDueReminders();
+      if (!due.length) {
+        return { ok: true, autoSendEnabled: true, sentCount: 0 };
+      }
+
+      let sentCount = 0;
+      let failedCount = 0;
+      const errors = [];
+
+      for (const item of due) {
+        try {
+          const inv = getInvoice(item.invoice_id);
+          if (!inv) continue;
+          const to = item.recipient_to ? item.recipient_to.trim() : '';
+          if (!to) {
+            failedCount++;
+            errors.push(`${item.invoice_number}: No recipient email`);
+            continue;
+          }
+
+          const client = getClient(inv.client_id);
+          const profile = getCompanyProfile();
+          const buffer = await renderInvoicePdf(inv, client, profile);
+          const safeNumber = String(inv.invoice_number || 'invoice').replace(/[^\w-]+/g, '_');
+          const filename = `Invoice_${safeNumber}.pdf`;
+
+          const sendResult = await sendDocumentEmail(config, {
+            to,
+            cc: item.recipient_cc && item.recipient_cc.trim() ? item.recipient_cc.trim() : undefined,
+            subject: item.subject,
+            text: item.message,
+            attachments: [
+              {
+                filename,
+                content: buffer,
+                contentType: 'application/pdf',
+              },
+            ],
+          });
+
+          if (sendResult.ok) {
+            sentCount++;
+            logReminderSent(item.invoice_id, item.rule_id, {
+              recipient_to: to,
+              recipient_cc: item.recipient_cc,
+              subject: item.subject,
+              message_id: sendResult.messageId || null,
+              sent_at: new Date().toISOString(),
+            });
+          } else {
+            failedCount++;
+            errors.push(`${item.invoice_number}: ${sendResult.error}`);
+          }
+        } catch (e) {
+          failedCount++;
+          errors.push(`${item.invoice_number}: ${e.message}`);
+        }
+      }
+
+      return { ok: true, autoSendEnabled: true, sentCount, failedCount, errors };
     } catch (err) {
       return { ok: false, error: err.message };
     }

@@ -101,12 +101,12 @@
       const docCurrency = doc.currency || 'USD';
 
       if (documentType === 'quote') {
-        modalTitle.textContent = `Send Quote ${doc.quote_number} by Email`;
-        subjectInput.value = `Quote ${doc.quote_number} from ${companyName}`;
+        modalTitle.textContent = context.modalTitle || `Send Quote ${doc.quote_number} by Email`;
+        subjectInput.value = context.prefillSubject || `Quote ${doc.quote_number} from ${companyName}`;
         const formattedTotal = window.QuoteCraftUtils.formatCurrency(doc.total, docCurrency);
         const formattedExpiry = doc.valid_until ? window.QuoteCraftUtils.formatDate(doc.valid_until) : '30 days from date of issue';
 
-        messageInput.value =
+        messageInput.value = context.prefillMessage ||
 `Dear ${recipientName},
 
 Please find attached Quote ${doc.quote_number} for your review.
@@ -125,13 +125,13 @@ ${companyName}`;
           attachmentBadgeName.textContent = `Quote_${safeNum}.pdf`;
         }
       } else {
-        modalTitle.textContent = `Send Invoice ${doc.invoice_number} by Email`;
-        subjectInput.value = `Invoice ${doc.invoice_number} from ${companyName}`;
+        modalTitle.textContent = context.modalTitle || `Send Invoice ${doc.invoice_number} by Email`;
+        subjectInput.value = context.prefillSubject || `Invoice ${doc.invoice_number} from ${companyName}`;
         const balance = doc.balance_due !== undefined ? doc.balance_due : doc.total;
         const formattedBalance = window.QuoteCraftUtils.formatCurrency(balance, docCurrency);
         const formattedDue = doc.date_due ? window.QuoteCraftUtils.formatDate(doc.date_due) : 'Upon receipt';
 
-        messageInput.value =
+        messageInput.value = context.prefillMessage ||
 `Dear ${recipientName},
 
 Please find attached Invoice ${doc.invoice_number} for your records.
@@ -149,6 +149,10 @@ ${companyName}`;
         if (attachmentBadgeName) {
           attachmentBadgeName.textContent = `Invoice_${safeNum}.pdf`;
         }
+      }
+
+      if (context.prefillTo) {
+        toInput.value = context.prefillTo;
       }
 
       modal.classList.remove('hidden');
@@ -189,16 +193,27 @@ ${companyName}`;
     hideError();
 
     try {
-      const payload = {
-        documentType: currentContext.documentType,
-        documentId: currentContext.documentId,
-        to,
-        cc,
-        subject,
-        message,
-      };
-
-      const res = await window.electronAPI.sendDocumentEmail(payload);
+      let res;
+      if (currentContext.reminderRuleId) {
+        res = await window.electronAPI.sendReminder({
+          invoiceId: currentContext.documentId,
+          ruleId: currentContext.reminderRuleId,
+          to,
+          cc,
+          subject,
+          message,
+        });
+      } else {
+        const payload = {
+          documentType: currentContext.documentType,
+          documentId: currentContext.documentId,
+          to,
+          cc,
+          subject,
+          message,
+        };
+        res = await window.electronAPI.sendDocumentEmail(payload);
+      }
 
       if (!res.ok) {
         showError(res.error || 'Failed to send email. Please check your SMTP settings.');
@@ -207,7 +222,10 @@ ${companyName}`;
         return;
       }
 
-      window.QuoteCraftUtils.showToast(`Email sent successfully to ${to}`, 'success');
+      const successMsg = currentContext.reminderRuleId
+        ? `Payment reminder sent successfully to ${to}`
+        : `Email sent successfully to ${to}`;
+      window.QuoteCraftUtils.showToast(successMsg, 'success');
       const cb = currentContext.onSuccess;
       closeModal();
       if (typeof cb === 'function') {
