@@ -69,8 +69,10 @@ const {
   getEmailSettings,
   getEmailSettingsInternal,
   saveEmailSettings,
+  logDocumentEmail,
+  getDocumentEmailLogs,
 } = require('./database');
-const { sendTestEmail } = require('./email-service');
+const { sendTestEmail, sendDocumentEmail } = require('./email-service');
 
 const LOGO_DIR = () => path.join(app.getPath('userData'), 'logo');
 const BACKUPS_DIR = () => path.join(app.getPath('userData'), 'backups');
@@ -933,6 +935,109 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       return { ok: false, error: `Failed to send test email: ${err.message}` };
+    }
+  });
+
+  ipcMain.handle('email:sendDocument', async (event, payload) => {
+    try {
+      const { documentType, documentId, to, cc, subject, message } = payload || {};
+      if (!documentType || !documentId) {
+        return { ok: false, error: 'Document type and ID are required.' };
+      }
+      if (!to || !to.trim()) {
+        return { ok: false, error: 'Recipient email address is required.' };
+      }
+
+      const config = getEmailSettingsInternal();
+      if (!config) {
+        return { ok: false, error: 'No email settings configured. Please configure your SMTP settings first in Settings.' };
+      }
+
+      let doc;
+      let client;
+      let buffer;
+      let filename;
+      const profile = getCompanyProfile();
+
+      if (documentType === 'quote') {
+        doc = getQuote(documentId);
+        if (!doc) return { ok: false, error: 'Quote not found.' };
+        client = getClient(doc.client_id);
+        buffer = await renderQuotePdf(doc, client, profile);
+        const safeNumber = String(doc.quote_number || 'quote').replace(/[^\w-]+/g, '_');
+        filename = `Quote_${safeNumber}.pdf`;
+      } else if (documentType === 'invoice') {
+        doc = getInvoice(documentId);
+        if (!doc) return { ok: false, error: 'Invoice not found.' };
+        client = getClient(doc.client_id);
+        buffer = await renderInvoicePdf(doc, client, profile);
+        const safeNumber = String(doc.invoice_number || 'invoice').replace(/[^\w-]+/g, '_');
+        filename = `Invoice_${safeNumber}.pdf`;
+      } else {
+        return { ok: false, error: `Unsupported document type: ${documentType}` };
+      }
+
+      const attachments = [
+        {
+          filename,
+          content: buffer,
+          contentType: 'application/pdf',
+        },
+      ];
+
+      const sendResult = await sendDocumentEmail(config, {
+        to: to.trim(),
+        cc: cc && cc.trim() ? cc.trim() : undefined,
+        subject: subject || `${documentType === 'quote' ? 'Quote' : 'Invoice'} from ${profile.company_name || 'QuoteCraft'}`,
+        text: message || '',
+        attachments,
+      });
+
+      if (!sendResult.ok) {
+        return { ok: false, error: sendResult.error || 'Failed to send email.' };
+      }
+
+      // Automatically update status to 'sent' if document is currently 'draft'
+      if (doc.status === 'draft') {
+        if (documentType === 'quote') {
+          setQuoteStatus(documentId, 'sent');
+        } else if (documentType === 'invoice') {
+          setInvoiceStatus(documentId, 'sent');
+        }
+      }
+
+      // Log visible send activity
+      const logRecord = logDocumentEmail({
+        document_type: documentType,
+        document_id: documentId,
+        recipient_to: to.trim(),
+        recipient_cc: cc && cc.trim() ? cc.trim() : null,
+        subject: subject || '',
+        message_id: sendResult.messageId || null,
+        sent_at: new Date().toISOString(),
+      });
+
+      const updatedDoc = documentType === 'quote' ? getQuote(documentId) : getInvoice(documentId);
+      const logs = getDocumentEmailLogs(documentType, documentId);
+
+      return {
+        ok: true,
+        messageId: sendResult.messageId,
+        document: updatedDoc,
+        logs,
+        log: logRecord,
+      };
+    } catch (err) {
+      return { ok: false, error: `Failed to send email: ${err.message}` };
+    }
+  });
+
+  ipcMain.handle('email:getDocumentLogs', async (event, documentType, documentId) => {
+    try {
+      const logs = getDocumentEmailLogs(documentType, documentId);
+      return { ok: true, logs };
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
   });
 

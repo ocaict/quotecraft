@@ -75,5 +75,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getEmailSettings: () => ipcRenderer.invoke('email:getSettings'),
   saveEmailSettings: (settings) => ipcRenderer.invoke('email:saveSettings', settings),
   sendTestEmail: (recipient) => ipcRenderer.invoke('email:sendTest', recipient),
+  sendDocumentEmail: (payload) => ipcRenderer.invoke('email:sendDocument', payload),
+  getDocumentEmailLogs: (documentType, documentId) => ipcRenderer.invoke('email:getDocumentLogs', documentType, documentId),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
 });

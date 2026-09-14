@@ -207,9 +207,74 @@ async function sendTestEmail(config, recipient) {
   }
 }
 
+async function sendDocumentEmail(config, { to, cc, subject, text, attachments }) {
+  if (!config || !config.smtp_host) {
+    return { ok: false, error: 'No email configuration found. Please configure your email settings first.' };
+  }
+  if (!to || !to.trim()) {
+    return { ok: false, error: 'Recipient email address is required.' };
+  }
+  if (!subject || !subject.trim()) {
+    return { ok: false, error: 'Email subject is required.' };
+  }
+
+  const transporter = createTransporter(config);
+  const senderName = config.sender_name || 'QuoteCraft';
+  const fromAddress = `"${senderName.replace(/"/g, '')}" <${config.sender_email || config.smtp_username}>`;
+
+  const escapedText = String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const htmlBody = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1f2937; max-width: 600px;">
+      <div style="white-space: pre-wrap;">${escapedText}</div>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0 12px;" />
+      <p style="font-size: 11px; color: #6b7280; margin: 0;">
+        Sent via <strong>${senderName}</strong> with QuoteCraft.
+      </p>
+    </div>
+  `;
+
+  const mailOptions = {
+    from: fromAddress,
+    to: to.trim(),
+    subject: subject.trim(),
+    text: text || '',
+    html: htmlBody,
+  };
+
+  if (cc && cc.trim()) {
+    mailOptions.cc = cc.trim();
+  }
+
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    mailOptions.attachments = attachments;
+  }
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return {
+      ok: true,
+      messageId: info.messageId,
+      recipient: to.trim(),
+      timestamp: new Date().toISOString(),
+    };
+  } catch (err) {
+    const diag = diagnoseSmtpError(err, config);
+    return {
+      ok: false,
+      error: diag.detail,
+      diagnosis: diag,
+    };
+  }
+}
+
 module.exports = {
   createTransporter,
   verifySmtpConnection,
   sendTestEmail,
+  sendDocumentEmail,
   diagnoseSmtpError,
 };
+

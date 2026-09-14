@@ -452,7 +452,7 @@ function drawStampOnFirstPage(ctx, text, color) {
   doc.opacity(0.12);
   doc.font('Helvetica-Bold').fontSize(64).fillColor(color);
   doc.rotate(-24, { origin: [cx, cy] });
-  doc.text(text, cx - 220, cy - 30, { width: 440, align: 'center', lineGap: 0 });
+  doc.text(text, cx - 220, cy - 30, { width: 440, align: 'center', lineGap: 0, lineBreak: false });
   doc.rotate(0);
   doc.restore();
 }
@@ -462,11 +462,14 @@ function drawFooter(ctx, leftText) {
   const range = doc.bufferedPageRange();
   for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
+    const oldBottom = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
     const fy = doc.page.height - MARGIN + 6;
     doc.moveTo(MARGIN, fy - 8).lineTo(MARGIN + W, fy - 8).strokeColor(COLORS.line).lineWidth(0.75).stroke();
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.muted);
-    doc.text(leftText, MARGIN, fy, { width: W / 2, lineGap: 0 });
-    doc.text(`Page ${i - range.start + 1} of ${range.count}`, MARGIN + W / 2, fy, { width: W / 2, align: 'right', lineGap: 0 });
+    doc.text(leftText, MARGIN, fy, { width: W / 2, lineGap: 0, lineBreak: false });
+    doc.text(`Page ${i - range.start + 1} of ${range.count}`, MARGIN + W / 2, fy, { width: W / 2, align: 'right', lineGap: 0, lineBreak: false });
+    doc.page.margins.bottom = oldBottom;
   }
 }
 

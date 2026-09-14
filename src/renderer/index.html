@@ -580,6 +580,7 @@
             </div>
             <button type="button" id="detailEditBtn" class="btn btn-secondary">Edit</button>
             <button type="button" id="detailExportBtn" class="btn btn-secondary">Download PDF</button>
+            <button type="button" id="detailSendEmailBtn" class="btn btn-secondary">✉️ Send by Email</button>
             <button type="button" id="detailConvertBtn" class="btn btn-primary">Convert to Invoice</button>
             <button type="button" id="detailBackBtn" class="btn btn-secondary">Back to quotes</button>
           </div>
@@ -613,6 +614,10 @@
             <div class="detail-field">
               <span class="detail-label">Currency</span>
               <span id="detailCurrency" class="detail-value badge">—</span>
+            </div>
+            <div class="detail-field" id="quoteDetailSentRow">
+              <span class="detail-label">Last sent</span>
+              <span id="quoteDetailSent" class="detail-value">—</span>
             </div>
           </div>
         </div>
@@ -655,6 +660,13 @@
         <div class="card">
           <h2>Notes / terms</h2>
           <p id="detailTerms" class="detail-terms">—</p>
+        </div>
+
+        <div class="card" id="quoteEmailActivityCard">
+          <h2>Email Activity</h2>
+          <div id="quoteEmailActivityList" class="email-activity-list">
+            <p class="empty">No emails sent yet for this quote.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -711,6 +723,7 @@
               </select>
             </div>
             <button type="button" id="invoiceExportBtn" class="btn btn-secondary">Download PDF</button>
+            <button type="button" id="invoiceSendEmailBtn" class="btn btn-secondary">✉️ Send by Email</button>
             <button type="button" id="invoiceRecurringBtn" class="btn btn-secondary">Make Recurring</button>
             <button type="button" id="invoiceIssueCreditBtn" class="btn btn-secondary">Issue Credit Note</button>
             <button type="button" id="invoiceRecordPaymentBtn" class="btn btn-primary">Record Payment</button>
@@ -743,6 +756,10 @@
             <div class="detail-field">
               <span class="detail-label">Currency</span>
               <span id="invoiceDetailCurrency" class="detail-value badge">—</span>
+            </div>
+            <div class="detail-field" id="invoiceDetailSentRow">
+              <span class="detail-label">Last sent</span>
+              <span id="invoiceDetailSent" class="detail-value">—</span>
             </div>
           </div>
         </div>
@@ -875,6 +892,13 @@
           <h2>Credit notes</h2>
           <div id="invoiceCreditNotesList" class="payments-list">
             <p class="empty">No credit notes issued against this invoice.</p>
+          </div>
+        </div>
+
+        <div class="card" id="invoiceEmailActivityCard">
+          <h2>Email Activity</h2>
+          <div id="invoiceEmailActivityList" class="email-activity-list">
+            <p class="empty">No emails sent yet for this invoice.</p>
           </div>
         </div>
       </div>
@@ -2002,6 +2026,58 @@
     </div>
   </div>
 
+  <div id="sendEmailModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="sendEmailModalTitle">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 id="sendEmailModalTitle">Send by Email</h2>
+        <button type="button" class="modal-close" id="sendEmailModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="sendEmailForm" class="modal-form" novalidate>
+        <div class="field field-required">
+          <label for="sendEmailTo">Recipient (To)</label>
+          <input type="email" id="sendEmailTo" name="to" placeholder="client@example.com" required>
+          <span class="field-error" data-error-for="to"></span>
+        </div>
+
+        <div class="field">
+          <label for="sendEmailCc">CC (Optional)</label>
+          <input type="text" id="sendEmailCc" name="cc" placeholder="e.g. accounts@example.com, manager@example.com">
+          <span class="field-error" data-error-for="cc"></span>
+        </div>
+
+        <div class="field field-required">
+          <label for="sendEmailSubject">Subject</label>
+          <input type="text" id="sendEmailSubject" name="subject" required>
+          <span class="field-error" data-error-for="subject"></span>
+        </div>
+
+        <div class="field field-required">
+          <label for="sendEmailMessage">Message Body</label>
+          <textarea id="sendEmailMessage" name="message" rows="7" style="resize:vertical;" required></textarea>
+          <span class="field-error" data-error-for="message"></span>
+        </div>
+
+        <div class="email-attachment-badge" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-card);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:16px;">
+          <span style="font-size:20px;">📎</span>
+          <div style="flex:1;min-width:0;">
+            <div id="sendEmailAttachmentName" style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Quote.pdf</div>
+            <div style="font-size:11px;color:var(--text-muted);">PDF automatically generated & attached</div>
+          </div>
+          <span class="badge badge-success" style="font-size:11px;">Attached</span>
+        </div>
+
+        <div id="sendEmailErrorNotice" class="convert-notice alert-error hidden" style="margin-bottom:14px;"></div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="sendEmailCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="sendEmailSubmitBtn">
+            <span class="btn-text">✉️ Send Email</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="restoreModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -2025,6 +2101,7 @@
   <script src="js/settings.js"></script>
   <script src="js/clients.js"></script>
   <script src="js/items.js"></script>
+  <script src="js/document-email.js"></script>
   <script src="js/quotes.js"></script>
   <script src="js/invoices.js"></script>
   <script src="js/dashboard.js"></script>

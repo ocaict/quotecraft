@@ -36,6 +36,7 @@
   const detailBackBtn = document.getElementById('detailBackBtn');
   const detailEditBtn = document.getElementById('detailEditBtn');
   const detailExportBtn = document.getElementById('detailExportBtn');
+  const detailSendEmailBtn = document.getElementById('detailSendEmailBtn');
   const detailStatusSelect = document.getElementById('detailStatusSelect');
   const detailConvertBtn = document.getElementById('detailConvertBtn');
   const detailConvertResult = document.getElementById('detailConvertResult');
@@ -1257,6 +1258,33 @@
     } else {
       showConvertResult('Only an accepted quote can be converted to an invoice.', 'hint');
     }
+
+    // Last sent metadata display
+    const sentRow = document.getElementById('quoteDetailSentRow');
+    const sentVal = document.getElementById('quoteDetailSent');
+    if (sentRow && sentVal) {
+      if (q.last_sent_at) {
+        sentRow.style.display = '';
+        const dt = new Date(q.last_sent_at);
+        const dateStr = isNaN(dt.getTime()) ? q.last_sent_at : dt.toLocaleString([], {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        sentVal.textContent = `${dateStr} to ${q.last_sent_to || 'Recipient'}`;
+      } else {
+        sentRow.style.display = 'none';
+        sentVal.textContent = '—';
+      }
+    }
+
+    // Email Activity history list
+    const emailListEl = document.getElementById('quoteEmailActivityList');
+    if (window.QuoteCraftDocumentEmail && emailListEl) {
+      window.QuoteCraftDocumentEmail.renderEmailActivityList(emailListEl, q.email_logs);
+    }
   }
 
   // ---------- Convert to invoice Modal & Logic ----------
@@ -1491,6 +1519,37 @@
       detailExportBtn.disabled = false;
     }
   });
+
+  if (detailSendEmailBtn) {
+    detailSendEmailBtn.addEventListener('click', async () => {
+      if (!currentDetailId) return;
+      try {
+        const res = await window.electronAPI.getQuote(currentDetailId);
+        if (!res.ok || !res.quote) {
+          toast('Quote not found.', 'error');
+          return;
+        }
+        if (window.QuoteCraftDocumentEmail) {
+          window.QuoteCraftDocumentEmail.openSendModal({
+            documentType: 'quote',
+            documentId: currentDetailId,
+            doc: res.quote,
+            onSuccess: async () => {
+              await loadQuotes();
+              if (currentDetailId) {
+                const updated = await window.electronAPI.getQuote(currentDetailId);
+                if (updated.ok && updated.quote) {
+                  renderDetail(updated.quote);
+                }
+              }
+            },
+          });
+        }
+      } catch (err) {
+        toast('Could not initiate email: ' + err.message, 'error');
+      }
+    });
+  }
 
   if (quoteLibrarySelect) {
     quoteLibrarySelect.addEventListener('change', () => {

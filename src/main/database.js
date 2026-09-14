@@ -626,6 +626,41 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 20,
+    up: () => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS document_email_logs (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          document_type   TEXT NOT NULL CHECK (document_type IN ('quote', 'invoice')),
+          document_id     INTEGER NOT NULL,
+          recipient_to    TEXT NOT NULL,
+          recipient_cc    TEXT DEFAULT '',
+          subject         TEXT NOT NULL,
+          message_id      TEXT DEFAULT '',
+          sent_at         TEXT NOT NULL,
+          status          TEXT NOT NULL DEFAULT 'sent'
+        );
+      `);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_doc_email_logs ON document_email_logs(document_type, document_id, sent_at DESC);`);
+
+      const quoteCols = new Set(db.exec(`PRAGMA table_info(quotes)`)[0].values.map((v) => v[1]));
+      if (!quoteCols.has('last_sent_at')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN last_sent_at TEXT DEFAULT NULL`);
+      }
+      if (!quoteCols.has('last_sent_to')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN last_sent_to TEXT DEFAULT NULL`);
+      }
+
+      const invCols = new Set(db.exec(`PRAGMA table_info(invoices)`)[0].values.map((v) => v[1]));
+      if (!invCols.has('last_sent_at')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN last_sent_at TEXT DEFAULT NULL`);
+      }
+      if (!invCols.has('last_sent_to')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN last_sent_to TEXT DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -857,6 +892,49 @@ function saveEmailSettings(settings) {
 
   saveToDisk();
   return { ok: true, settings: getEmailSettings() };
+}
+
+// ---------- Document Email Logging ----------
+
+function logDocumentEmail({ document_type, document_id, recipient_to, recipient_cc, subject, message_id, sent_at }) {
+  const now = sent_at || new Date().toISOString();
+  db.run(
+    `INSERT INTO document_email_logs (
+       document_type, document_id, recipient_to, recipient_cc, subject, message_id, sent_at, status
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, 'sent')`,
+    [
+      document_type,
+      Number(document_id),
+      String(recipient_to || '').trim(),
+      String(recipient_cc || '').trim(),
+      String(subject || '').trim(),
+      String(message_id || '').trim(),
+      now,
+    ]
+  );
+
+  if (document_type === 'quote') {
+    db.run(
+      `UPDATE quotes SET last_sent_at = ?, last_sent_to = ?, updated_at = ? WHERE id = ?`,
+      [now, String(recipient_to || '').trim(), now, Number(document_id)]
+    );
+  } else if (document_type === 'invoice') {
+    db.run(
+      `UPDATE invoices SET last_sent_at = ?, last_sent_to = ?, updated_at = ? WHERE id = ?`,
+      [now, String(recipient_to || '').trim(), now, Number(document_id)]
+    );
+  }
+
+  saveToDisk();
+  return { ok: true, logs: getDocumentEmailLogs(document_type, document_id) };
+}
+
+function getDocumentEmailLogs(document_type, document_id) {
+  const res = db.exec(
+    `SELECT * FROM document_email_logs WHERE document_type = ? AND document_id = ? ORDER BY sent_at DESC, id DESC`,
+    [document_type, Number(document_id)]
+  );
+  return rowsToArray(res);
 }
 
 function getClients() {
@@ -1815,9 +1893,10 @@ function getQuote(id) {
   if (!quote) return null;
   quote.line_items = getQuoteLineItems(id);
   const client = getClient(quote.client_id);
-  quote.client = client ? { id: client.id, name: client.name, company_name: client.company_name } : null;
+  quote.client = client ? { id: client.id, name: client.name, company_name: client.company_name, email: client.email, contacts: client.contacts } : null;
   quote.contact = quote.contact_id ? getContactById(quote.contact_id) : null;
   quote.version_history = getQuoteVersionHistory(id);
+  quote.email_logs = getDocumentEmailLogs('quote', id);
   return quote;
 }
 
@@ -2050,9 +2129,10 @@ function getInvoice(id) {
   invoice.credit_notes = getCreditNotesForInvoice(id);
   refreshInvoiceBalance(invoice);
   const client = getClient(invoice.client_id);
-  invoice.client = client ? { id: client.id, name: client.name, company_name: client.company_name } : null;
+  invoice.client = client ? { id: client.id, name: client.name, company_name: client.company_name, email: client.email, contacts: client.contacts } : null;
   invoice.contact = invoice.contact_id ? getContactById(invoice.contact_id) : null;
   invoice.recurring_profile = getRecurringProfileByInvoice(id);
+  invoice.email_logs = getDocumentEmailLogs('invoice', id);
 
   if (invoice.quote_id) {
     const q = rowToObject(db.exec('SELECT id, quote_number, total, currency, status FROM quotes WHERE id = ?', [invoice.quote_id]));
@@ -3751,4 +3831,6 @@ module.exports = {
   getEmailSettings,
   getEmailSettingsInternal,
   saveEmailSettings,
+  logDocumentEmail,
+  getDocumentEmailLogs,
 };

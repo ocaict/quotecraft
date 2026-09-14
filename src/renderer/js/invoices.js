@@ -10,6 +10,7 @@
 
   const invoiceBackBtn = document.getElementById('invoiceBackBtn');
   const invoiceExportBtn = document.getElementById('invoiceExportBtn');
+  const invoiceSendEmailBtn = document.getElementById('invoiceSendEmailBtn');
   const invoiceRecurringBtn = document.getElementById('invoiceRecurringBtn');
   const invoiceRecordPaymentBtn = document.getElementById('invoiceRecordPaymentBtn');
   const invoiceDetailStatusSelect = document.getElementById('invoiceDetailStatusSelect');
@@ -486,6 +487,33 @@
 
     // Deposit / Retainer & Final Invoice handling
     renderDepositSection(inv, invCurr);
+
+    // Last sent metadata display
+    const sentRow = document.getElementById('invoiceDetailSentRow');
+    const sentVal = document.getElementById('invoiceDetailSent');
+    if (sentRow && sentVal) {
+      if (inv.last_sent_at) {
+        sentRow.style.display = '';
+        const dt = new Date(inv.last_sent_at);
+        const dateStr = isNaN(dt.getTime()) ? inv.last_sent_at : dt.toLocaleString([], {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        sentVal.textContent = `${dateStr} to ${inv.last_sent_to || 'Recipient'}`;
+      } else {
+        sentRow.style.display = 'none';
+        sentVal.textContent = '—';
+      }
+    }
+
+    // Email Activity history list
+    const emailListEl = document.getElementById('invoiceEmailActivityList');
+    if (window.QuoteCraftDocumentEmail && emailListEl) {
+      window.QuoteCraftDocumentEmail.renderEmailActivityList(emailListEl, inv.email_logs);
+    }
   }
 
   function renderRecurringSection(profile) {
@@ -1268,6 +1296,37 @@
       invoiceExportBtn.disabled = false;
     }
   });
+
+  if (invoiceSendEmailBtn) {
+    invoiceSendEmailBtn.addEventListener('click', async () => {
+      if (!currentInvoiceId) return;
+      try {
+        const res = await window.electronAPI.getInvoice(currentInvoiceId);
+        if (!res.ok || !res.invoice) {
+          toast('Invoice not found.', 'error');
+          return;
+        }
+        if (window.QuoteCraftDocumentEmail) {
+          window.QuoteCraftDocumentEmail.openSendModal({
+            documentType: 'invoice',
+            documentId: currentInvoiceId,
+            doc: res.invoice,
+            onSuccess: async () => {
+              await loadInvoices();
+              if (currentInvoiceId) {
+                const updated = await window.electronAPI.getInvoice(currentInvoiceId);
+                if (updated.ok && updated.invoice) {
+                  renderDetail(updated.invoice);
+                }
+              }
+            },
+          });
+        }
+      } catch (err) {
+        toast('Could not initiate email: ' + err.message, 'error');
+      }
+    });
+  }
 
   invoiceDetailStatusSelect.addEventListener('change', () => {
     changeInvoiceStatus(invoiceDetailStatusSelect.value);
