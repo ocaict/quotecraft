@@ -92,5 +92,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendReminder: (payload) => ipcRenderer.invoke('reminders:send', payload),
   sendBatchReminders: (list) => ipcRenderer.invoke('reminders:sendBatch', list),
   checkAutoSendReminders: () => ipcRenderer.invoke('reminders:checkAutoSend'),
+  getRevenueReport: (filter) => ipcRenderer.invoke('reports:revenue', filter),
+  getClientProfitabilityReport: (filter) => ipcRenderer.invoke('reports:clientProfitability', filter),
 });
 

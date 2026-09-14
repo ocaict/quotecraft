@@ -769,6 +769,17 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 23,
+    up: () => {
+      // Allow quotes with a deposit invoice to also have a final remainder invoice linked to the same quote
+      db.run(`DROP INDEX IF EXISTS idx_invoices_quote_id`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_invoices_quote_id ON invoices(quote_id)`);
+      db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_quote_standard ON invoices(quote_id) WHERE invoice_type = 'standard'`);
+      db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_quote_deposit ON invoices(quote_id) WHERE invoice_type = 'deposit'`);
+      db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_quote_final ON invoices(quote_id) WHERE invoice_type = 'final'`);
+    },
+  },
 ];
 
 function runMigrations() {
@@ -3099,13 +3110,13 @@ function createFinalInvoiceFromDeposit(depositInvoiceId, overrides) {
         finalInvoiceId,
         deductionDesc,
         1,
-        -depositPaid,
+        0,              // unit_price = 0 to satisfy CHECK (unit_price >= 0); negative value carried in amount
         0,
         'none',
         0,
         0,
         0,
-        -depositPaid,
+        -depositPaid,  // amount = negative deposit to deduct from final total
         sortIdx++,
       ]
     );
@@ -3659,6 +3670,358 @@ function getProfitLossReport(filter = {}) {
     profitMargin,
     variance,
     months: monthsData,
+  };
+}
+
+// ---------- Revenue Reports by Period ----------
+
+function getRevenueReport(filter = {}) {
+  const { startDate, endDate, period = 'month' } = filter;
+  const activePeriod = ['week', 'month', 'quarter', 'year'].includes(period) ? period : 'month';
+
+  const profile = getCompanyProfile();
+  const baseCurrency = (profile && (profile.reporting_currency || profile.default_currency)) || 'USD';
+
+  // Discover date bounds if missing
+  let sDate = startDate ? startDate.trim() : '';
+  let eDate = endDate ? endDate.trim() : '';
+
+  if (!sDate || !eDate) {
+    const minInvRes = db.exec(`SELECT MIN(date_created) FROM invoices`);
+    const minPayRes = db.exec(`SELECT MIN(payment_date) FROM payments`);
+    const maxInvRes = db.exec(`SELECT MAX(date_created) FROM invoices`);
+    const maxPayRes = db.exec(`SELECT MAX(payment_date) FROM payments`);
+
+    const allMins = [
+      minInvRes[0]?.values[0]?.[0],
+      minPayRes[0]?.values[0]?.[0],
+    ].filter(Boolean);
+
+    const allMaxs = [
+      maxInvRes[0]?.values[0]?.[0],
+      maxPayRes[0]?.values[0]?.[0],
+    ].filter(Boolean);
+
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const startOfYear = `${now.getFullYear()}-01-01`;
+
+    if (!sDate) {
+      if (allMins.length) {
+        allMins.sort();
+        sDate = allMins[0] < startOfYear ? allMins[0] : startOfYear;
+      } else {
+        sDate = startOfYear;
+      }
+    }
+
+    if (!eDate) {
+      if (allMaxs.length) {
+        allMaxs.sort();
+        const latest = allMaxs[allMaxs.length - 1];
+        eDate = latest > todayStr ? latest : todayStr;
+      } else {
+        eDate = todayStr;
+      }
+    }
+  }
+
+  if (sDate > eDate) {
+    const temp = sDate;
+    sDate = eDate;
+    eDate = temp;
+  }
+
+  // Date helpers
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function getMondayOfWeek(d) {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    date.setDate(diff);
+    return date;
+  }
+
+  function getWeekNumber(d) {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  }
+
+  function toISODateStr(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function getPeriodKeyForDate(dateStr) {
+    if (activePeriod === 'year') {
+      return dateStr.slice(0, 4);
+    }
+    if (activePeriod === 'quarter') {
+      const y = dateStr.slice(0, 4);
+      const m = Number(dateStr.slice(5, 7));
+      const q = Math.ceil(m / 3);
+      return `${y}-Q${q}`;
+    }
+    if (activePeriod === 'week') {
+      const d = new Date(dateStr + 'T00:00:00');
+      const mon = getMondayOfWeek(d);
+      const wn = getWeekNumber(mon);
+      return `${mon.getFullYear()}-W${String(wn).padStart(2, '0')}`;
+    }
+    return dateStr.slice(0, 7);
+  }
+
+  // Generate continuous list of period buckets
+  const periodBuckets = [];
+  const periodBucketMap = new Map();
+
+  if (activePeriod === 'year') {
+    const startY = Number(sDate.slice(0, 4));
+    const endY = Number(eDate.slice(0, 4));
+    for (let y = startY; y <= endY; y++) {
+      const key = String(y);
+      const bucket = {
+        key,
+        label: key,
+        startDate: `${y}-01-01`,
+        endDate: `${y}-12-31`,
+        invoiced: 0,
+        invoicedCount: 0,
+        collected: 0,
+        collectedCount: 0,
+      };
+      periodBuckets.push(bucket);
+      periodBucketMap.set(key, bucket);
+    }
+  } else if (activePeriod === 'quarter') {
+    const startY = Number(sDate.slice(0, 4));
+    const startQ = Math.ceil(Number(sDate.slice(5, 7)) / 3);
+    const endY = Number(eDate.slice(0, 4));
+    const endQ = Math.ceil(Number(eDate.slice(5, 7)) / 3);
+
+    let curY = startY;
+    let curQ = startQ;
+    while (curY < endY || (curY === endY && curQ <= endQ)) {
+      const key = `${curY}-Q${curQ}`;
+      const qStartMonth = (curQ - 1) * 3 + 1;
+      const qEndMonth = curQ * 3;
+      const qEndDay = new Date(curY, qEndMonth, 0).getDate();
+      const qMonthsLabel = `${monthNames[qStartMonth - 1]} – ${monthNames[qEndMonth - 1]}`;
+
+      const bucket = {
+        key,
+        label: `Q${curQ} ${curY} (${qMonthsLabel})`,
+        startDate: `${curY}-${String(qStartMonth).padStart(2, '0')}-01`,
+        endDate: `${curY}-${String(qEndMonth).padStart(2, '0')}-${String(qEndDay).padStart(2, '0')}`,
+        invoiced: 0,
+        invoicedCount: 0,
+        collected: 0,
+        collectedCount: 0,
+      };
+      periodBuckets.push(bucket);
+      periodBucketMap.set(key, bucket);
+
+      curQ++;
+      if (curQ > 4) {
+        curQ = 1;
+        curY++;
+      }
+    }
+  } else if (activePeriod === 'week') {
+    const startD = new Date(sDate + 'T00:00:00');
+    const endD = new Date(eDate + 'T00:00:00');
+    let curMon = getMondayOfWeek(startD);
+
+    while (curMon <= endD || (curMon.getTime() - endD.getTime() < 7 * 86400000 && toISODateStr(curMon) <= eDate)) {
+      const sun = new Date(curMon);
+      sun.setDate(curMon.getDate() + 6);
+      const wn = getWeekNumber(curMon);
+      const key = `${curMon.getFullYear()}-W${String(wn).padStart(2, '0')}`;
+      const monStr = toISODateStr(curMon);
+      const sunStr = toISODateStr(sun);
+
+      const monLabel = `${monthNames[curMon.getMonth()]} ${curMon.getDate()}`;
+      const sunLabel = `${monthNames[sun.getMonth()]} ${sun.getDate()}, ${sun.getFullYear()}`;
+
+      const bucket = {
+        key,
+        label: `W${wn} (${monLabel} – ${sunLabel})`,
+        startDate: monStr,
+        endDate: sunStr,
+        invoiced: 0,
+        invoicedCount: 0,
+        collected: 0,
+        collectedCount: 0,
+      };
+      periodBuckets.push(bucket);
+      periodBucketMap.set(key, bucket);
+
+      curMon = new Date(curMon);
+      curMon.setDate(curMon.getDate() + 7);
+      if (periodBuckets.length > 520) break; // safety guard
+    }
+  } else {
+    // Default 'month'
+    const [startY, startM] = sDate.slice(0, 7).split('-').map(Number);
+    const [endY, endM] = eDate.slice(0, 7).split('-').map(Number);
+
+    let curY = startY;
+    let curM = startM;
+    while (curY < endY || (curY === endY && curM <= endM)) {
+      const key = `${curY}-${String(curM).padStart(2, '0')}`;
+      const lastDay = new Date(curY, curM, 0).getDate();
+      const bucket = {
+        key,
+        label: `${monthNames[curM - 1]} ${curY}`,
+        startDate: `${key}-01`,
+        endDate: `${key}-${String(lastDay).padStart(2, '0')}`,
+        invoiced: 0,
+        invoicedCount: 0,
+        collected: 0,
+        collectedCount: 0,
+      };
+      periodBuckets.push(bucket);
+      periodBucketMap.set(key, bucket);
+
+      curM++;
+      if (curM > 12) {
+        curM = 1;
+        curY++;
+      }
+    }
+  }
+
+  // 1. Fetch Invoices in date range
+  const invSql = `
+    SELECT 
+      id,
+      invoice_number,
+      date_created,
+      total,
+      currency,
+      exchange_rate
+    FROM invoices
+    WHERE date_created >= ? AND date_created <= ?
+    ORDER BY date_created ASC
+  `;
+  const invRows = rowsToArray(db.exec(invSql, [sDate, eDate]));
+  let hasForeignCurrency = false;
+
+  for (const inv of invRows) {
+    const rate = Number(inv.exchange_rate) || 1.0;
+    if ((inv.currency && inv.currency !== baseCurrency) || rate !== 1.0) {
+      hasForeignCurrency = true;
+    }
+    const invBaseAmount = Math.round((Number(inv.total) || 0) * rate * 100) / 100;
+    const pKey = getPeriodKeyForDate(inv.date_created);
+
+    let bucket = periodBucketMap.get(pKey);
+    if (!bucket) {
+      bucket = {
+        key: pKey,
+        label: pKey,
+        startDate: inv.date_created,
+        endDate: inv.date_created,
+        invoiced: 0,
+        invoicedCount: 0,
+        collected: 0,
+        collectedCount: 0,
+      };
+      periodBuckets.push(bucket);
+      periodBucketMap.set(pKey, bucket);
+    }
+    bucket.invoiced = Math.round((bucket.invoiced + invBaseAmount) * 100) / 100;
+    bucket.invoicedCount += 1;
+  }
+
+  // 2. Fetch Payments in date range
+  const paySql = `
+    SELECT 
+      p.id,
+      p.invoice_id,
+      p.payment_date,
+      p.amount,
+      i.currency,
+      i.exchange_rate
+    FROM payments p
+    JOIN invoices i ON p.invoice_id = i.id
+    WHERE p.payment_date >= ? AND p.payment_date <= ?
+    ORDER BY p.payment_date ASC
+  `;
+  const payRows = rowsToArray(db.exec(paySql, [sDate, eDate]));
+
+  for (const pay of payRows) {
+    const rate = Number(pay.exchange_rate) || 1.0;
+    if ((pay.currency && pay.currency !== baseCurrency) || rate !== 1.0) {
+      hasForeignCurrency = true;
+    }
+    const payBaseAmount = Math.round((Number(pay.amount) || 0) * rate * 100) / 100;
+    const pKey = getPeriodKeyForDate(pay.payment_date);
+
+    let bucket = periodBucketMap.get(pKey);
+    if (!bucket) {
+      bucket = {
+        key: pKey,
+        label: pKey,
+        startDate: pay.payment_date,
+        endDate: pay.payment_date,
+        invoiced: 0,
+        invoicedCount: 0,
+        collected: 0,
+        collectedCount: 0,
+      };
+      periodBuckets.push(bucket);
+      periodBucketMap.set(pKey, bucket);
+    }
+    bucket.collected = Math.round((bucket.collected + payBaseAmount) * 100) / 100;
+    bucket.collectedCount += 1;
+  }
+
+  // Sort period buckets chronologically
+  periodBuckets.sort((a, b) => a.key.localeCompare(b.key));
+
+  let grandInvoiced = 0;
+  let grandCollected = 0;
+  let grandInvoicesCount = 0;
+  let grandPaymentsCount = 0;
+
+  for (const b of periodBuckets) {
+    b.invoiced = Math.round(b.invoiced * 100) / 100;
+    b.collected = Math.round(b.collected * 100) / 100;
+    b.uncollected = Math.max(0, Math.round((b.invoiced - b.collected) * 100) / 100);
+    b.collectionRate = b.invoiced > 0
+      ? Math.round((b.collected / b.invoiced) * 1000) / 10
+      : (b.collected > 0 ? 100 : 0);
+
+    grandInvoiced += b.invoiced;
+    grandCollected += b.collected;
+    grandInvoicesCount += b.invoicedCount;
+    grandPaymentsCount += b.collectedCount;
+  }
+
+  grandInvoiced = Math.round(grandInvoiced * 100) / 100;
+  grandCollected = Math.round(grandCollected * 100) / 100;
+  const uncollectedBalance = Math.max(0, Math.round((grandInvoiced - grandCollected) * 100) / 100);
+  const overallCollectionRate = grandInvoiced > 0
+    ? Math.round((grandCollected / grandInvoiced) * 1000) / 10
+    : (grandCollected > 0 ? 100 : 0);
+
+  return {
+    period: activePeriod,
+    startDate: sDate,
+    endDate: eDate,
+    baseCurrency,
+    totalInvoiced: grandInvoiced,
+    totalCollected: grandCollected,
+    uncollectedBalance,
+    overallCollectionRate,
+    invoicesCount: grandInvoicesCount,
+    paymentsCount: grandPaymentsCount,
+    hasForeignCurrency,
+    periods: periodBuckets,
   };
 }
 
@@ -4273,6 +4636,471 @@ function closeDatabase() {
   }
 }
 
+// ─── Revenue Report ──────────────────────────────────────────────────────────
+
+function getRevenueReport({ startDate, endDate, period = 'month' } = {}) {
+  // Resolve base reporting currency
+  const profileRes = db.exec(`SELECT reporting_currency, default_currency FROM company_profile WHERE id = 1`);
+  let reportingCurrency = 'USD';
+  if (profileRes.length && profileRes[0].values.length) {
+    const [rc, dc] = profileRes[0].values[0];
+    reportingCurrency = rc || dc || 'USD';
+  }
+
+  // Determine date bounds if not supplied
+  if (!startDate || !endDate) {
+    const boundsRes = db.exec(`
+      SELECT
+        MIN(i.date_created) AS minInvoice,
+        MAX(i.date_created) AS maxInvoice,
+        MIN(p.payment_date) AS minPay,
+        MAX(p.payment_date) AS maxPay
+      FROM invoices i
+      LEFT JOIN payments p ON p.invoice_id = i.id
+    `);
+    let minDate = null;
+    let maxDate = null;
+    if (boundsRes.length && boundsRes[0].values.length) {
+      const [minInv, maxInv, minP, maxP] = boundsRes[0].values[0];
+      const dates = [minInv, maxInv, minP, maxP].filter(Boolean);
+      if (dates.length) {
+        minDate = dates.reduce((a, b) => (a < b ? a : b));
+        maxDate = dates.reduce((a, b) => (a > b ? a : b));
+      }
+    }
+    if (!minDate) {
+      // No data — default to current year
+      const y = new Date().getFullYear();
+      startDate = startDate || `${y}-01-01`;
+      endDate = endDate || `${y}-12-31`;
+    } else {
+      startDate = startDate || minDate.slice(0, 10);
+      endDate = endDate || maxDate.slice(0, 10);
+    }
+  }
+
+  // Query invoiced amounts (grouped by period of invoice creation)
+  const invoiceRows = db.exec(`
+    SELECT
+      date_created,
+      total,
+      COALESCE(exchange_rate, 1.0) AS rate
+    FROM invoices
+    WHERE date_created >= ? AND date_created <= ?
+      AND status NOT IN ('draft')
+  `, [startDate, endDate + 'T23:59:59']);
+
+  // Query collected payments (joined to invoices for exchange rate)
+  const paymentRows = db.exec(`
+    SELECT
+      p.payment_date,
+      p.amount,
+      COALESCE(i.exchange_rate, 1.0) AS rate
+    FROM payments p
+    JOIN invoices i ON i.id = p.invoice_id
+    WHERE p.payment_date >= ? AND p.payment_date <= ?
+  `, [startDate, endDate + 'T23:59:59']);
+
+  // Helper: format date into period bucket key
+  function dateToBucket(dateStr) {
+    const d = new Date(dateStr);
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth(); // 0-based
+    const day = d.getUTCDate();
+    if (period === 'week') {
+      // ISO week: Monday-anchored
+      const tmp = new Date(Date.UTC(y, m, day));
+      const dow = tmp.getUTCDay() || 7; // Mon=1..Sun=7
+      tmp.setUTCDate(tmp.getUTCDate() - (dow - 1));
+      const wy = tmp.getUTCFullYear();
+      const wm = tmp.getUTCMonth();
+      const wd = tmp.getUTCDate();
+      return `${wy}-W${String(wm + 1).padStart(2, '0')}-${String(wd).padStart(2, '0')}`;
+    } else if (period === 'month') {
+      return `${y}-${String(m + 1).padStart(2, '0')}`;
+    } else if (period === 'quarter') {
+      const q = Math.floor(m / 3) + 1;
+      return `${y}-Q${q}`;
+    } else { // year
+      return `${y}`;
+    }
+  }
+
+  // Generate all buckets between startDate and endDate so gaps show zero
+  function generateBuckets(start, end) {
+    const buckets = [];
+    const seen = new Set();
+    const startD = new Date(start + 'T00:00:00Z');
+    const endD = new Date(end + 'T23:59:59Z');
+
+    let cur;
+    if (period === 'week') {
+      cur = new Date(startD);
+      const dow = cur.getUTCDay() || 7;
+      cur.setUTCDate(cur.getUTCDate() - (dow - 1));
+    } else if (period === 'month') {
+      cur = new Date(Date.UTC(startD.getUTCFullYear(), startD.getUTCMonth(), 1));
+    } else if (period === 'quarter') {
+      const qM = Math.floor(startD.getUTCMonth() / 3) * 3;
+      cur = new Date(Date.UTC(startD.getUTCFullYear(), qM, 1));
+    } else {
+      cur = new Date(Date.UTC(startD.getUTCFullYear(), 0, 1));
+    }
+
+    const endKey = dateToBucket(endD.toISOString());
+    while (cur <= endD || (!seen.has(endKey) && cur.getTime() <= endD.getTime() + 90 * 86400000)) {
+      const key = dateToBucket(cur.toISOString());
+      if (!seen.has(key)) {
+        seen.add(key);
+        buckets.push(key);
+      }
+      if (key === endKey) break;
+
+      // Advance by period
+      if (period === 'week') {
+        cur.setUTCDate(cur.getUTCDate() + 7);
+      } else if (period === 'month') {
+        cur.setUTCMonth(cur.getUTCMonth() + 1);
+      } else if (period === 'quarter') {
+        cur.setUTCMonth(cur.getUTCMonth() + 3);
+      } else {
+        cur.setUTCFullYear(cur.getUTCFullYear() + 1);
+      }
+    }
+
+    // Safety: include any keys that exist in invMap or payMap
+    for (const k of [...Object.keys(invMap), ...Object.keys(payMap)]) {
+      if (!seen.has(k)) {
+        seen.add(k);
+        buckets.push(k);
+      }
+    }
+
+    buckets.sort();
+    return buckets;
+  }
+
+  // Human-readable label for a bucket key
+  function bucketLabel(key) {
+    if (period === 'week') {
+      // key = YYYY-WMM-DD → Monday date
+      const parts = key.split('-');
+      const y = parseInt(parts[0], 10);
+      const mo = parseInt(parts[1].slice(1), 10) - 1;
+      const d = parseInt(parts[2], 10);
+      const monday = new Date(Date.UTC(y, mo, d));
+      const sunday = new Date(Date.UTC(y, mo, d + 6));
+      const fmt = (dt) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+      return `${fmt(monday)} – ${fmt(sunday)}`;
+    } else if (period === 'month') {
+      const [y, mo] = key.split('-');
+      const d = new Date(Date.UTC(parseInt(y), parseInt(mo) - 1, 1));
+      return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+    } else if (period === 'quarter') {
+      const [y, q] = key.split('-');
+      const qNum = parseInt(q.slice(1), 10);
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const startM = (qNum - 1) * 3;
+      return `${q} ${y} (${monthNames[startM]}–${monthNames[startM + 2]})`;
+    } else {
+      return key;
+    }
+  }
+
+  // Aggregate invoice data per bucket
+  const invMap = {};
+  const invCountMap = {};
+  let hasForeignCurrency = false;
+  if (invoiceRows.length && invoiceRows[0].values.length) {
+    const cols = invoiceRows[0].columns;
+    invoiceRows[0].values.forEach(row => {
+      const obj = {};
+      cols.forEach((c, i) => { obj[c] = row[i]; });
+      const bucket = dateToBucket(obj.date_created);
+      const normalized = (obj.total || 0) * (obj.rate !== 1.0 ? obj.rate : 1);
+      if (obj.rate !== 1.0) hasForeignCurrency = true;
+      invMap[bucket] = (invMap[bucket] || 0) + normalized;
+      invCountMap[bucket] = (invCountMap[bucket] || 0) + 1;
+    });
+  }
+
+  // Aggregate payment data per bucket
+  const payMap = {};
+  const payCountMap = {};
+  if (paymentRows.length && paymentRows[0].values.length) {
+    const cols = paymentRows[0].columns;
+    paymentRows[0].values.forEach(row => {
+      const obj = {};
+      cols.forEach((c, i) => { obj[c] = row[i]; });
+      const bucket = dateToBucket(obj.payment_date);
+      const normalized = (obj.amount || 0) * (obj.rate !== 1.0 ? obj.rate : 1);
+      if (obj.rate !== 1.0) hasForeignCurrency = true;
+      payMap[bucket] = (payMap[bucket] || 0) + normalized;
+      payCountMap[bucket] = (payCountMap[bucket] || 0) + 1;
+    });
+  }
+
+  const bucketKeys = generateBuckets(startDate, endDate);
+  let totalInvoiced = 0;
+  let totalCollected = 0;
+  let totalInvoiceCount = 0;
+  let totalPaymentCount = 0;
+
+  const buckets = bucketKeys.map(key => {
+    const invoiced = invMap[key] || 0;
+    const collected = payMap[key] || 0;
+    const invCount = invCountMap[key] || 0;
+    const payCount = payCountMap[key] || 0;
+    totalInvoiced += invoiced;
+    totalCollected += collected;
+    totalInvoiceCount += invCount;
+    totalPaymentCount += payCount;
+    return {
+      key,
+      label: bucketLabel(key),
+      invoiced,
+      collected,
+      invoiceCount: invCount,
+      paymentCount: payCount,
+      difference: invoiced - collected,
+      collectionRate: invoiced > 0 ? (collected / invoiced) * 100 : null,
+    };
+  });
+
+  return {
+    period,
+    startDate,
+    endDate,
+    reportingCurrency,
+    hasForeignCurrency,
+    buckets,
+    summary: {
+      totalInvoiced,
+      totalCollected,
+      uncollected: totalInvoiced - totalCollected,
+      collectionRate: totalInvoiced > 0 ? (totalCollected / totalInvoiced) * 100 : null,
+      invoiceCount: totalInvoiceCount,
+      paymentCount: totalPaymentCount,
+    },
+  };
+}
+
+// ─── Client Profitability Report ─────────────────────────────────────────────
+
+function getClientProfitabilityReport({ startDate, endDate, sort = 'collected_desc', includeInactive = false } = {}) {
+  function execRows(sql, params = []) {
+    const res = db.exec(sql, params);
+    if (!res.length || !res[0].values.length) return [];
+    const cols = res[0].columns;
+    return res[0].values.map(row => {
+      const obj = {};
+      cols.forEach((c, i) => { obj[c] = row[i]; });
+      return obj;
+    });
+  }
+
+  // Resolve base reporting currency
+  const profileRes = db.exec(`SELECT reporting_currency, default_currency FROM company_profile WHERE id = 1`);
+  let reportingCurrency = 'USD';
+  if (profileRes.length && profileRes[0].values.length) {
+    const [rc, dc] = profileRes[0].values[0];
+    reportingCurrency = rc || dc || 'USD';
+  }
+
+  // Handle date bounds
+  let startBound = null;
+  let endBound = null;
+  if (startDate && endDate) {
+    startBound = startDate.length === 10 ? startDate : startDate.slice(0, 10);
+    endBound = endDate.length === 10 ? endDate + 'T23:59:59.999Z' : endDate;
+  }
+
+  // Query all clients
+  const clients = execRows(`
+    SELECT id, name, company_name, email, phone, created_at
+    FROM clients
+    ORDER BY name COLLATE NOCASE ASC
+  `);
+
+  // Query non-draft invoices in date range
+  let invSql = `
+    SELECT
+      id,
+      client_id,
+      invoice_number,
+      date_created,
+      total,
+      currency,
+      COALESCE(exchange_rate, 1.0) AS rate
+    FROM invoices
+    WHERE status NOT IN ('draft')
+  `;
+  const invParams = [];
+  if (startBound && endBound) {
+    invSql += ` AND date_created >= ? AND date_created <= ?`;
+    invParams.push(startBound, endBound);
+  }
+  const invoiceRows = execRows(invSql, invParams);
+
+  // Query payments in date range
+  let paySql = `
+    SELECT
+      p.id,
+      p.invoice_id,
+      p.amount,
+      p.payment_date,
+      i.client_id,
+      COALESCE(i.exchange_rate, 1.0) AS rate
+    FROM payments p
+    JOIN invoices i ON i.id = p.invoice_id
+  `;
+  const payParams = [];
+  if (startBound && endBound) {
+    paySql += ` WHERE p.payment_date >= ? AND p.payment_date <= ?`;
+    payParams.push(startBound, endBound);
+  }
+  const paymentRows = execRows(paySql, payParams);
+
+  let hasForeignCurrency = false;
+
+  // Aggregate invoice data by client_id
+  const clientInvMap = {};
+  for (const inv of invoiceRows) {
+    const cid = inv.client_id;
+    if (!clientInvMap[cid]) {
+      clientInvMap[cid] = { totalBilled: 0, invoiceCount: 0 };
+    }
+    const rate = Number(inv.rate) || 1.0;
+    if (rate !== 1.0 || (inv.currency && inv.currency !== reportingCurrency)) {
+      hasForeignCurrency = true;
+    }
+    const norm = (Number(inv.total) || 0) * rate;
+    clientInvMap[cid].totalBilled += norm;
+    clientInvMap[cid].invoiceCount += 1;
+  }
+
+  // Aggregate payment data by client_id
+  const clientPayMap = {};
+  for (const pay of paymentRows) {
+    const cid = pay.client_id;
+    if (!clientPayMap[cid]) {
+      clientPayMap[cid] = { totalCollected: 0, paymentCount: 0 };
+    }
+    const rate = Number(pay.rate) || 1.0;
+    if (rate !== 1.0) {
+      hasForeignCurrency = true;
+    }
+    const norm = (Number(pay.amount) || 0) * rate;
+    clientPayMap[cid].totalCollected += norm;
+    clientPayMap[cid].paymentCount += 1;
+  }
+
+  // Build per-client metrics
+  let reportClients = [];
+  let sumBilled = 0;
+  let sumCollected = 0;
+  let activeCount = 0;
+
+  for (const cl of clients) {
+    const invData = clientInvMap[cl.id] || { totalBilled: 0, invoiceCount: 0 };
+    const payData = clientPayMap[cl.id] || { totalCollected: 0, paymentCount: 0 };
+
+    const totalBilled = Math.round(invData.totalBilled * 100) / 100;
+    const totalCollected = Math.round(payData.totalCollected * 100) / 100;
+    const outstandingBalance = Math.max(0, Math.round((totalBilled - totalCollected) * 100) / 100);
+    const collectionRate = totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 1000) / 10 : null;
+
+    const hasActivity = invData.invoiceCount > 0 || payData.paymentCount > 0;
+    if (hasActivity) {
+      activeCount += 1;
+      sumBilled += totalBilled;
+      sumCollected += totalCollected;
+    }
+
+    if (hasActivity || includeInactive) {
+      reportClients.push({
+        clientId: cl.id,
+        clientName: cl.name,
+        companyName: cl.company_name || '',
+        email: cl.email || '',
+        phone: cl.phone || '',
+        totalBilled,
+        totalCollected,
+        outstandingBalance,
+        collectionRate,
+        invoiceCount: invData.invoiceCount,
+        paymentCount: payData.paymentCount,
+        hasActivity,
+      });
+    }
+  }
+
+  // Sorting
+  reportClients.sort((a, b) => {
+    switch (sort) {
+      case 'collected_asc':
+        return a.totalCollected - b.totalCollected || a.totalBilled - b.totalBilled;
+      case 'billed_desc':
+        return b.totalBilled - a.totalBilled || b.totalCollected - a.totalCollected;
+      case 'billed_asc':
+        return a.totalBilled - b.totalBilled || a.totalCollected - b.totalCollected;
+      case 'outstanding_desc':
+        return b.outstandingBalance - a.outstandingBalance || b.totalBilled - a.totalBilled;
+      case 'outstanding_asc':
+        return a.outstandingBalance - b.outstandingBalance || a.totalBilled - b.totalBilled;
+      case 'name_asc':
+        return a.clientName.localeCompare(b.clientName, undefined, { sensitivity: 'base' });
+      case 'name_desc':
+        return b.clientName.localeCompare(a.clientName, undefined, { sensitivity: 'base' });
+      case 'rate_desc':
+        return (b.collectionRate ?? -1) - (a.collectionRate ?? -1);
+      case 'rate_asc':
+        return (a.collectionRate ?? 9999) - (b.collectionRate ?? 9999);
+      case 'collected_desc':
+      default:
+        return b.totalCollected - a.totalCollected || b.totalBilled - a.totalBilled;
+    }
+  });
+
+  // Assign ranks
+  reportClients.forEach((cl, idx) => {
+    cl.rank = idx + 1;
+  });
+
+  const totalOutstanding = Math.max(0, Math.round((sumBilled - sumCollected) * 100) / 100);
+  const overallCollectionRate = sumBilled > 0 ? Math.round((sumCollected / sumBilled) * 1000) / 10 : null;
+
+  // Find top client by collected
+  let topClient = null;
+  const topCandidate = [...reportClients].sort((a, b) => b.totalCollected - a.totalCollected)[0];
+  if (topCandidate && topCandidate.totalCollected > 0) {
+    topClient = {
+      id: topCandidate.clientId,
+      name: topCandidate.clientName,
+      company: topCandidate.companyName,
+      totalCollected: topCandidate.totalCollected,
+      totalBilled: topCandidate.totalBilled,
+    };
+  }
+
+  return {
+    startDate: startDate || null,
+    endDate: endDate || null,
+    reportingCurrency,
+    hasForeignCurrency,
+    clients: reportClients,
+    summary: {
+      totalBilled: Math.round(sumBilled * 100) / 100,
+      totalCollected: Math.round(sumCollected * 100) / 100,
+      totalOutstanding,
+      overallCollectionRate,
+      activeClientsCount: activeCount,
+      totalClientsCount: clients.length,
+      topClient,
+    },
+  };
+}
+
 module.exports = {
   initializeDatabase,
   getDb,
@@ -4320,6 +5148,7 @@ module.exports = {
   getPaymentHistory,
   getPaymentsReport,
   getProfitLossReport,
+  getRevenueReport,
   issueCreditNote,
   getCreditNotesForInvoice,
   getCreditNotesForClient,
@@ -4358,4 +5187,6 @@ module.exports = {
   resetDefaultReminderRules,
   getDueReminders,
   logReminderSent,
+  getRevenueReport,
+  getClientProfitabilityReport,
 };

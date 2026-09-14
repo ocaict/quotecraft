@@ -19,6 +19,8 @@
   <link rel="stylesheet" href="styles/expenses.css">
   <link rel="stylesheet" href="styles/profit-loss.css">
   <link rel="stylesheet" href="styles/email-settings.css">
+  <link rel="stylesheet" href="styles/revenue-report.css">
+  <link rel="stylesheet" href="styles/client-profitability.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -37,6 +39,8 @@
       <a href="#" data-page="profit-loss">Profit &amp; Loss</a>
       <a href="#" data-page="settings">Settings</a>
       <a href="#" data-page="email-settings">Email Settings</a>
+      <a href="#" data-page="revenue-report">Revenue Report</a>
+      <a href="#" data-page="client-profitability">Client Profitability</a>
     </nav>
   </aside>
 
@@ -2368,6 +2372,242 @@
     </div>
   </div>
 
+    <!-- ════════════════════════════════════════════════════ -->
+    <!-- Revenue Report Page                                  -->
+    <!-- ════════════════════════════════════════════════════ -->
+    <section id="page-revenue-report" class="page">
+      <div class="page-header rr-header-row">
+        <div class="rr-header-left">
+          <h1>Revenue Report</h1>
+          <p>Track total invoiced vs. collected revenue over time, normalised to your reporting currency.</p>
+        </div>
+        <div class="rr-header-actions">
+          <span id="rrCurrencyBadge" class="rr-currency-note">Reporting in USD</span>
+          <button type="button" class="btn btn-ghost" id="rrExportCsvBtn">⬇ Export CSV</button>
+          <button type="button" class="btn btn-ghost" id="rrPrintBtn">🖨 Print</button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="rr-filter-card">
+        <div class="rr-filter-group">
+          <label>Group by Period</label>
+          <div class="rr-period-pills">
+            <button type="button" class="rr-period-pill" data-period="week">Week</button>
+            <button type="button" class="rr-period-pill active" data-period="month">Month</button>
+            <button type="button" class="rr-period-pill" data-period="quarter">Quarter</button>
+            <button type="button" class="rr-period-pill" data-period="year">Year</button>
+          </div>
+        </div>
+        <div class="rr-filter-group">
+          <label for="rrPresetSelect">Date Preset</label>
+          <select id="rrPresetSelect" class="rr-preset-select">
+            <option value="this_year">This Year</option>
+            <option value="last_year">Last Year</option>
+            <option value="last_12_months">Last 12 Months</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_month">This Month</option>
+            <option value="all_time">All Time</option>
+            <option value="custom">Custom Range…</option>
+          </select>
+        </div>
+        <div class="rr-filter-group">
+          <label>Custom Date Range</label>
+          <div class="rr-date-range">
+            <input type="date" id="rrStartDate" class="rr-date-input" aria-label="Start date">
+            <span class="rr-date-sep">→</span>
+            <input type="date" id="rrEndDate" class="rr-date-input" aria-label="End date">
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="rr-kpi-grid">
+        <div class="rr-kpi-card invoiced">
+          <span class="rr-kpi-icon">📄</span>
+          <div class="rr-kpi-label">Total Invoiced</div>
+          <div class="rr-kpi-value" id="rrKpiInvoiced">—</div>
+          <div class="rr-kpi-sub" id="rrKpiInvoicedSub">0 invoices</div>
+        </div>
+        <div class="rr-kpi-card collected">
+          <span class="rr-kpi-icon">💳</span>
+          <div class="rr-kpi-label">Total Collected</div>
+          <div class="rr-kpi-value" id="rrKpiCollected">—</div>
+          <div class="rr-kpi-sub" id="rrKpiCollectedSub">0 payments</div>
+        </div>
+        <div class="rr-kpi-card uncollected">
+          <span class="rr-kpi-icon">⏳</span>
+          <div class="rr-kpi-label">Outstanding Balance</div>
+          <div class="rr-kpi-value" id="rrKpiUncollected">—</div>
+          <div class="rr-kpi-sub">Invoiced minus collected</div>
+        </div>
+        <div class="rr-kpi-card rate">
+          <span class="rr-kpi-icon">📊</span>
+          <div class="rr-kpi-label">Collection Rate</div>
+          <div class="rr-kpi-value" id="rrKpiRate">—</div>
+          <div class="rr-kpi-sub">% of invoiced revenue collected</div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="rr-chart-card">
+        <div class="rr-chart-header">
+          <span class="rr-chart-title">Invoiced vs. Collected by Period</span>
+          <div class="rr-chart-legend">
+            <div class="rr-legend-item"><span class="rr-legend-dot invoiced"></span> Total Invoiced</div>
+            <div class="rr-legend-item"><span class="rr-legend-dot collected"></span> Total Collected</div>
+          </div>
+        </div>
+        <div class="rr-chart-wrap" id="rrChartWrap">
+          <div class="rr-chart-empty">
+            <span class="rr-empty-icon">📊</span>
+            <p>Select a period to see your chart.</p>
+          </div>
+        </div>
+        <div id="rrFxNotice" class="rr-fx-notice" style="display:none;">
+          <span class="rr-fx-icon">ℹ️</span>
+          <span>Some invoices use foreign currencies. Amounts have been converted to your base reporting currency using each invoice's stored exchange rate.</span>
+        </div>
+      </div>
+
+      <!-- Breakdown Table -->
+      <div class="rr-table-card">
+        <div class="rr-table-header">
+          <span class="rr-table-title">Period Breakdown</span>
+        </div>
+        <div class="rr-table-wrap">
+          <table class="rr-table" id="rrTable">
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th class="num">Invoices</th>
+                <th class="num">Total Invoiced</th>
+                <th class="num">Payments</th>
+                <th class="num">Total Collected</th>
+                <th class="num">Outstanding</th>
+                <th class="num">Collection %</th>
+              </tr>
+            </thead>
+            <tbody id="rrTableBody"></tbody>
+            <tfoot id="rrTableFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Client Profitability Report -->
+    <section id="page-client-profitability" class="page">
+      <div class="cp-header-row">
+        <div class="cp-header-left">
+          <h1>Client Profitability</h1>
+          <p>Analyze revenue, cash collections, and outstanding receivables by client.</p>
+        </div>
+        <div class="cp-header-actions">
+          <button type="button" class="btn btn-secondary btn-small" id="cpExportCsvBtn">📊 Export CSV</button>
+          <button type="button" class="btn btn-secondary btn-small" id="cpPrintBtn">🖨️ Print / PDF</button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="cp-filter-card">
+        <div class="cp-filter-group">
+          <label for="cpPresetSelect">Date Range</label>
+          <select id="cpPresetSelect" class="cp-preset-select">
+            <option value="this_year">This Year</option>
+            <option value="last_year">Last Year</option>
+            <option value="last_12_months">Last 12 Months</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_month">This Month</option>
+            <option value="all_time">All Time</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+        <div class="cp-filter-group">
+          <label for="cpStartDate">Start Date</label>
+          <input type="date" id="cpStartDate" class="cp-date-input">
+        </div>
+        <div class="cp-filter-group">
+          <label for="cpEndDate">End Date</label>
+          <input type="date" id="cpEndDate" class="cp-date-input">
+        </div>
+        <div class="cp-filter-group">
+          <label for="cpSearchInput">Search Client</label>
+          <input type="text" id="cpSearchInput" class="cp-search-input" placeholder="Search by name, company, email...">
+        </div>
+        <label class="cp-checkbox-group">
+          <input type="checkbox" id="cpIncludeInactive">
+          <span>Include inactive clients ($0 billed/collected)</span>
+        </label>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="cp-kpi-grid">
+        <div class="cp-kpi-card billed">
+          <div class="cp-kpi-label">
+            <span>Total Billed</span>
+            <span class="cp-kpi-icon">📄</span>
+          </div>
+          <div class="cp-kpi-value" id="cpKpiBilled">$0.00</div>
+          <div class="cp-kpi-sub" id="cpKpiBilledSub">0 active clients</div>
+        </div>
+        <div class="cp-kpi-card collected">
+          <div class="cp-kpi-label">
+            <span>Total Collected</span>
+            <span class="cp-kpi-icon">💰</span>
+          </div>
+          <div class="cp-kpi-value" id="cpKpiCollected">$0.00</div>
+          <div class="cp-kpi-sub" id="cpKpiCollectedSub">0.0% collected</div>
+        </div>
+        <div class="cp-kpi-card outstanding">
+          <div class="cp-kpi-label">
+            <span>Outstanding Balance</span>
+            <span class="cp-kpi-icon">⏳</span>
+          </div>
+          <div class="cp-kpi-value" id="cpKpiOutstanding">$0.00</div>
+          <div class="cp-kpi-sub" id="cpKpiOutstandingSub">0.0% unpaid</div>
+        </div>
+        <div class="cp-kpi-card top-client">
+          <div class="cp-kpi-label">
+            <span>Top Paying Client</span>
+            <span class="cp-kpi-icon">🏆</span>
+          </div>
+          <div class="cp-kpi-value" id="cpKpiTopClient">None</div>
+          <div class="cp-kpi-sub" id="cpKpiTopClientSub">No payments in period</div>
+        </div>
+      </div>
+
+      <!-- Multi-currency notice -->
+      <div id="cpFxNotice" class="cp-fx-notice hidden">
+        <span class="cp-fx-icon">💱</span>
+        <span>Amounts are normalized to base reporting currency (<strong id="cpCurrencyBadge">USD</strong>) using stored invoice exchange rates.</span>
+      </div>
+
+      <!-- Client Profitability Table Card -->
+      <div class="cp-table-card">
+        <div class="cp-table-header">
+          <h2>Client Profitability Breakdown</h2>
+          <span class="cp-table-count" id="cpTableCount">Showing 0 clients</span>
+        </div>
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">Rank</th>
+                <th class="cp-th-sortable" data-sort="name">Client <span class="sort-icon">↕</span></th>
+                <th class="num cp-th-sortable" data-sort="billed">Total Billed <span class="sort-icon">↕</span></th>
+                <th class="num cp-th-sortable sorted" data-sort="collected">Total Collected <span class="sort-icon">↓</span></th>
+                <th class="num cp-th-sortable" data-sort="outstanding">Outstanding <span class="sort-icon">↕</span></th>
+                <th class="num cp-th-sortable" data-sort="rate" style="text-align: center;">Collection % <span class="sort-icon">↕</span></th>
+                <th style="text-align: right; width: 100px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="cpTableBody"></tbody>
+            <tfoot id="cpTableFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
   <div id="restoreModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -2399,6 +2639,8 @@
   <script src="js/expenses.js"></script>
   <script src="js/profit-loss.js"></script>
   <script src="js/email-settings.js"></script>
+  <script src="js/revenue-report.js"></script>
+  <script src="js/client-profitability.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

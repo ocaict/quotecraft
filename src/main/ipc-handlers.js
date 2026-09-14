@@ -81,6 +81,8 @@ const {
   resetDefaultReminderRules,
   getDueReminders,
   logReminderSent,
+  getRevenueReport,
+  getClientProfitabilityReport,
 } = require('./database');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
 
@@ -1354,6 +1356,26 @@ function registerIpcHandlers() {
       }
 
       return { ok: true, autoSendEnabled: true, sentCount, failedCount, errors };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // ---------- Revenue Report ----------
+  ipcMain.handle('reports:revenue', async (event, filter) => {
+    try {
+      const report = getRevenueReport(filter || {});
+      return { ok: true, report };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // ---------- Client Profitability Report ----------
+  ipcMain.handle('reports:clientProfitability', async (event, filter) => {
+    try {
+      const report = getClientProfitabilityReport(filter || {});
+      return { ok: true, report };
     } catch (err) {
       return { ok: false, error: err.message };
     }
