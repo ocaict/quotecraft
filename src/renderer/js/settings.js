@@ -2,6 +2,18 @@
   const form = document.getElementById('settingsForm');
   if (!form) return;
 
+  // ---------- Theme (Appearance) ----------
+  const themeInputs = document.querySelectorAll('input[name="themeMode"]');
+  if (themeInputs.length && window.QuoteCraftTheme) {
+    const current = window.QuoteCraftTheme.getMode();
+    themeInputs.forEach((el) => {
+      el.checked = el.value === current;
+      el.addEventListener('change', () => {
+        if (el.checked) window.QuoteCraftTheme.setMode(el.value);
+      });
+    });
+  }
+
   const currencySelect = document.getElementById('default_currency');
   const reportingCurrencySelect = document.getElementById('reporting_currency');
   const chooseLogoBtn = document.getElementById('chooseLogoBtn');
@@ -88,7 +100,7 @@
     }
     for (const key of Object.keys(form.elements)) {
       const el = form.elements[key];
-      if (el && el.name && el.name !== 'logo_path') {
+      if (el && el.name && el.name !== 'logo_path' && !isRadioGroup(el)) {
         el.value = data[el.name] !== undefined && data[el.name] !== null ? data[el.name] : '';
       }
     }
@@ -116,11 +128,16 @@
     }
   }
 
+  function isRadioGroup(el) {
+    return typeof RadioNodeList !== 'undefined' && el instanceof RadioNodeList;
+  }
+
   function collectForm() {
     const data = {};
     for (const key of Object.keys(form.elements)) {
       const el = form.elements[key];
-      if (el && el.name) {
+      // Skip radio groups (e.g. themeMode) — they are prefs, not company profile fields.
+      if (el && el.name && !isRadioGroup(el)) {
         data[el.name] = el.value;
       }
     }

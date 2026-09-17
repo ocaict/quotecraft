@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="styles/client-profitability.css">
   <link rel="stylesheet" href="styles/audit-log.css">
   <link rel="stylesheet" href="styles/app-lock.css">
+  <script src="js/theme.js"></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -1534,6 +1535,71 @@
           </div>
         </div>
 
+        <div class="card" id="appearanceCard">
+          <h2>Appearance</h2>
+          <p class="subtitle">Choose how QuoteCraft looks. Your printed reports and PDF exports always come out light for clean printing, no matter which theme is active.</p>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <div class="theme-options" id="themeOptions">
+                <label class="theme-option">
+                  <input type="radio" name="themeMode" value="system">
+                  <span class="theme-option-body">
+                    <strong>System</strong>
+                    <small>Follow your operating system's light/dark preference automatically.</small>
+                  </span>
+                </label>
+                <label class="theme-option">
+                  <input type="radio" name="themeMode" value="light">
+                  <span class="theme-option-body">
+                    <strong>Light</strong>
+                    <small>Bright, high-contrast interface.</small>
+                  </span>
+                </label>
+                <label class="theme-option">
+                  <input type="radio" name="themeMode" value="dark">
+                  <span class="theme-option-body">
+                    <strong>Dark</strong>
+                    <small>Low-glare, dark interface (the current look).</small>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="shortcutsCard">
+          <h2>Keyboard Shortcuts</h2>
+          <p class="subtitle">Work faster without touching the mouse. Shortcuts are disabled while you're typing in a field or a dialog is open.</p>
+
+          <div class="shortcuts-list">
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">N</span>
+              <span>New quote</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">I</span>
+              <span>New invoice (open the Invoices screen)</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">C</span>
+              <span>New client</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">Ctrl&nbsp;+&nbsp;S</span>
+              <span>Save the current form or dialog</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">/</span>
+              <span>Focus search on the current screen</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">?</span>
+              <span>Open this reference from any screen</span>
+            </div>
+          </div>
+        </div>
+
         <div class="card" id="appLockCard">
           <h2>App Lock (PIN)</h2>
           <p class="subtitle">Require a PIN before QuoteCraft opens — a deterrent for anyone with casual access to this computer.</p>
@@ -2852,6 +2918,7 @@
   <script src="js/revenue-report.js"></script>
   <script src="js/client-profitability.js"></script>
   <script src="js/audit-log.js"></script>
+  <script src="js/shortcuts.js"></script>
   <script src="js/app-lock.js"></script>
   <script src="js/app.js"></script>
 </body>

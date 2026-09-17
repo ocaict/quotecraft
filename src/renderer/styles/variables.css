@@ -4,6 +4,7 @@
   --bg: #0f1117;
   --bg-elevated: #161822;
   --bg-card: #1c1f2e;
+  --bg-hover: rgba(255, 255, 255, 0.05);
   --border: #21262d;
   --border-strong: #30363d;
   --text: #e1e4e8;
@@ -17,4 +18,47 @@
   --radius: 6px;
   --radius-lg: 8px;
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Light theme (resolved by js/theme.js setting data-theme on <html>) */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f6f8fa;
+  --bg-elevated: #eef1f4;
+  --bg-card: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --border: #d0d7de;
+  --border-strong: #afb8c1;
+  --text: #1f2328;
+  --text-muted: #57606a;
+  --text-faint: #6e7781;
+  --accent: #0969da;
+  --accent-hover: #218bff;
+  --success: #1a7f37;
+  --error: #cf222e;
+  --warning: #9a6700;
+}
+
+/* Printed output must stay light/print-friendly regardless of app theme.
+   Standalone quote/invoice PDFs already have their own light templates. */
+@media print {
+  :root,
+  :root[data-theme="dark"] {
+    color-scheme: light;
+    --bg: #ffffff;
+    --bg-elevated: #f6f8fa;
+    --bg-card: #ffffff;
+    --bg-hover: rgba(0, 0, 0, 0.04);
+    --border: #d0d7de;
+    --border-strong: #afb8c1;
+    --text: #1f2328;
+    --text-muted: #57606a;
+    --text-faint: #6e7781;
+    --accent: #0969da;
+    --accent-hover: #0969da;
+    --success: #1a7f37;
+    --error: #cf222e;
+    --warning: #9a6700;
+  }
 }
