@@ -9,13 +9,21 @@
   const invoiceStatusFilter = document.getElementById('invoiceStatusFilter');
   const invoicesExportCsvBtn = document.getElementById('invoicesExportCsvBtn');
 
+  const invoiceBulkBar = document.getElementById('invoiceBulkBar');
+  const invoiceBulkCount = document.getElementById('invoiceBulkCount');
+  const invoiceBulkMarkSentBtn = document.getElementById('invoiceBulkMarkSentBtn');
+  const invoiceBulkExportPdfBtn = document.getElementById('invoiceBulkExportPdfBtn');
+  const invoiceBulkClearBtn = document.getElementById('invoiceBulkClearBtn');
+
   const invoiceBackBtn = document.getElementById('invoiceBackBtn');
   const invoiceExportBtn = document.getElementById('invoiceExportBtn');
+  const invoicePrintBtn = document.getElementById('invoicePrintBtn');
   const invoiceSendEmailBtn = document.getElementById('invoiceSendEmailBtn');
   const invoiceRecurringBtn = document.getElementById('invoiceRecurringBtn');
   const invoiceRecordPaymentBtn = document.getElementById('invoiceRecordPaymentBtn');
   const invoiceDetailStatusSelect = document.getElementById('invoiceDetailStatusSelect');
   const invoiceIssueCreditBtn = document.getElementById('invoiceIssueCreditBtn');
+  const invoiceDuplicateBtn = document.getElementById('invoiceDuplicateBtn');
 
   const creditNoteModal = document.getElementById('creditNoteModal');
   const creditNoteForm = document.getElementById('creditNoteForm');
@@ -75,6 +83,7 @@
   let currentInvoiceCurrency = 'USD';
   let searchTerm = '';
   let statusFilter = 'all';
+  const selectedInvoiceIds = new Set();
 
   function toast(message, type) {
     window.QuoteCraftUtils.showToast(message, type);
@@ -265,6 +274,7 @@
     table.className = 'data-table';
     const thead = document.createElement('thead');
     thead.innerHTML = '<tr>' +
+      '<th class="th-select"><input type="checkbox" id="invoiceSelectAll" title="Select all invoices"></th>' +
       '<th>Number</th>' +
       '<th>Client</th>' +
       '<th>Date</th>' +
@@ -280,6 +290,23 @@
     const tbody = document.createElement('tbody');
     for (const inv of filtered) {
       const tr = document.createElement('tr');
+
+      const selectTd = document.createElement('td');
+      selectTd.className = 'cell-select';
+      const rowCheckbox = document.createElement('input');
+      rowCheckbox.type = 'checkbox';
+      rowCheckbox.className = 'invoice-row-check';
+      rowCheckbox.checked = selectedInvoiceIds.has(inv.id);
+      rowCheckbox.addEventListener('change', () => {
+        if (rowCheckbox.checked) {
+          selectedInvoiceIds.add(inv.id);
+        } else {
+          selectedInvoiceIds.delete(inv.id);
+        }
+        updateBulkBar();
+        syncSelectAll();
+      });
+      selectTd.appendChild(rowCheckbox);
 
       const numTd = document.createElement('td');
       numTd.className = 'cell-name';
@@ -330,14 +357,21 @@
       viewBtn.className = 'btn btn-small btn-secondary';
       viewBtn.textContent = 'View';
       viewBtn.addEventListener('click', () => openDetail(inv.id));
+      const dupBtn = document.createElement('button');
+      dupBtn.type = 'button';
+      dupBtn.className = 'btn btn-small btn-secondary';
+      dupBtn.textContent = 'Duplicate';
+      dupBtn.addEventListener('click', () => runDuplicateInvoice(inv.id, false));
       const payBtn = document.createElement('button');
       payBtn.type = 'button';
       payBtn.className = 'btn btn-small btn-secondary';
       payBtn.textContent = 'Record Payment';
       payBtn.addEventListener('click', () => openPaymentModal(inv.id));
       actionsTd.appendChild(viewBtn);
+      actionsTd.appendChild(dupBtn);
       actionsTd.appendChild(payBtn);
 
+      tr.appendChild(selectTd);
       tr.appendChild(numTd);
       tr.appendChild(clientTd);
       tr.appendChild(dateTd);
@@ -352,6 +386,88 @@
     table.appendChild(tbody);
     invoiceListEl.innerHTML = '';
     invoiceListEl.appendChild(table);
+
+    const selectAll = document.getElementById('invoiceSelectAll');
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        if (selectAll.checked) {
+          filtered.forEach((inv) => selectedInvoiceIds.add(inv.id));
+        } else {
+          filtered.forEach((inv) => selectedInvoiceIds.delete(inv.id));
+        }
+        renderList();
+      });
+    }
+    syncSelectAll();
+    updateBulkBar();
+  }
+
+  function syncSelectAll() {
+    const filtered = filterInvoices();
+    const selectAll = document.getElementById('invoiceSelectAll');
+    if (!selectAll) return;
+    if (filtered.length === 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+      return;
+    }
+    const allSelected = filtered.every((inv) => selectedInvoiceIds.has(inv.id));
+    const someSelected = filtered.some((inv) => selectedInvoiceIds.has(inv.id));
+    selectAll.checked = allSelected;
+    selectAll.indeterminate = someSelected && !allSelected;
+  }
+
+  function updateBulkBar() {
+    const count = selectedInvoiceIds.size;
+    if (invoiceBulkBar) {
+      invoiceBulkBar.classList.toggle('hidden', count === 0);
+    }
+    if (invoiceBulkCount) {
+      invoiceBulkCount.textContent = count === 1 ? '1 selected' : `${count} selected`;
+    }
+    const disabled = count === 0;
+    if (invoiceBulkMarkSentBtn) invoiceBulkMarkSentBtn.disabled = disabled;
+    if (invoiceBulkExportPdfBtn) invoiceBulkExportPdfBtn.disabled = disabled;
+  }
+
+  async function handleBulkMarkSent() {
+    const ids = Array.from(selectedInvoiceIds);
+    if (ids.length === 0) return;
+    try {
+      const res = await window.electronAPI.markInvoicesSentBatch(ids);
+      if (res.ok) {
+        const skipped = (res.skipped || []).length;
+        const msg = skipped > 0
+          ? `${res.marked} marked as sent, ${skipped} skipped (only Drafts are promoted).`
+          : `${res.marked} invoice${res.marked === 1 ? '' : 's'} marked as sent.`;
+        toast(msg, res.marked > 0 ? 'success' : 'warning');
+        selectedInvoiceIds.clear();
+        await loadInvoices();
+      } else {
+        toast(res.errors && res.errors.general ? res.errors.general : 'Could not update statuses.', 'error');
+      }
+    } catch (e) {
+      toast('Could not update statuses: ' + e.message, 'error');
+    }
+  }
+
+  async function handleBulkExportPdfs() {
+    const ids = Array.from(selectedInvoiceIds);
+    if (ids.length === 0) return;
+    window.QuoteCraftUtils.showBusy('Generating PDFs…');
+    try {
+      const res = await window.electronAPI.exportInvoicesPdfBatch(ids);
+      if (res.ok && res.cancelled) return;
+      if (res.ok) {
+        toast(`Exported ${res.savedCount} of ${ids.length} PDFs to ${res.folder}`, 'success');
+      } else {
+        toast(res.errors && res.errors.general ? res.errors.general : 'Could not export PDFs.', 'error');
+      }
+    } catch (e) {
+      toast('Could not export PDFs: ' + e.message, 'error');
+    } finally {
+      window.QuoteCraftUtils.hideBusy();
+    }
   }
 
   function exportInvoicesCsv() {
@@ -393,6 +509,21 @@
   }
 
   // ---------- Detail ----------
+  async function runDuplicateInvoice(id, openAfter) {
+    try {
+      const res = await window.electronAPI.duplicateInvoice(id);
+      if (res.ok) {
+        toast('Duplicate created: ' + res.invoice.invoice_number, 'success');
+        await loadInvoices();
+        if (openAfter) openDetail(res.invoice.id);
+      } else {
+        toast(res.errors && res.errors.general ? res.errors.general : 'Could not duplicate invoice.', 'error');
+      }
+    } catch (e) {
+      toast('Could not duplicate invoice: ' + e.message, 'error');
+    }
+  }
+
   async function openDetail(id) {
     currentInvoiceId = id;
     try {
@@ -1279,6 +1410,9 @@
 
   // ---------- Events ----------
   invoiceBackBtn.addEventListener('click', () => { currentInvoiceId = null; currentRecurringProfile = null; loadInvoices(); showList(); });
+  if (invoiceDuplicateBtn) {
+    invoiceDuplicateBtn.addEventListener('click', () => runDuplicateInvoice(currentInvoiceId, true));
+  }
   invoiceRecordPaymentBtn.addEventListener('click', () => {
     if (currentInvoiceId) openPaymentModal(currentInvoiceId);
   });
@@ -1326,6 +1460,26 @@
       invoiceExportBtn.disabled = false;
     }
   });
+
+  if (invoicePrintBtn) {
+    invoicePrintBtn.addEventListener('click', async () => {
+      if (!currentInvoiceId) return;
+      invoicePrintBtn.disabled = true;
+      try {
+        const res = await window.electronAPI.printInvoice(currentInvoiceId);
+        if (res.ok && res.cancelled) return;
+        if (res.ok) {
+          toast('Print sent to the printer.', 'success');
+        } else {
+          toast(res.errors && res.errors.general ? res.errors.general : 'Could not print invoice.', 'error');
+        }
+      } catch (e) {
+        toast('Could not print invoice: ' + e.message, 'error');
+      } finally {
+        invoicePrintBtn.disabled = false;
+      }
+    });
+  }
 
   if (invoiceSendEmailBtn) {
     invoiceSendEmailBtn.addEventListener('click', async () => {
@@ -1380,6 +1534,19 @@
 
   if (invoicesExportCsvBtn) {
     invoicesExportCsvBtn.addEventListener('click', exportInvoicesCsv);
+  }
+
+  if (invoiceBulkMarkSentBtn) {
+    invoiceBulkMarkSentBtn.addEventListener('click', handleBulkMarkSent);
+  }
+  if (invoiceBulkExportPdfBtn) {
+    invoiceBulkExportPdfBtn.addEventListener('click', handleBulkExportPdfs);
+  }
+  if (invoiceBulkClearBtn) {
+    invoiceBulkClearBtn.addEventListener('click', () => {
+      selectedInvoiceIds.clear();
+      renderList();
+    });
   }
 
   document.getElementById('paymentModalClose').addEventListener('click', closePaymentModal);

@@ -2141,6 +2141,57 @@ function getQuoteLineItems(quoteId) {
   return rowsToArray(res);
 }
 
+function duplicateQuote(id) {
+  const source = getQuote(id);
+  if (!source) {
+    return { ok: false, errors: { general: 'Quote not found.' } };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  let validUntil = null;
+  if (source.valid_until) {
+    const d1 = new Date(source.date_created + 'T00:00:00');
+    const d2 = new Date(source.valid_until + 'T00:00:00');
+    const offsetDays = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+    if (offsetDays > 0) {
+      const vd = new Date(today + 'T00:00:00');
+      vd.setDate(vd.getDate() + offsetDays);
+      validUntil = toDateString(vd);
+    }
+  }
+
+  const data = {
+    client_id: source.client_id,
+    contact_id: source.contact_id || null,
+    date_created: today,
+    valid_until: validUntil,
+    currency: source.currency,
+    exchange_rate: Number(source.exchange_rate) || 1.0,
+    discount_type: source.discount_type || 'none',
+    discount_value: Number(source.discount_value) || 0,
+    discount: Number(source.discount_amount) || 0,
+    tax_rate: Number(source.tax_rate) || 0,
+    tax: Number(source.tax_amount) || 0,
+    subtotal: Number(source.subtotal) || 0,
+    total: Number(source.total) || 0,
+    notes: source.notes || '',
+    terms: source.terms || '',
+  };
+
+  const lineItems = (source.line_items || []).map((item) => ({
+    description: item.description,
+    quantity: Number(item.quantity),
+    unit_price: Number(item.unit_price),
+    tax_rate: item.tax_rate !== undefined && item.tax_rate !== null ? Number(item.tax_rate) : (Number(source.tax_rate) || 0),
+    discount_type: item.discount_type || 'none',
+    discount_value: Number(item.discount_value) || 0,
+    discount_amount: Number(item.discount_amount) || 0,
+    amount: Number(item.amount) || 0,
+  }));
+
+  return createQuote(data, lineItems);
+}
+
 function createQuote(data, lineItems) {
   const errors = validateQuoteInput(data, lineItems);
   if (Object.keys(errors).length > 0) {
@@ -2831,6 +2882,117 @@ function getInvoiceByQuote(quoteId) {
   return getInvoice(res[0].values[0][0]);
 }
 
+function duplicateInvoice(id) {
+  const source = getInvoice(id);
+  if (!source) {
+    return { ok: false, errors: { general: 'Invoice not found.' } };
+  }
+
+  const today = toDateString(new Date());
+  let days = parsePaymentTermsDays(source.terms);
+  if (days === null && source.date_created && source.date_due) {
+    const d1 = new Date(source.date_created + 'T00:00:00');
+    const d2 = new Date(source.date_due + 'T00:00:00');
+    const diffDays = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) days = diffDays;
+  }
+  if (days === null || days <= 0) days = 14;
+
+  const issueD = new Date(today + 'T00:00:00');
+  const dueD = new Date(issueD);
+  dueD.setDate(dueD.getDate() + days);
+  const dueDate = toDateString(dueD);
+
+  const invoiceNumber = nextInvoiceNumber();
+  const now = new Date().toISOString();
+  let newInvoiceId = null;
+
+  db.run('BEGIN');
+  try {
+    db.run(
+      `INSERT INTO invoices (
+         invoice_number, quote_id, client_id, contact_id, status,
+         date_created, date_due, date_sent,
+         subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
+         currency, exchange_rate,
+         notes, terms,
+         invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
+         recurring_profile_id, is_recurring, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        invoiceNumber,
+        null,
+        source.client_id,
+        source.contact_id || null,
+        'draft',
+        today,
+        dueDate,
+        null,
+        Number(source.subtotal) || 0,
+        Number(source.tax_amount) || 0,
+        Number(source.discount_amount) || 0,
+        Number(source.total) || 0,
+        0,
+        Number(source.total) || 0,
+        source.currency || 'USD',
+        Number(source.exchange_rate) || 1.0,
+        source.notes || '',
+        source.terms || '',
+        'standard',
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        now,
+        now,
+      ]
+    );
+    const idRes = db.exec('SELECT last_insert_rowid() AS id');
+    newInvoiceId = idRes[0].values[0][0];
+
+    (source.line_items || []).forEach((item, idx) => {
+      db.run(
+        `INSERT INTO invoice_line_items (
+           invoice_id, description, quantity, unit_price,
+           tax_rate, discount_type, discount_value, discount_amount,
+           discount_percent, amount, sort_order
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newInvoiceId,
+          String(item.description).trim(),
+          Number(item.quantity),
+          Number(item.unit_price),
+          Number(item.tax_rate) || 0,
+          item.discount_type || 'none',
+          Number(item.discount_value) || 0,
+          Number(item.discount_amount) || 0,
+          Number(item.discount_percent) || 0,
+          Number(item.amount) || 0,
+          idx,
+        ]
+      );
+    });
+
+    db.run('COMMIT');
+  } catch (err) {
+    db.run('ROLLBACK');
+    return { ok: false, errors: { general: `Failed to duplicate invoice: ${err.message}` } };
+  }
+
+  saveToDisk();
+  const invoice = getInvoice(newInvoiceId);
+  addAuditEntry({
+    entityType: 'invoice',
+    entityRef: invoice.invoice_number,
+    action: 'created',
+    description: 'Duplicated invoice ' + invoice.invoice_number + ' for $' + (Number(invoice.total) || 0).toFixed(2),
+  });
+  return { ok: true, invoice };
+}
+
 // Convert an accepted quote into an invoice (Full or Deposit). Returns:
 //   { ok:true, invoice, alreadyConverted:false }
 // or if already converted:
@@ -3285,6 +3447,26 @@ function setInvoiceStatus(id, status) {
     description: 'Marked invoice ' + (stInv.invoice_number || '') + ' as ' + (status.charAt(0).toUpperCase() + status.slice(1)),
   });
   return { ok: true, invoice: stInv };
+}
+
+function markInvoicesSent(ids) {
+  const unique = Array.from(new Set((ids || []).filter((id) => Number(id) > 0).map(Number)));
+  let marked = 0;
+  const skipped = [];
+  for (const id of unique) {
+    const existing = rowToObject(db.exec('SELECT id, status FROM invoices WHERE id = ?', [id]));
+    if (!existing || existing.status !== 'draft') {
+      skipped.push(id);
+      continue;
+    }
+    const res = setInvoiceStatus(id, 'sent');
+    if (res.ok) {
+      marked++;
+    } else {
+      skipped.push(id);
+    }
+  }
+  return { ok: true, marked, skipped };
 }
 
 // ---------- Payments ----------
@@ -5450,6 +5632,7 @@ module.exports = {
   deleteClientNote,
   getClientOverview,
   createQuote,
+  duplicateQuote,
   updateQuote,
   getQuote,
   getQuoteVersionHistory,
@@ -5460,10 +5643,12 @@ module.exports = {
   parsePaymentTermsDays,
   convertQuoteToInvoice,
   createFinalInvoiceFromDeposit,
+  duplicateInvoice,
   getInvoice,
   getInvoiceByQuote,
   listInvoices,
   setInvoiceStatus,
+  markInvoicesSent,
   addPayment,
   getPaymentHistory,
   getPaymentsReport,

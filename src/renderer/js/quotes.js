@@ -36,12 +36,14 @@
   const detailBackBtn = document.getElementById('detailBackBtn');
   const detailEditBtn = document.getElementById('detailEditBtn');
   const detailExportBtn = document.getElementById('detailExportBtn');
+  const detailPrintBtn = document.getElementById('detailPrintBtn');
   const detailSendEmailBtn = document.getElementById('detailSendEmailBtn');
   const detailStatusSelect = document.getElementById('detailStatusSelect');
   const detailConvertBtn = document.getElementById('detailConvertBtn');
   const detailConvertResult = document.getElementById('detailConvertResult');
   const detailMarkAcceptedBtn = document.getElementById('detailMarkAcceptedBtn');
   const detailShareQuoteBtn = document.getElementById('detailShareQuoteBtn');
+  const detailDuplicateBtn = document.getElementById('detailDuplicateBtn');
 
   // Acceptance Paper Trail elements
   const quoteAcceptanceCard = document.getElementById('quoteAcceptanceCard');
@@ -69,6 +71,7 @@
   const shareQuoteModalClose = document.getElementById('shareQuoteModalClose');
   const shareQuoteModalCloseBtn = document.getElementById('shareQuoteModalCloseBtn');
   const btnShareDownloadPdf = document.getElementById('btnShareDownloadPdf');
+  const btnSharePrint = document.getElementById('btnSharePrint');
   const btnShareDownloadHtml = document.getElementById('btnShareDownloadHtml');
   const btnShareSendEmail = document.getElementById('btnShareSendEmail');
   const shareInstructionsText = document.getElementById('shareInstructionsText');
@@ -1108,7 +1111,13 @@
       viewBtn.className = 'btn btn-small btn-secondary';
       viewBtn.textContent = 'View';
       viewBtn.addEventListener('click', () => openDetail(q.id));
+      const duplicateBtn = document.createElement('button');
+      duplicateBtn.type = 'button';
+      duplicateBtn.className = 'btn btn-small btn-secondary';
+      duplicateBtn.textContent = 'Duplicate';
+      duplicateBtn.addEventListener('click', () => runDuplicateQuote(q.id, false));
       actionsTd.appendChild(viewBtn);
+      actionsTd.appendChild(duplicateBtn);
 
       tr.appendChild(numTd);
       tr.appendChild(clientTd);
@@ -1158,6 +1167,21 @@
   }
 
   // ---------- Detail (read-only) ----------
+  async function runDuplicateQuote(id, openAfter) {
+    try {
+      const res = await window.electronAPI.duplicateQuote(id);
+      if (res.ok) {
+        toast('Duplicate created: ' + res.quote.quote_number, 'success');
+        await loadQuotes();
+        if (openAfter) openDetail(res.quote.id);
+      } else {
+        toast(res.errors && res.errors.general ? res.errors.general : 'Could not duplicate quote.', 'error');
+      }
+    } catch (e) {
+      toast('Could not duplicate quote: ' + e.message, 'error');
+    }
+  }
+
   async function openDetail(id) {
     currentDetailId = id;
     try {
@@ -1529,6 +1553,10 @@
     }
   });
 
+  if (detailDuplicateBtn) {
+    detailDuplicateBtn.addEventListener('click', () => runDuplicateQuote(currentDetailId, true));
+  }
+
   addLineItemBtn.addEventListener('click', addEmptyRow);
 
   clientSearch.addEventListener('input', () => {
@@ -1729,6 +1757,13 @@
     });
   }
 
+  if (btnSharePrint) {
+    btnSharePrint.addEventListener('click', () => {
+      closeShareModal();
+      if (detailPrintBtn) detailPrintBtn.click();
+    });
+  }
+
   if (btnShareDownloadHtml) {
     btnShareDownloadHtml.addEventListener('click', async () => {
       if (!currentDetailId) return;
@@ -1795,6 +1830,26 @@
       detailExportBtn.disabled = false;
     }
   });
+
+  if (detailPrintBtn) {
+    detailPrintBtn.addEventListener('click', async () => {
+      if (!currentDetailId) return;
+      detailPrintBtn.disabled = true;
+      try {
+        const res = await window.electronAPI.printQuote(currentDetailId);
+        if (res.ok && res.cancelled) return;
+        if (res.ok) {
+          toast('Print sent to the printer.', 'success');
+        } else {
+          toast(res.errors && res.errors.general ? res.errors.general : 'Could not print quote.', 'error');
+        }
+      } catch (e) {
+        toast('Could not print quote: ' + e.message, 'error');
+      } finally {
+        detailPrintBtn.disabled = false;
+      }
+    });
+  }
 
   if (detailSendEmailBtn) {
     detailSendEmailBtn.addEventListener('click', async () => {

@@ -610,7 +610,9 @@
             </div>
             <button type="button" id="detailShareQuoteBtn" class="btn btn-secondary" title="Share PDF or standalone HTML quote with acceptance instructions">📤 Share Quote</button>
             <button type="button" id="detailEditBtn" class="btn btn-secondary">Edit</button>
+            <button type="button" id="detailDuplicateBtn" class="btn btn-secondary" title="Create a new Draft quote with the same client and line items but a fresh number and today's date">Duplicate</button>
             <button type="button" id="detailExportBtn" class="btn btn-secondary">Download PDF</button>
+            <button type="button" id="detailPrintBtn" class="btn btn-secondary" title="Open the system print dialog for this quote">🖨 Print</button>
             <button type="button" id="detailSendEmailBtn" class="btn btn-secondary">✉️ Send by Email</button>
             <button type="button" id="detailConvertBtn" class="btn btn-primary">Convert to Invoice</button>
             <button type="button" id="detailBackBtn" class="btn btn-secondary">Back to quotes</button>
@@ -769,6 +771,13 @@
           </div>
         </div>
 
+        <div id="invoiceBulkBar" class="bulk-actions-bar hidden">
+          <span id="invoiceBulkCount" class="bulk-count">0 selected</span>
+          <button type="button" id="invoiceBulkMarkSentBtn" class="btn btn-small btn-secondary">Mark as Sent</button>
+          <button type="button" id="invoiceBulkExportPdfBtn" class="btn btn-small btn-secondary">Export PDFs</button>
+          <button type="button" id="invoiceBulkClearBtn" class="btn btn-small btn-ghost">Clear selection</button>
+        </div>
+
         <div class="card quotes-list-card">
           <div id="invoiceList" class="quotes-list">
             <p class="placeholder">Loading invoices…</p>
@@ -792,6 +801,8 @@
               </select>
             </div>
             <button type="button" id="invoiceExportBtn" class="btn btn-secondary">Download PDF</button>
+            <button type="button" id="invoicePrintBtn" class="btn btn-secondary" title="Open the system print dialog for this invoice">🖨 Print</button>
+            <button type="button" id="invoiceDuplicateBtn" class="btn btn-secondary" title="Create a new Draft invoice with the same client and line items but a fresh number and today's date">Duplicate</button>
             <button type="button" id="invoiceSendEmailBtn" class="btn btn-secondary">✉️ Send by Email</button>
             <button type="button" id="invoiceRecurringBtn" class="btn btn-secondary">Make Recurring</button>
             <button type="button" id="invoiceIssueCreditBtn" class="btn btn-secondary">Issue Credit Note</button>
@@ -2404,6 +2415,7 @@
               <p>Standard PDF export with formal printed Acceptance &amp; Confirmation section and signature lines.</p>
             </div>
             <button type="button" class="btn btn-primary btn-small" id="btnShareDownloadPdf">Download PDF</button>
+            <button type="button" class="btn btn-secondary btn-small" id="btnSharePrint" title="Open the system print dialog directly">🖨 Print</button>
           </div>
 
           <div class="share-option-card">

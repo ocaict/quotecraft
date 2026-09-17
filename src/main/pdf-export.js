@@ -715,6 +715,414 @@ function renderInvoicePdf(invoice, client, profile, opts) {
   return ctx.done;
 }
 
+// ---------- Print HTML (mirrors the PDF export layout) ----------
+
+function imageToDataUrl(filePath) {
+  const ext = path.extname(String(filePath || '')).toLowerCase();
+  const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+  return `data:${mime};base64,${fs.readFileSync(filePath).toString('base64')}`;
+}
+
+function buildPrintHeaderHtml({ profile, businessName, pageLabel, docNumber, metaRows }) {
+  const logoPath = profile && profile.logo_path;
+  let logoHtml = '';
+  let businessNameSize = 20;
+  if (logoPath && LOGO_EXTENSIONS.includes(path.extname(String(logoPath)).toLowerCase()) && fs.existsSync(logoPath)) {
+    try {
+      logoHtml = `<img src="${imageToDataUrl(logoPath)}" alt="" class="logo">`;
+      businessNameSize = 15;
+    } catch (err) {
+      logoHtml = '';
+    }
+  }
+
+  const companyLines = buildCompanyLines(profile);
+  const companyHtml = companyLines.join('').trim()
+    ? `<div class="company-lines">${companyLines.map(escapeHtml).join('<br>')}</div>`
+    : '';
+
+  const metaHtml = (metaRows || [])
+    .filter(Boolean)
+    .map(([label, value]) =>
+      `<div class="meta-pair"><div class="meta-label">${escapeHtml(String(label).toUpperCase())}</div><div class="meta-value">${escapeHtml(value)}</div></div>`
+    )
+    .join('');
+
+  return `
+    <table class="doc-header"><tr>
+      <td class="brand-cell">
+        ${logoHtml}
+        <div class="business-name" style="font-size:${businessNameSize}pt;">${escapeHtml(businessName)}</div>
+        ${companyHtml}
+      </td>
+      <td class="meta-cell">
+        <div class="doc-label">${escapeHtml(String(pageLabel).toUpperCase())}</div>
+        <div class="doc-number">${escapeHtml(docNumber || '')}</div>
+        ${metaHtml}
+      </td>
+    </tr></table>
+    <div class="divider"></div>`;
+}
+
+function buildPrintClientHtml(clientLabel, client, contact) {
+  const clientName = (client && client.name) || '\u2014';
+  let html = '<div class="client-block">';
+  html += `<div class="client-label">${escapeHtml(String(clientLabel).toUpperCase())}</div>`;
+  html += `<div class="client-name">${escapeHtml(clientName)}</div>`;
+  if (client && client.company_name) {
+    html += `<div class="client-company">${escapeHtml(client.company_name)}</div>`;
+  }
+  if (contact && contact.name) {
+    html += `<div class="client-attn"><strong>Attn: ${escapeHtml(contact.name)}${contact.role ? ` (${escapeHtml(contact.role)})` : ''}</strong></div>`;
+    if (contact.email || contact.phone) {
+      html += `<div class="client-attn-info">${escapeHtml([contact.email, contact.phone].filter(Boolean).join(' \u2022 '))}</div>`;
+    }
+  }
+  const clientLines = buildClientLines(client);
+  if (clientLines.join('').trim()) {
+    html += `<div class="client-address">${clientLines.map(escapeHtml).join('<br>')}</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function buildPrintItemsHtml(items, currency) {
+  if (!items || !items.length) {
+    return '<table class="items"><tbody><tr><td class="no-items">No line items.</td></tr></tbody></table>';
+  }
+
+  const rows = items.map((item, idx) => {
+    let discLabel = '\u2014';
+    if (item.discount_type && item.discount_type !== 'none' && Number(item.discount_value) > 0) {
+      discLabel = item.discount_type === 'percent'
+        ? `${Number(item.discount_value)}%`
+        : `\u2212${money(item.discount_value, currency)}`;
+    }
+    const taxLabel = Number(item.tax_rate) > 0 ? `${item.tax_rate}%` : '0%';
+    return `<tr${idx % 2 === 1 ? ' class="alt"' : ''}>
+      <td class="col-desc">${escapeHtml(String(item.description || ''))}</td>
+      <td class="col-num">${escapeHtml(normalizeQty(item.quantity))}</td>
+      <td class="col-num">${money(item.unit_price, currency)}</td>
+      <td class="col-num">${escapeHtml(discLabel)}</td>
+      <td class="col-num">${escapeHtml(taxLabel)}</td>
+      <td class="col-num"><strong>${money(item.amount, currency)}</strong></td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="items">
+    <thead><tr>
+      <th class="col-desc">DESCRIPTION</th>
+      <th class="col-num">QTY</th>
+      <th class="col-num">UNIT PRICE</th>
+      <th class="col-num">DISC</th>
+      <th class="col-num">TAX</th>
+      <th class="col-num">LINE TOTAL</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function buildPrintTotalsHtml(totalRows, grandLabel, grandValue, extraRows) {
+  const rowHtml = (totalRows || []).map(([label, value]) =>
+    `<div class="t-row"><span>${escapeHtml(label)}</span><span>${escapeHtml(value)}</span></div>`
+  ).join('');
+  const extraHtml = (extraRows || []).map(([label, value]) =>
+    `<div class="t-row ${label === 'Balance due' ? 'due' : 'muted'}"><span>${escapeHtml(label)}</span><span>${escapeHtml(value)}</span></div>`
+  ).join('');
+  return `<div class="totals">
+    ${rowHtml}
+    <div class="t-divider"></div>
+    <div class="grand"><span>${escapeHtml(grandLabel)}</span><span>${escapeHtml(grandValue)}</span></div>
+    ${extraHtml}
+  </div>`;
+}
+
+function buildPrintNotesHtml(notesTerms) {
+  if (!notesTerms || !String(notesTerms).trim()) return '';
+  return `<div class="notes">
+    <div class="notes-title">NOTES &amp; TERMS</div>
+    <div class="notes-body">${escapeHtml(notesTerms)}</div>
+  </div>`;
+}
+
+function buildPrintAcceptanceHtml(quote, profile) {
+  const acceptMethodLabels = {
+    email: 'Email reply',
+    phone: 'Phone call',
+    signed_document: 'Signed document',
+    purchase_order: 'Purchase Order',
+    in_person: 'In-person confirmation',
+    other: 'Direct confirmation',
+  };
+
+  if (quote.status === 'accepted') {
+    const methodStr = acceptMethodLabels[quote.acceptance_method] || quote.acceptance_method || 'Direct confirmation';
+    const acceptedByStr = quote.accepted_by ? ` by ${quote.accepted_by}` : '';
+    const acceptedDateStr = formatDate(quote.date_accepted);
+    return `<div class="acceptance accepted">
+      <div class="accept-title">&#10003; FORMALLY ACCEPTED (${escapeHtml(methodStr)}${escapeHtml(acceptedByStr)} on ${escapeHtml(acceptedDateStr)})</div>
+      ${quote.acceptance_note ? `<div class="accept-note"><strong>Paper Trail Note:</strong> ${escapeHtml(quote.acceptance_note)}</div>` : ''}
+    </div>`;
+  }
+
+  const instructions = quote.acceptance_instructions
+    || (profile && profile.default_quote_acceptance_instructions)
+    || 'To accept this quote, please reply to confirm via email or phone.';
+  const senderEmail = (profile && profile.email) || '';
+  const senderPhone = (profile && profile.phone) || '';
+  let contactLine = '';
+  if (senderEmail && senderPhone) {
+    contactLine = `Reply to: ${senderEmail}  |  Phone: ${senderPhone}`;
+  } else if (senderEmail) {
+    contactLine = `Reply to: ${senderEmail}`;
+  } else if (senderPhone) {
+    contactLine = `Phone: ${senderPhone}`;
+  }
+
+  return `<div class="acceptance pending">
+    <div class="accept-title">ACCEPTANCE &amp; CONFIRMATION</div>
+    <div class="accept-instructions"><strong>${escapeHtml(instructions)}</strong></div>
+    ${contactLine ? `<div class="accept-contact">${escapeHtml(contactLine)}</div>` : ''}
+    <div class="sig-grid">
+      <div class="sig-field"><div class="sig-line"></div><label>Authorized Client Signature</label></div>
+      <div class="sig-field"><div class="sig-line"></div><label>Date</label></div>
+      <div class="sig-field"><div class="sig-line"></div><label>Printed Name &amp; Title</label></div>
+      <div class="sig-field"><div class="sig-line"></div><label>PO / Reference # (optional)</label></div>
+    </div>
+  </div>`;
+}
+
+function renderDocumentPrintHtml(opts) {
+  const {
+    pageLabel,
+    docNumber,
+    businessName,
+    profile,
+    metaRows,
+    clientLabel,
+    client,
+    contact,
+    items,
+    currency,
+    totalRows,
+    grandLabel,
+    grandValue,
+    extraRows,
+    notesTerms,
+    footerLeft,
+    acceptanceHtml,
+    stamp,
+  } = opts;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(`${pageLabel} ${docNumber}`)}</title>
+<style>
+  @page { size: A4; margin: 46px 46px 62px 46px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    position: relative;
+    font-family: Helvetica, Arial, 'Segoe UI', sans-serif;
+    color: #1F2937;
+    font-size: 9.5pt;
+    line-height: 1.35;
+  }
+  .doc-header { width: 100%; border-collapse: collapse; }
+  .doc-header td { vertical-align: top; padding: 0; }
+  .brand-cell { width: 100%; }
+  .logo { max-height: 42px; max-width: 260px; margin-bottom: 8px; }
+  .business-name { font-size: 20pt; font-weight: bold; color: #1F2937; }
+  .company-lines { font-size: 8.5pt; color: #6B7280; margin-top: 4px; line-height: 1.5; }
+  .meta-cell { text-align: right; white-space: nowrap; padding-left: 24px; }
+  .doc-label { font-size: 8pt; font-weight: bold; color: #6B7280; letter-spacing: 0.5px; }
+  .doc-number { font-size: 20pt; font-weight: bold; color: #1F2937; margin: 2px 0 10px; }
+  .meta-pair { margin-bottom: 6px; }
+  .meta-label { font-size: 7pt; font-weight: bold; color: #6B7280; text-transform: uppercase; letter-spacing: 0.4px; }
+  .meta-value { font-size: 10.5pt; color: #1F2937; }
+  .divider { border-top: 1px solid #E5E7EB; margin: 22px 0 24px; }
+  .client-block { margin-bottom: 26px; }
+  .client-label { font-size: 8pt; font-weight: bold; color: #6B7280; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; }
+  .client-name { font-size: 12.5pt; font-weight: bold; color: #1F2937; margin-bottom: 3px; }
+  .client-company { font-size: 10pt; color: #1F2937; }
+  .client-attn { font-size: 9.5pt; color: #1F2937; margin-top: 2px; }
+  .client-attn-info { font-size: 8.5pt; color: #6B7280; }
+  .client-address { font-size: 9pt; color: #6B7280; margin-top: 4px; line-height: 1.5; }
+  table.items { width: 100%; border-collapse: collapse; margin-bottom: 26px; }
+  table.items th {
+    background: #F3F4F6; color: #6B7280; font-size: 8pt; font-weight: bold;
+    letter-spacing: 0.4px; padding: 7px 8px; text-align: left;
+    border-bottom: 1px solid #E5E7EB;
+  }
+  table.items td {
+    padding: 7px 8px; font-size: 9.5pt; color: #1F2937;
+    border-bottom: 0.75px solid #E5E7EB; vertical-align: top;
+  }
+  table.items tbody tr.alt { background: #FAFAFA; }
+  table.items td.col-num, table.items th.col-num { text-align: right; }
+  table.items td.no-items { color: #6B7280; font-style: italic; }
+  .totals { width: 270px; margin-left: auto; page-break-inside: avoid; }
+  .t-row { display: flex; justify-content: space-between; font-size: 9.5pt; color: #1F2937; padding: 2.5px 0; }
+  .t-row.muted { color: #6B7280; }
+  .t-row.due { color: #1F2937; font-weight: bold; }
+  .t-divider { border-top: 1px solid #E5E7EB; margin: 6px 0; }
+  .grand {
+    display: flex; justify-content: space-between; background: #F9FAFB;
+    border-top: 1.5px solid #1F2937; font-size: 11pt; font-weight: bold;
+    color: #1F2937; padding: 11px 10px; margin-top: 8px;
+  }
+  .notes { margin-top: 26px; page-break-inside: avoid; }
+  .notes-title { font-size: 8pt; font-weight: bold; color: #6B7280; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; }
+  .notes-body { font-size: 9pt; color: #1F2937; white-space: pre-wrap; }
+  .acceptance { margin-top: 26px; page-break-inside: avoid; }
+  .acceptance.accepted { background: #F0FDF4; border: 1px solid #86EFAC; padding: 14px 16px; }
+  .acceptance.accepted .accept-title { color: #166534; }
+  .acceptance.pending { background: #F9FAFB; border: 1px solid #E5E7EB; padding: 12px 16px 16px; }
+  .acceptance.pending .accept-title { color: #1F2937; margin-bottom: 8px; }
+  .accept-title { font-size: 9.5pt; font-weight: bold; }
+  .accept-note { font-size: 8.5pt; color: #14532D; margin-top: 6px; }
+  .accept-instructions { font-size: 11pt; color: #1F2937; margin-bottom: 4px; }
+  .accept-contact { font-size: 8pt; color: #6B7280; margin-bottom: 10px; }
+  .sig-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 34px; row-gap: 22px; margin-top: 10px; }
+  .sig-line { border-top: 1px solid #CBD5E1; margin-bottom: 12px; }
+  .sig-field label { font-size: 7.5pt; color: #6B7280; }
+  .doc-footer {
+    position: fixed; bottom: 0; left: 46px; right: 46px;
+    display: flex; justify-content: space-between;
+    border-top: 0.75px solid #E5E7EB; padding-top: 6px;
+    font-size: 8pt; color: #6B7280;
+  }
+  .stamp {
+    position: absolute; top: 40%; left: 0; right: 0; text-align: center;
+    font-size: 64pt; font-weight: bold; letter-spacing: 6px;
+    opacity: 0.12; transform: rotate(-24deg);
+    pointer-events: none; z-index: 0;
+  }
+</style>
+</head>
+<body>
+${stamp ? `<div class="stamp" style="color:#${String(stamp.color).replace(/^#/, '')}">${escapeHtml(stamp.text)}</div>` : ''}
+${buildPrintHeaderHtml({ profile, businessName, pageLabel, docNumber, metaRows })}
+${buildPrintClientHtml(clientLabel, client, contact)}
+${buildPrintItemsHtml(items, currency)}
+${buildPrintTotalsHtml(totalRows, grandLabel, grandValue, extraRows)}
+${buildPrintNotesHtml(notesTerms)}
+${acceptanceHtml || ''}
+<div class="doc-footer"><span>${escapeHtml(footerLeft)}</span></div>
+</body>
+</html>`;
+}
+
+function renderQuotePrintHtml(quote, client, profile) {
+  const currency = quote.currency || (profile && profile.default_currency) || 'USD';
+  const businessName = (profile && profile.business_name) || 'QuoteCraft';
+
+  const totalRows = [['Subtotal', money(quote.subtotal, currency)]];
+  if (Number(quote.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(quote.discount_amount, currency)}`]);
+  buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency).forEach((r) => totalRows.push(r));
+  const notesTerms = [quote.notes, quote.terms].filter(Boolean).join('\n\n') || null;
+
+  return renderDocumentPrintHtml({
+    pageLabel: 'QUOTE',
+    docNumber: quote.quote_number || '',
+    businessName,
+    profile,
+    metaRows: [
+      ['Issue date', formatDate(quote.date_created)],
+      ['Valid until', formatDate(quote.valid_until)],
+      ['Status', QUOTE_STATUS_LABELS[quote.status] || quote.status || ''],
+    ],
+    clientLabel: 'PREPARED FOR',
+    client,
+    contact: quote.contact,
+    items: quote.line_items || [],
+    currency,
+    totalRows,
+    grandLabel: 'GRAND TOTAL',
+    grandValue: money(quote.total, currency),
+    extraRows: [],
+    notesTerms,
+    footerLeft: `Prepared by ${businessName}`,
+    acceptanceHtml: buildPrintAcceptanceHtml(quote, profile),
+    stamp: null,
+  });
+}
+
+function renderInvoicePrintHtml(invoice, client, profile) {
+  const currency = invoice.currency || (profile && profile.default_currency) || 'USD';
+  const businessName = (profile && profile.business_name) || 'QuoteCraft';
+  const status = effectiveInvoiceStatus(invoice);
+
+  let docLabel = 'INVOICE';
+  let grandLabel = 'TOTAL DUE';
+  if (invoice.invoice_type === 'deposit') {
+    docLabel = 'DEPOSIT INVOICE';
+    grandLabel = 'DEPOSIT DUE';
+  } else if (invoice.invoice_type === 'final') {
+    docLabel = 'FINAL INVOICE';
+    grandLabel = 'FINAL BALANCE DUE';
+  }
+
+  const metaRows = [
+    ['Issue date', formatDate(invoice.date_created)],
+    ['Due date', formatDate(invoice.date_due)],
+    ['Status', INVOICE_STATUS_LABELS[status] || status || ''],
+  ];
+  if (invoice.original_quote_total && (invoice.invoice_type === 'deposit' || invoice.invoice_type === 'final')) {
+    metaRows.push(['Full Quote Value', money(invoice.original_quote_total, currency)]);
+  }
+
+  const totalRows = [['Subtotal', money(invoice.subtotal, currency)]];
+  if (Number(invoice.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(invoice.discount_amount, currency)}`]);
+  buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency).forEach((r) => totalRows.push(r));
+
+  const paid = Number(invoice.amount_paid) || 0;
+  const credited = Number(invoice.amount_credited) || 0;
+  const balance = Number(invoice.balance_due) || 0;
+  const netPaid = Math.max(0, Math.round((paid - credited) * 100) / 100);
+  const extraRows = [];
+  if (paid > 0.0001) {
+    extraRows.push(['Amount paid', money(paid, currency)]);
+    if (credited > 0.0001) {
+      extraRows.push(['Credited', `\u2212${money(credited, currency)}`]);
+      extraRows.push(['Net paid', money(netPaid, currency)]);
+    }
+    extraRows.push(['Balance due', money(Math.max(balance, 0), currency)]);
+  } else if (balance > 0.0001) {
+    extraRows.push(['Balance due', money(balance, currency)]);
+  } else if (credited > 0.0001) {
+    extraRows.push(['Credited', `\u2212${money(credited, currency)}`]);
+    extraRows.push(['Net paid', money(netPaid, currency)]);
+  }
+
+  const notesTerms = [invoice.notes, invoice.terms].filter(Boolean).join('\n\n') || null;
+  let stamp = null;
+  if (status === 'paid') stamp = { text: 'PAID', color: '#166534' };
+  else if (status === 'overdue') stamp = { text: 'OVERDUE', color: '#B91C1C' };
+
+  return renderDocumentPrintHtml({
+    pageLabel: docLabel,
+    docNumber: invoice.invoice_number || '',
+    businessName,
+    profile,
+    metaRows,
+    clientLabel: 'BILLED TO',
+    client,
+    contact: invoice.contact,
+    items: invoice.line_items || [],
+    currency,
+    totalRows,
+    grandLabel,
+    grandValue: money(invoice.total, currency),
+    extraRows,
+    notesTerms,
+    footerLeft: `Prepared by ${businessName}`,
+    acceptanceHtml: '',
+    stamp,
+  });
+}
+
 // ---------- Credit Note PDF ----------
 
 function renderCreditNotePdf(creditNote, invoice, client, profile) {
@@ -1259,4 +1667,11 @@ function renderQuoteHtml(quote, client, profile) {
 </html>`;
 }
 
-module.exports = { renderQuotePdf, renderInvoicePdf, renderCreditNotePdf, renderQuoteHtml };
+module.exports = {
+  renderQuotePdf,
+  renderInvoicePdf,
+  renderCreditNotePdf,
+  renderQuoteHtml,
+  renderQuotePrintHtml,
+  renderInvoicePrintHtml,
+};

@@ -335,13 +335,13 @@
   white-space: nowrap;
 }
 
-/* Invoices list: Total (5), Paid (6), Balance (7) */
-#invoiceList .data-table td:nth-child(5),
+/* Invoices list: Total (6), Paid (7), Balance (8) — col 1 is the select box */
 #invoiceList .data-table td:nth-child(6),
 #invoiceList .data-table td:nth-child(7),
-#invoiceList .data-table th:nth-child(5),
+#invoiceList .data-table td:nth-child(8),
 #invoiceList .data-table th:nth-child(6),
-#invoiceList .data-table th:nth-child(7) {
+#invoiceList .data-table th:nth-child(7),
+#invoiceList .data-table th:nth-child(8) {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -353,6 +353,35 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Bulk actions bar on the invoices list */
+.bulk-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.bulk-actions-bar .bulk-count {
+  font-weight: 600;
+  color: var(--text);
+  margin-right: auto;
+}
+
+.th-select,
+.cell-select {
+  width: 34px;
+  text-align: center;
+}
+
+.cell-select input,
+.th-select input {
+  cursor: pointer;
 }
 
 /* ── Contacts sub-section inside client modal ─────────────────────────── */

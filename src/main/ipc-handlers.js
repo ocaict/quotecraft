@@ -1,7 +1,14 @@
-const { ipcMain, dialog, app, shell } = require('electron');
+const { ipcMain, dialog, app, shell, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { renderQuotePdf, renderInvoicePdf, renderCreditNotePdf, renderQuoteHtml } = require('./pdf-export');
+const {
+  renderQuotePdf,
+  renderInvoicePdf,
+  renderCreditNotePdf,
+  renderQuoteHtml,
+  renderQuotePrintHtml,
+  renderInvoicePrintHtml,
+} = require('./pdf-export');
 const {
   getCompanyProfile,
   saveCompanyProfile,
@@ -14,6 +21,7 @@ const {
   archiveClient,
   deleteClient,
   createQuote,
+  duplicateQuote,
   updateQuote,
   getQuote,
   getQuoteVersionHistory,
@@ -23,10 +31,12 @@ const {
   markQuoteDeclined,
   convertQuoteToInvoice,
   createFinalInvoiceFromDeposit,
+  duplicateInvoice,
   getInvoice,
   getInvoiceByQuote,
   listInvoices,
   setInvoiceStatus,
+  markInvoicesSent,
   addPayment,
   getPaymentHistory,
   getPaymentsReport,
@@ -100,6 +110,152 @@ const {
 
 const LOGO_DIR = () => path.join(app.getPath('userData'), 'logo');
 const BACKUPS_DIR = () => path.join(app.getPath('userData'), 'backups');
+
+// Adds an on-screen toolbar to a print-ready HTML document so the OS print
+// dialog can always be re-opened from the preview (window.print()), even when
+// the auto-triggered dialog fails to come to the foreground on Windows.
+const PRINT_TOOLBAR_SNIPPET = `
+<style>
+  .qc-print-toolbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding: 0 16px;
+    background: #0F172A;
+    color: #FFFFFF;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .qc-print-toolbar .qc-print-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-right: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .qc-print-toolbar button {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 16px;
+    cursor: pointer;
+  }
+  .qc-print-toolbar .qc-print-btn { background: #22C55E; color: #FFFFFF; }
+  .qc-print-toolbar .qc-print-btn:hover { background: #16A34A; }
+  .qc-print-toolbar .qc-close-btn { background: #EF4444; color: #FFFFFF; }
+  .qc-print-toolbar .qc-close-btn:hover { background: #DC2626; }
+  body { padding-top: 88px !important; }
+  @media print {
+    .qc-print-toolbar { display: none !important; }
+  }
+</style>
+<div class="qc-print-toolbar">
+  <span class="qc-print-title">Print preview</span>
+  <button type="button" class="qc-print-btn">Print</button>
+  <button type="button" class="qc-close-btn">Close</button>
+</div>
+<script>
+(function () {
+  var printBtn = document.querySelector('.qc-print-btn');
+  var closeBtn = document.querySelector('.qc-close-btn');
+  var doPrint = function () {
+    try { window.print(); } catch (err) { /* ignore */ }
+  };
+  if (printBtn) printBtn.addEventListener('click', doPrint);
+  if (closeBtn) closeBtn.addEventListener('click', function () { window.close(); });
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+      e.preventDefault();
+      doPrint();
+    }
+  });
+})();
+</script>
+`;
+
+function withPrintToolbar(html) {
+  if (html.includes('.qc-print-toolbar')) return html;
+  const bodyEnd = html.lastIndexOf('</body>');
+  if (bodyEnd === -1) return html + PRINT_TOOLBAR_SNIPPET;
+  return html.slice(0, bodyEnd) + PRINT_TOOLBAR_SNIPPET + html.slice(bodyEnd);
+}
+
+// Opens the OS print dialog for an HTML document loaded in a temporary window.
+// The document reuses the PDF-export layout so the printed output matches it.
+function printHtmlWindow(html, title) {
+  return new Promise((resolve, reject) => {
+    let win;
+    try {
+      win = new BrowserWindow({
+        show: false,
+        width: 820,
+        height: 1100,
+        title: title || 'Print',
+        autoHideMenuBar: true,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+        },
+      });
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    let settled = false;
+    const finish = (error, result) => {
+      if (settled) return;
+      settled = true;
+      try {
+        if (!win.isDestroyed()) win.destroy();
+      } catch (err) {
+        /* ignore */
+      }
+      if (error) reject(error);
+      else resolve(result || { ok: true });
+    };
+
+    win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      finish(new Error(`Could not load the document for printing: ${errorDescription}`));
+    });
+
+    win.on('closed', () => {
+      if (!settled) finish(null, { ok: true, cancelled: true });
+    });
+
+    win.webContents.on('did-finish-load', () => {
+      // Show the preview so the on-screen Print toolbar is always available,
+      // then give the window focus so Windows attaches the system dialog to it.
+      win.once('show', () => {
+        setTimeout(() => {
+          win.focus();
+          win.webContents.focus();
+          win.webContents.print({ silent: false, printBackground: true }, (success) => {
+            if (success) {
+              finish(null, { ok: true });
+            }
+            // Otherwise (cancelled or the dialog could not open) keep the
+            // preview open so the user can print via the toolbar or Ctrl+P.
+          });
+        }, 250);
+      });
+      win.show();
+      win.focus();
+    });
+
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(withPrintToolbar(html))).catch((err) => finish(err));
+  });
+}
 
 function validateProfile(profile) {
   const errors = {};
@@ -490,6 +646,15 @@ function registerIpcHandlers() {
     return { ok: true, quote };
   });
 
+  ipcMain.handle('quotes:duplicate', async (event, id) => {
+    try {
+      const result = duplicateQuote(id);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to duplicate quote: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('quotes:getVersionHistory', async (event, quoteId) => {
     try {
       const history = getQuoteVersionHistory(quoteId);
@@ -531,6 +696,21 @@ function registerIpcHandlers() {
       return { ok: true, savedPath: result.filePath };
     } catch (err) {
       return { ok: false, errors: { general: `Could not export PDF: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('quotes:print', async (event, quoteId) => {
+    try {
+      const quote = getQuote(quoteId);
+      if (!quote) {
+        return { ok: false, errors: { general: 'Quote not found.' } };
+      }
+      const client = getClient(quote.client_id);
+      const profile = getCompanyProfile();
+      const html = renderQuotePrintHtml(quote, client, profile);
+      return await printHtmlWindow(html, `Print Quote ${quote.quote_number || ''}`);
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not print quote: ${err.message}` } };
     }
   });
 
@@ -612,6 +792,15 @@ function registerIpcHandlers() {
     return { ok: true, invoice };
   });
 
+  ipcMain.handle('invoices:duplicate', async (event, id) => {
+    try {
+      const result = duplicateInvoice(id);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to duplicate invoice: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('invoices:exportPdf', async (event, invoiceId) => {
     try {
       const invoice = getInvoice(invoiceId);
@@ -638,12 +827,79 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('invoices:print', async (event, invoiceId) => {
+    try {
+      const invoice = getInvoice(invoiceId);
+      if (!invoice) {
+        return { ok: false, errors: { general: 'Invoice not found.' } };
+      }
+      const client = getClient(invoice.client_id);
+      const profile = getCompanyProfile();
+      const html = renderInvoicePrintHtml(invoice, client, profile);
+      return await printHtmlWindow(html, `Print Invoice ${invoice.invoice_number || ''}`);
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not print invoice: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('invoices:exportPdfBatch', async (event, ids) => {
+    try {
+      const uniqueIds = Array.from(new Set((ids || []).filter((id) => Number(id) > 0).map(Number)));
+      if (uniqueIds.length === 0) {
+        return { ok: false, errors: { general: 'No invoices selected.' } };
+      }
+      const folderResult = await dialog.showOpenDialog({
+        title: 'Choose a folder to save invoice PDFs',
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      if (folderResult.canceled || folderResult.filePaths.length === 0) {
+        return { ok: true, cancelled: true };
+      }
+      const folder = folderResult.filePaths[0];
+
+      const profile = getCompanyProfile();
+      const savedPaths = [];
+      const failures = [];
+      for (const id of uniqueIds) {
+        const invoice = getInvoice(id);
+        if (!invoice) {
+          failures.push({ id, reason: 'Invoice not found.' });
+          continue;
+        }
+        const client = getClient(invoice.client_id);
+        const buffer = await renderInvoicePdf(invoice, client, profile);
+        const base = `Invoice ${String(invoice.invoice_number || id).replace(/[^\w-]+/g, '_')}.pdf`;
+        let fileName = base;
+        let counter = 2;
+        while (fs.existsSync(path.join(folder, fileName))) {
+          fileName = `${base.slice(0, -4)} (${counter}).pdf`;
+          counter++;
+        }
+        const dest = path.join(folder, fileName);
+        fs.writeFileSync(dest, buffer);
+        savedPaths.push(dest);
+      }
+      return { ok: true, folder, savedCount: savedPaths.length, savedPaths, failures };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not export PDFs: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('invoices:setStatus', async (event, id, status) => {
     try {
       const result = setInvoiceStatus(id, status);
       return result;
     } catch (err) {
       return { ok: false, errors: { general: `Failed to update status: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('invoices:markSentBatch', async (event, ids) => {
+    try {
+      const result = markInvoicesSent(ids || []);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to update statuses: ${err.message}` } };
     }
   });
 
