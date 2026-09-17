@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="styles/email-settings.css">
   <link rel="stylesheet" href="styles/revenue-report.css">
   <link rel="stylesheet" href="styles/client-profitability.css">
+  <link rel="stylesheet" href="styles/audit-log.css">
   <link rel="stylesheet" href="styles/app-lock.css">
 </head>
 <body>
@@ -42,6 +43,7 @@
       <a href="#" data-page="email-settings">Email Settings</a>
       <a href="#" data-page="revenue-report">Revenue Report</a>
       <a href="#" data-page="client-profitability">Client Profitability</a>
+      <a href="#" data-page="audit-log">Audit Log</a>
     </nav>
   </aside>
 
@@ -2732,6 +2734,74 @@
       </div>
     </section>
 
+    <!-- Audit Log -->
+    <section id="page-audit-log" class="page">
+      <div class="page-header">
+        <div>
+          <h1>Audit Log</h1>
+          <p class="subtitle">Chronological, read-only record of changes to your data.</p>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="audit-filter-card">
+        <div class="audit-filter-group">
+          <label for="auditPresetSelect">Date Range</label>
+          <select id="auditPresetSelect" class="audit-preset-select">
+            <option value="today">Today</option>
+            <option value="this_week" selected>This Week</option>
+            <option value="this_month">This Month</option>
+            <option value="this_year">This Year</option>
+            <option value="all_time">All Time</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+        <div class="audit-filter-group">
+          <label for="auditStartDate">From Date</label>
+          <input type="date" id="auditStartDate" class="audit-date-input">
+        </div>
+        <div class="audit-filter-group">
+          <label for="auditEndDate">To Date</label>
+          <input type="date" id="auditEndDate" class="audit-date-input">
+        </div>
+        <div class="audit-filter-group">
+          <label for="auditTypeSelect">Record Type</label>
+          <select id="auditTypeSelect" class="audit-preset-select">
+            <option value="all">All types</option>
+            <option value="client">Client</option>
+            <option value="quote">Quote</option>
+            <option value="invoice">Invoice</option>
+            <option value="payment">Payment</option>
+            <option value="credit_note">Credit note</option>
+            <option value="settings">Settings</option>
+          </select>
+        </div>
+        <button type="button" class="btn btn-secondary btn-small" id="auditRefreshBtn">🔄 Refresh</button>
+      </div>
+
+      <!-- Audit Entries Table -->
+      <div class="audit-table-card">
+        <div class="audit-table-header">
+          <h2>Activity</h2>
+          <span class="audit-table-count" id="auditTableCount">0 entries</span>
+        </div>
+        <div class="audit-table-wrap">
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th style="width:170px;">When</th>
+                <th style="width:120px;">Type</th>
+                <th style="width:160px;">Action</th>
+                <th style="width:200px;">Record</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
   <div id="restoreModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -2781,6 +2851,7 @@
   <script src="js/email-settings.js"></script>
   <script src="js/revenue-report.js"></script>
   <script src="js/client-profitability.js"></script>
+  <script src="js/audit-log.js"></script>
   <script src="js/app-lock.js"></script>
   <script src="js/app.js"></script>
 </body>

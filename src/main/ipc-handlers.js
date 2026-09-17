@@ -88,6 +88,8 @@ const {
   disableAppLock,
   getAutoBackupSettings,
   saveAutoBackupSettings,
+  addAuditEntry,
+  getAuditLogEntries,
 } = require('./database');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
 const {
@@ -943,6 +945,15 @@ function registerIpcHandlers() {
       return { ok: true, autoBackupPath: autoPath };
     } catch (err) {
       return { ok: false, errors: { general: `Could not restore backup: ${err.message}` } };
+    }
+  });
+
+  // ---------- Audit Trail ----------
+  ipcMain.handle('audit:getEntries', async (event, filter) => {
+    try {
+      return { ok: true, entries: getAuditLogEntries(filter || {}) };
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
   });
 

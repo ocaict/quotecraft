@@ -81,6 +81,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runAutoBackupNow: () => ipcRenderer.invoke('autobackup:runNow'),
   listAutoBackups: (folder) => ipcRenderer.invoke('autobackup:list', folder),
 
+  getAuditEntries: (filter) => ipcRenderer.invoke('audit:getEntries', filter),
+
   getEmailSettings: () => ipcRenderer.invoke('email:getSettings'),
   saveEmailSettings: (settings) => ipcRenderer.invoke('email:saveSettings', settings),
   sendTestEmail: (recipient) => ipcRenderer.invoke('email:sendTest', recipient),

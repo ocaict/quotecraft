@@ -340,6 +340,18 @@ function createTables() {
       updated_at     TEXT NOT NULL
     );
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS audit_log_entries (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_type TEXT NOT NULL,
+      entity_ref  TEXT DEFAULT '',
+      action      TEXT NOT NULL,
+      description TEXT NOT NULL,
+      created_at  TEXT NOT NULL
+    );
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log_entries(created_at DESC);`);
 }
 
 const MIGRATIONS = [
@@ -924,6 +936,12 @@ function saveCompanyProfile(profile) {
   }
 
   saveToDisk();
+  addAuditEntry({
+    entityType: 'settings',
+    entityRef: 'Company Profile',
+    action: 'settings_changed',
+    description: 'Changed company settings (business: ' + (fields.business_name || '—') + ')',
+  });
   return getCompanyProfile();
 }
 
@@ -1478,7 +1496,14 @@ function addClient(client) {
   }
 
   saveToDisk();
-  return getClient(newId);
+  const created = getClient(newId);
+  addAuditEntry({
+    entityType: 'client',
+    entityRef: created.name || 'Client #' + newId,
+    action: 'created',
+    description: 'Created client "' + (created.name || '') + '"',
+  });
+  return created;
 }
 
 function clientParams(client, now) {
@@ -1517,7 +1542,14 @@ function updateClient(id, client) {
   }
 
   saveToDisk();
-  return getClient(id);
+  const updated = getClient(id);
+  addAuditEntry({
+    entityType: 'client',
+    entityRef: (updated && updated.name) || 'Client #' + id,
+    action: 'updated',
+    description: 'Updated client "' + ((updated && updated.name) || '') + '"',
+  });
+  return updated;
 }
 
 function countClientHistory(id) {
@@ -1533,7 +1565,14 @@ function archiveClient(id) {
   const now = new Date().toISOString();
   db.run(`UPDATE clients SET archived = 1, updated_at = ? WHERE id = ?`, [now, id]);
   saveToDisk();
-  return getClient(id);
+  const archived = getClient(id);
+  addAuditEntry({
+    entityType: 'client',
+    entityRef: (archived && archived.name) || 'Client #' + id,
+    action: 'archived',
+    description: 'Archived client "' + ((archived && archived.name) || '') + '"',
+  });
+  return archived;
 }
 
 function deleteClient(id) {
@@ -1541,10 +1580,19 @@ function deleteClient(id) {
   if (history.quoteCount > 0 || history.invoiceCount > 0) {
     return { ok: false, blocked: true, ...history };
   }
+  const before = getClient(id);
   // client_contacts rows cascade-delete via FK ON DELETE CASCADE
   const changes = db.run(`DELETE FROM clients WHERE id = ?`, [id]);
   const deleted = db.getRowsModified() > 0;
   saveToDisk();
+  if (deleted && before) {
+    addAuditEntry({
+      entityType: 'client',
+      entityRef: before.name || 'Client #' + id,
+      action: 'deleted',
+      description: 'Deleted client "' + (before.name || '') + '"',
+    });
+  }
   return { ok: true, deleted };
 }
 
@@ -2174,7 +2222,14 @@ function createQuote(data, lineItems) {
   }
 
   saveToDisk();
-  return { ok: true, quote: getQuote(createdQuoteId) };
+  const createdQuote = getQuote(createdQuoteId);
+  addAuditEntry({
+    entityType: 'quote',
+    entityRef: createdQuote.quote_number || 'Quote #' + createdQuoteId,
+    action: 'created',
+    description: 'Created quote ' + (createdQuote.quote_number || '') + ' for $' + (Number(createdQuote.total) || 0).toFixed(2),
+  });
+  return { ok: true, quote: createdQuote };
 }
 
 function getQuoteVersionHistory(quoteId) {
@@ -2359,7 +2414,14 @@ function updateQuote(id, data, lineItems) {
   }
 
   saveToDisk();
-  return { ok: true, quote: getQuote(id) };
+  const updatedQuote = getQuote(id);
+  addAuditEntry({
+    entityType: 'quote',
+    entityRef: updatedQuote.quote_number || 'Quote #' + id,
+    action: 'updated',
+    description: 'Updated quote ' + (updatedQuote.quote_number || '') + ' to $' + (Number(updatedQuote.total) || 0).toFixed(2),
+  });
+  return { ok: true, quote: updatedQuote };
 }
 
 function getQuote(id) {
@@ -2445,7 +2507,14 @@ function setQuoteStatus(id, status) {
     [status, ...params, id]
   );
   saveToDisk();
-  return { ok: true, quote: getQuote(id) };
+  const stQuote = getQuote(id);
+  addAuditEntry({
+    entityType: 'quote',
+    entityRef: stQuote.quote_number || 'Quote #' + id,
+    action: 'status_changed',
+    description: 'Marked quote ' + (stQuote.quote_number || '') + ' as ' + (status.charAt(0).toUpperCase() + status.slice(1)),
+  });
+  return { ok: true, quote: stQuote };
 }
 
 function markQuoteAccepted(id, { method, note, accepted_by, date_accepted, acceptance_instructions } = {}) {
@@ -2917,7 +2986,14 @@ function convertQuoteToInvoice(quoteId, overrides) {
     }
 
     saveToDisk();
-    return { ok: true, alreadyConverted: false, invoice: getInvoice(invoiceId) };
+    const depInv = getInvoice(invoiceId);
+    addAuditEntry({
+      entityType: 'invoice',
+      entityRef: depInv.invoice_number || 'Invoice #' + invoiceId,
+      action: 'created',
+      description: 'Created deposit invoice ' + (depInv.invoice_number || '') + ' for ' + (Number(depInv.total) || 0).toFixed(2) + ' ' + (depInv.currency || ''),
+    });
+    return { ok: true, alreadyConverted: false, invoice: depInv };
   }
 
   // Full invoice conversion
@@ -2999,7 +3075,14 @@ function convertQuoteToInvoice(quoteId, overrides) {
   }
 
   saveToDisk();
-  return { ok: true, alreadyConverted: false, invoice: getInvoice(invoiceId) };
+  const fullInv = getInvoice(invoiceId);
+  addAuditEntry({
+    entityType: 'invoice',
+    entityRef: fullInv.invoice_number || 'Invoice #' + invoiceId,
+    action: 'created',
+    description: 'Created invoice ' + (fullInv.invoice_number || '') + ' for ' + (Number(fullInv.total) || 0).toFixed(2) + ' ' + (fullInv.currency || ''),
+  });
+  return { ok: true, alreadyConverted: false, invoice: fullInv };
 }
 
 function createFinalInvoiceFromDeposit(depositInvoiceId, overrides) {
@@ -3155,7 +3238,14 @@ function createFinalInvoiceFromDeposit(depositInvoiceId, overrides) {
   }
 
   saveToDisk();
-  return { ok: true, alreadyGenerated: false, invoice: getInvoice(finalInvoiceId) };
+  const finInv = getInvoice(finalInvoiceId);
+  addAuditEntry({
+    entityType: 'invoice',
+    entityRef: finInv.invoice_number || 'Invoice #' + finalInvoiceId,
+    action: 'created',
+    description: 'Created final invoice ' + (finInv.invoice_number || '') + ' for ' + (Number(finInv.total) || 0).toFixed(2) + ' ' + (finInv.currency || ''),
+  });
+  return { ok: true, alreadyGenerated: false, invoice: finInv };
 }
 
 function listInvoices() {
@@ -3187,7 +3277,14 @@ function setInvoiceStatus(id, status) {
     [status, status === 'sent' ? now : existing.date_sent, now, id]
   );
   saveToDisk();
-  return { ok: true, invoice: getInvoice(id) };
+  const stInv = getInvoice(id);
+  addAuditEntry({
+    entityType: 'invoice',
+    entityRef: stInv.invoice_number || 'Invoice #' + id,
+    action: 'status_changed',
+    description: 'Marked invoice ' + (stInv.invoice_number || '') + ' as ' + (status.charAt(0).toUpperCase() + status.slice(1)),
+  });
+  return { ok: true, invoice: stInv };
 }
 
 // ---------- Payments ----------
@@ -3259,7 +3356,14 @@ function addPayment(invoiceId, input) {
   }
 
   saveToDisk();
-  return { ok: true, invoice: getInvoice(invoiceId) };
+  const payInv = getInvoice(invoiceId);
+  addAuditEntry({
+    entityType: 'payment',
+    entityRef: payInv.invoice_number || 'Invoice #' + invoiceId,
+    action: 'payment_recorded',
+    description: 'Recorded payment of ' + amount.toFixed(2) + ' ' + (payInv.currency || '') + ' on invoice ' + (payInv.invoice_number || '') + (method ? ' via ' + method : ''),
+  });
+  return { ok: true, invoice: payInv };
 }
 
 // Return payments reconciliation report filtered by date range and payment method.
@@ -4156,7 +4260,14 @@ function issueCreditNote(invoiceId, input) {
   const creditNote = rowToObject(
     db.exec('SELECT * FROM credit_notes WHERE credit_note_number = ?', [creditNoteNumber])
   );
-  return { ok: true, credit_note: creditNote, invoice: getInvoice(invoiceId) };
+  const creditInv = getInvoice(invoiceId);
+  addAuditEntry({
+    entityType: 'credit_note',
+    entityRef: creditNoteNumber || 'Credit note',
+    action: 'credit_note_issued',
+    description: 'Issued credit note ' + (creditNoteNumber || '') + ' for ' + amount.toFixed(2) + ' ' + (creditInv.currency || '') + ' on invoice ' + (creditInv.invoice_number || '') + (reason ? ' (' + reason + ')' : ''),
+  });
+  return { ok: true, credit_note: creditNote, invoice: creditInv };
 }
 
 function getCreditNotesForInvoice(invoiceId) {
@@ -5263,6 +5374,53 @@ function saveAutoBackupSettings({ enabled, schedule, folder, retainCount, lastBa
   return { ok: true, settings: getAutoBackupSettings() };
 }
 
+// ---------- Audit Trail ----------
+
+// Records one entry in the audit log. Runs best-effort: a logging failure must
+// never break the real action it describes. The caller's saveToDisk() persists
+// both the action and this row together.
+function addAuditEntry({ entityType, entityRef = '', action, description }) {
+  try {
+    db.run(
+      `INSERT INTO audit_log_entries (entity_type, entity_ref, action, description, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [String(entityType || ''), String(entityRef || ''), String(action || ''), String(description || ''), new Date().toISOString()]
+    );
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function getAuditLogEntries({ recordType, from, to, limit = 500 } = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (recordType && recordType !== 'all') {
+    conditions.push('entity_type = ?');
+    params.push(String(recordType));
+  }
+  if (from) {
+    conditions.push('created_at >= ?');
+    params.push(String(from) + 'T00:00:00.000Z');
+  }
+  if (to) {
+    conditions.push('created_at <= ?');
+    params.push(String(to) + 'T23:59:59.999Z');
+  }
+
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  const max = Math.max(1, parseInt(limit, 10) || 500);
+  const res = db.exec(
+    `SELECT id, entity_type, entity_ref, action, description, created_at
+     FROM audit_log_entries
+     ${where}
+     ORDER BY created_at DESC, id DESC
+     LIMIT ${max}`,
+    params
+  );
+  return rowsToArray(res);
+}
+
 module.exports = {
   initializeDatabase,
   getDb,
@@ -5357,4 +5515,6 @@ module.exports = {
   disableAppLock,
   getAutoBackupSettings,
   saveAutoBackupSettings,
+  addAuditEntry,
+  getAuditLogEntries,
 };
