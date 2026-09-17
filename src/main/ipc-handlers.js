@@ -57,7 +57,6 @@ const {
   updateClientNote,
   deleteClientNote,
   getClientOverview,
-  getDatabaseBuffer,
   validateBackupBuffer,
   restoreDatabaseFromBuffer,
   PAYMENT_METHODS,
@@ -83,37 +82,22 @@ const {
   logReminderSent,
   getRevenueReport,
   getClientProfitabilityReport,
+  getAppLockSettings,
+  setAppLockPin,
+  verifyAppLockPin,
+  disableAppLock,
+  getAutoBackupSettings,
+  saveAutoBackupSettings,
 } = require('./database');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
+const {
+  createBackupPayload,
+  runNow: runAutoBackupNow,
+  listAutoBackups,
+} = require('./auto-backup');
 
 const LOGO_DIR = () => path.join(app.getPath('userData'), 'logo');
 const BACKUPS_DIR = () => path.join(app.getPath('userData'), 'backups');
-
-function buildBackupPayload(profile) {
-  const dbBytes = getDatabaseBuffer();
-  let logo = null;
-  let logoFileName = null;
-  if (profile && profile.logo_path) {
-    const lp = profile.logo_path;
-    if (fs.existsSync(lp)) {
-      try {
-        logo = fs.readFileSync(lp).toString('base64');
-        logoFileName = path.basename(lp);
-      } catch (e) {
-        /* skip logo if unreadable */
-      }
-    }
-  }
-  return {
-    app: 'QuoteCraft',
-    magic: 'QUOTECRAFT_BACKUP',
-    version: 1,
-    createdAt: new Date().toISOString(),
-    database: dbBytes.toString('base64'),
-    logo,
-    logoFileName,
-  };
-}
 
 function validateProfile(profile) {
   const errors = {};
@@ -876,7 +860,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('backup:export', async () => {
     try {
-      const payload = buildBackupPayload(getCompanyProfile());
+      const payload = createBackupPayload(getCompanyProfile());
       const stamp = new Date().toISOString().slice(0, 10);
       const result = await dialog.showSaveDialog({
         title: 'Export QuoteCraft Backup',
@@ -938,7 +922,7 @@ function registerIpcHandlers() {
       fs.mkdirSync(BACKUPS_DIR(), { recursive: true });
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       const autoPath = path.join(BACKUPS_DIR(), `pre-restore-${stamp}.json`);
-      fs.writeFileSync(autoPath, JSON.stringify(buildBackupPayload(getCompanyProfile()), null, 2));
+      fs.writeFileSync(autoPath, JSON.stringify(createBackupPayload(getCompanyProfile()), null, 2));
 
       await restoreDatabaseFromBuffer(v.dbBytes);
 
@@ -959,6 +943,57 @@ function registerIpcHandlers() {
       return { ok: true, autoBackupPath: autoPath };
     } catch (err) {
       return { ok: false, errors: { general: `Could not restore backup: ${err.message}` } };
+    }
+  });
+
+  // ---------- Automatic Backups ----------
+  ipcMain.handle('autobackup:getSettings', async () => {
+    try {
+      return { ok: true, settings: getAutoBackupSettings() };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('autobackup:saveSettings', async (event, settings) => {
+    try {
+      const res = saveAutoBackupSettings(settings || {});
+      return res.ok ? { ok: true, settings: res.settings } : { ok: false, error: res.error };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('autobackup:chooseFolder', async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: 'Choose a folder for automatic backups',
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return { ok: true, cancelled: true, folder: null };
+      }
+      return { ok: true, canceled: false, folder: result.filePaths[0] };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('autobackup:runNow', async () => {
+    try {
+      const res = runAutoBackupNow();
+      return res.ok ? { ok: true, path: res.path } : { ok: false, error: res.error };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('autobackup:list', async (event, folder) => {
+    try {
+      const backups = listAutoBackups(folder || getAutoBackupSettings().folder);
+      return { ok: true, backups };
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
   });
 
@@ -1397,6 +1432,42 @@ function registerIpcHandlers() {
       }
       await shell.openExternal(url);
       return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // ---------- App Lock (PIN) ----------
+  ipcMain.handle('lock:getSettings', async () => {
+    try {
+      return { ok: true, settings: getAppLockSettings() };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lock:setPin', async (event, payload) => {
+    try {
+      const res = setAppLockPin(payload || {});
+      return res.ok ? { ok: true, settings: res.settings } : { ok: false, error: res.error };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lock:verify', async (event, payload) => {
+    try {
+      const unlocked = verifyAppLockPin((payload && payload.pin) || '');
+      return { ok: true, unlocked };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lock:disable', async (event, payload) => {
+    try {
+      const res = disableAppLock(payload || {});
+      return res.ok ? { ok: true, settings: res.settings } : { ok: false, error: res.error };
     } catch (err) {
       return { ok: false, error: err.message };
     }

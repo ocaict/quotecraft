@@ -75,6 +75,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   prepareRestore: () => ipcRenderer.invoke('backup:prepareRestore'),
   restoreBackup: (filePath) => ipcRenderer.invoke('backup:restore', filePath),
 
+  getAutoBackupSettings: () => ipcRenderer.invoke('autobackup:getSettings'),
+  saveAutoBackupSettings: (settings) => ipcRenderer.invoke('autobackup:saveSettings', settings),
+  chooseAutoBackupFolder: () => ipcRenderer.invoke('autobackup:chooseFolder'),
+  runAutoBackupNow: () => ipcRenderer.invoke('autobackup:runNow'),
+  listAutoBackups: (folder) => ipcRenderer.invoke('autobackup:list', folder),
+
   getEmailSettings: () => ipcRenderer.invoke('email:getSettings'),
   saveEmailSettings: (settings) => ipcRenderer.invoke('email:saveSettings', settings),
   sendTestEmail: (recipient) => ipcRenderer.invoke('email:sendTest', recipient),
@@ -94,5 +100,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkAutoSendReminders: () => ipcRenderer.invoke('reminders:checkAutoSend'),
   getRevenueReport: (filter) => ipcRenderer.invoke('reports:revenue', filter),
   getClientProfitabilityReport: (filter) => ipcRenderer.invoke('reports:clientProfitability', filter),
+  getAppLockSettings: () => ipcRenderer.invoke('lock:getSettings'),
+  setAppLockPin: (payload) => ipcRenderer.invoke('lock:setPin', payload),
+  verifyAppLockPin: (pin) => ipcRenderer.invoke('lock:verify', { pin }),
+  disableAppLock: (currentPin) => ipcRenderer.invoke('lock:disable', { currentPin }),
 });
 

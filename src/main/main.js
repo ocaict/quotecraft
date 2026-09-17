@@ -8,6 +8,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'quotecraft'));
 
 const { initializeDatabase, closeDatabase } = require('./database');
 const { registerIpcHandlers } = require('./ipc-handlers');
+const { startAutoBackupScheduler, stopAutoBackupScheduler, runOnCloseIfEnabled } = require('./auto-backup');
 
 let mainWindow = null;
 
@@ -46,6 +47,7 @@ app.whenReady().then(async () => {
   await initializeDatabase();
   registerIpcHandlers();
   await createWindow();
+  startAutoBackupScheduler();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -55,6 +57,12 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', () => {
+  stopAutoBackupScheduler();
+  try {
+    runOnCloseIfEnabled();
+  } catch (e) {
+    /* silent: a failed backup must never block quitting */
+  }
   closeDatabase();
 });
 

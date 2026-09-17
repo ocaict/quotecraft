@@ -1,6 +1,7 @@
 const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { app } = require('electron');
 const { encryptSecret, decryptSecret, getStorageMechanismName } = require('./secure-storage');
 
@@ -314,6 +315,29 @@ function createTables() {
       exchange_rate   REAL DEFAULT 1.0,
       created_at      TEXT NOT NULL,
       updated_at      TEXT NOT NULL
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS app_lock (
+      id                 INTEGER PRIMARY KEY CHECK (id = 1),
+      is_enabled         INTEGER NOT NULL DEFAULT 0,
+      pin_hash           TEXT DEFAULT '',
+      pin_salt           TEXT DEFAULT '',
+      inactivity_minutes INTEGER NOT NULL DEFAULT 5,
+      updated_at         TEXT NOT NULL
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS auto_backup_settings (
+      id             INTEGER PRIMARY KEY CHECK (id = 1),
+      enabled        INTEGER NOT NULL DEFAULT 0,
+      schedule       TEXT NOT NULL DEFAULT 'daily',
+      folder         TEXT NOT NULL DEFAULT '',
+      retain_count   INTEGER NOT NULL DEFAULT 7,
+      last_backup_at TEXT DEFAULT '',
+      updated_at     TEXT NOT NULL
     );
   `);
 }
@@ -5101,6 +5125,144 @@ function getClientProfitabilityReport({ startDate, endDate, sort = 'collected_de
   };
 }
 
+// ---------- App Lock (PIN) ----------
+
+function getAppLockRow() {
+  const res = db.exec('SELECT is_enabled, pin_hash, pin_salt, inactivity_minutes FROM app_lock WHERE id = 1');
+  if (!res.length || res[0].values.length === 0) {
+    return { is_enabled: 0, pin_hash: '', pin_salt: '', inactivity_minutes: 5 };
+  }
+  const cols = res[0].columns;
+  const row = {};
+  cols.forEach((c, i) => { row[c] = res[0].values[0][i]; });
+  return row;
+}
+
+function getAppLockSettings() {
+  const row = getAppLockRow();
+  return {
+    is_enabled: Number(row.is_enabled) === 1,
+    pin_set: Boolean(row.pin_hash),
+    inactivity_minutes: Number(row.inactivity_minutes) || 5,
+  };
+}
+
+function hashAppLockPin(pin, saltHex) {
+  const salt = Buffer.from(saltHex, 'hex');
+  return crypto.scryptSync(String(pin), salt, 16).toString('hex');
+}
+
+function verifyAppLockPin(pin) {
+  const row = getAppLockRow();
+  if (!row.pin_hash || !row.pin_salt) return false;
+  const expected = Buffer.from(row.pin_hash, 'hex');
+  const actual = Buffer.from(hashAppLockPin(pin, row.pin_salt), 'hex');
+  if (expected.length !== actual.length) return false;
+  return crypto.timingSafeEqual(expected, actual);
+}
+
+function setAppLockPin({ pin, currentPin = null, inactivityMinutes } = {}) {
+  const pinStr = String(pin || '');
+  if (pinStr.length < 4) return { ok: false, error: 'PIN must be at least 4 characters.' };
+  if (pinStr.length > 64) return { ok: false, error: 'PIN must be 64 characters or fewer.' };
+
+  const row = getAppLockRow();
+  const hasPin = Boolean(row.pin_hash);
+  if (hasPin && !verifyAppLockPin(currentPin)) {
+    return { ok: false, error: 'Current PIN is incorrect.' };
+  }
+
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = hashAppLockPin(pinStr, salt);
+  const minutes = Math.max(0, parseInt(inactivityMinutes, 10) || 0);
+  const now = new Date().toISOString();
+
+  const existing = getAppLockRow();
+  if (existing.pin_hash) {
+    db.run(
+      `UPDATE app_lock SET is_enabled = 1, pin_hash = ?, pin_salt = ?, inactivity_minutes = ?, updated_at = ? WHERE id = 1`,
+      [hash, salt, minutes, now]
+    );
+  } else {
+    db.run(
+      `INSERT INTO app_lock (id, is_enabled, pin_hash, pin_salt, inactivity_minutes, updated_at)
+       VALUES (1, 1, ?, ?, ?, ?)`,
+      [hash, salt, minutes, now]
+    );
+  }
+  saveToDisk();
+  return { ok: true, settings: getAppLockSettings() };
+}
+
+function disableAppLock({ currentPin = null } = {}) {
+  const row = getAppLockRow();
+  if (Number(row.is_enabled) === 0) return { ok: true, settings: getAppLockSettings() };
+  if (!row.pin_hash || !verifyAppLockPin(currentPin)) {
+    return { ok: false, error: 'Current PIN is incorrect.' };
+  }
+  db.run(`UPDATE app_lock SET is_enabled = 0, updated_at = ? WHERE id = 1`, [new Date().toISOString()]);
+  saveToDisk();
+  return { ok: true, settings: getAppLockSettings() };
+}
+
+// ---------- Automatic Backups ----------
+
+function getAutoBackupSettings() {
+  const res = db.exec('SELECT enabled, schedule, folder, retain_count, last_backup_at FROM auto_backup_settings WHERE id = 1');
+  if (!res.length || res[0].values.length === 0) {
+    return { enabled: false, schedule: 'daily', folder: '', retainCount: 7, lastBackupAt: null };
+  }
+  const cols = res[0].columns;
+  const row = {};
+  cols.forEach((c, i) => { row[c] = res[0].values[0][i]; });
+  return {
+    enabled: Number(row.enabled) === 1,
+    schedule: row.schedule === 'on_close' ? 'on_close' : 'daily',
+    folder: row.folder || '',
+    retainCount: Math.max(1, parseInt(row.retain_count, 10) || 7),
+    lastBackupAt: row.last_backup_at || null,
+  };
+}
+
+function saveAutoBackupSettings({ enabled, schedule, folder, retainCount, lastBackupAt } = {}) {
+  const enableFlag = enabled ? 1 : 0;
+  const sched = schedule === 'on_close' ? 'on_close' : 'daily';
+
+  let retain = retainCount === undefined || retainCount === null ? 7 : parseInt(retainCount, 10);
+  if (Number.isNaN(retain)) retain = 7;
+  if (retain < 1) retain = 1;
+  if (retain > 30) retain = 30;
+
+  const folderStr = String(folder || '').trim();
+  if (enableFlag === 1) {
+    if (!folderStr) {
+      return { ok: false, error: 'Choose a folder to store automatic backups.' };
+    }
+  }
+  if (retain < 1) {
+    return { ok: false, error: 'Keep at least 1 backup.' };
+  }
+
+  const now = new Date().toISOString();
+  const last = lastBackupAt ? String(lastBackupAt) : '';
+
+  const existingRes = db.exec('SELECT * FROM auto_backup_settings WHERE id = 1');
+  if (existingRes.length && existingRes[0].values.length > 0) {
+    db.run(
+      `UPDATE auto_backup_settings SET enabled = ?, schedule = ?, folder = ?, retain_count = ?, last_backup_at = ?, updated_at = ? WHERE id = 1`,
+      [enableFlag, sched, folderStr, retain, last, now]
+    );
+  } else {
+    db.run(
+      `INSERT INTO auto_backup_settings (id, enabled, schedule, folder, retain_count, last_backup_at, updated_at)
+       VALUES (1, ?, ?, ?, ?, ?, ?)`,
+      [enableFlag, sched, folderStr, retain, last, now]
+    );
+  }
+  saveToDisk();
+  return { ok: true, settings: getAutoBackupSettings() };
+}
+
 module.exports = {
   initializeDatabase,
   getDb,
@@ -5189,4 +5351,10 @@ module.exports = {
   logReminderSent,
   getRevenueReport,
   getClientProfitabilityReport,
+  getAppLockSettings,
+  setAppLockPin,
+  verifyAppLockPin,
+  disableAppLock,
+  getAutoBackupSettings,
+  saveAutoBackupSettings,
 };

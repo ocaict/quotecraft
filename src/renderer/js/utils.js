@@ -49,6 +49,13 @@ window.QuoteCraftUtils = {
     return d.toLocaleDateString();
   },
 
+  formatDateTime(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleString();
+  },
+
   showToast(message, type) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -132,6 +139,25 @@ window.QuoteCraftUtils = {
       modal.addEventListener('click', onBackdrop);
       okBtn.addEventListener('click', onOk);
     });
+  },
+
+  // Downloads an array-of-arrays as a CSV file. Headers are the first row.
+  // Every cell is quoted/escaped so commas, quotes, and newlines survive;
+  // a UTF-8 BOM is prepended so Excel opens the file cleanly. Pass money
+  // values as plain numbers (e.g. 1234.56), not formatted strings.
+  downloadCSV(filename, rows) {
+    const quote = (val) =>
+      '"' + String(val === null || val === undefined ? '' : val).replace(/"/g, '""') + '"';
+    const csv = rows.map((row) => row.map(quote).join(',')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   },
 
   showBusy(label) {

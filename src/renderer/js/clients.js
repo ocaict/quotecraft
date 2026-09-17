@@ -14,6 +14,7 @@
   const sortSelect = document.getElementById('clientSort');
   const tagFilterSelect = document.getElementById('clientTagFilter');
   const addBtn = document.getElementById('addClientBtn');
+  const exportCsvBtn = document.getElementById('clientsExportCsvBtn');
 
   const deleteDialog = document.getElementById('clientDeleteDialog');
   const deleteMessage = document.getElementById('clientDeleteMessage');
@@ -287,7 +288,7 @@
 
   // ── Client list rendering ─────────────────────────────────────────────
 
-  function renderList() {
+  function filterClients() {
     let filtered = clients.slice();
 
     if (tagFilter !== 'all') {
@@ -310,6 +311,12 @@
     } else {
       filtered.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
     }
+
+    return filtered;
+  }
+
+  function renderList() {
+    const filtered = filterClients();
 
     if (filtered.length === 0) {
       if (clients.length === 0) {
@@ -449,6 +456,31 @@
     table.appendChild(tbody);
     listEl.innerHTML = '';
     listEl.appendChild(table);
+  }
+
+  function exportClientsCsv() {
+    const filtered = filterClients();
+    if (filtered.length === 0) {
+      toast('No clients available to export.', 'warning');
+      return;
+    }
+
+    const headers = ['Name', 'Company', 'Email', 'Phone', 'Billing Address', 'Date Added', 'Tags'];
+    const rows = filtered.map((c) => {
+      const addr = fullAddress(c);
+      return [
+        c.name || '',
+        c.company_name || '',
+        c.email || '',
+        c.phone || '',
+        addr === '—' ? '' : addr,
+        c.created_at || '',
+        parseTags(c.tags).join('; '),
+      ];
+    });
+
+    window.QuoteCraftUtils.downloadCSV(`clients-${new Date().toISOString().slice(0, 10)}.csv`, [headers].concat(rows));
+    toast('Clients CSV exported successfully.', 'success');
   }
 
   // ── Client Overview / Portal Rendering ────────────────────────────────
@@ -1277,6 +1309,10 @@
   }
 
   addBtn.addEventListener('click', openAddModal);
+
+  if (exportCsvBtn) {
+    exportCsvBtn.addEventListener('click', exportClientsCsv);
+  }
   document.getElementById('clientModalClose').addEventListener('click', closeModal);
   document.getElementById('clientCancelBtn').addEventListener('click', closeModal);
   modal.addEventListener('click', (e) => {

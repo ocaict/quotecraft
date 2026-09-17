@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="styles/email-settings.css">
   <link rel="stylesheet" href="styles/revenue-report.css">
   <link rel="stylesheet" href="styles/client-profitability.css">
+  <link rel="stylesheet" href="styles/app-lock.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -165,6 +166,7 @@
             <h1>Clients</h1>
             <p class="subtitle">Manage the people and companies you send quotes and invoices to.</p>
           </div>
+          <button type="button" id="clientsExportCsvBtn" class="btn btn-secondary">Export CSV</button>
           <button type="button" id="addClientBtn" class="btn btn-primary">Add Client</button>
         </div>
 
@@ -742,6 +744,7 @@
             <p class="subtitle">Invoices created from accepted quotes. Record payments and track balances.</p>
           </div>
           <div class="detail-actions">
+            <button type="button" id="invoicesExportCsvBtn" class="btn btn-secondary">Export CSV</button>
             <button type="button" id="invoicesViewPaymentsBtn" class="btn btn-secondary">Payments Report</button>
           </div>
         </div>
@@ -1529,6 +1532,68 @@
           </div>
         </div>
 
+        <div class="card" id="appLockCard">
+          <h2>App Lock (PIN)</h2>
+          <p class="subtitle">Require a PIN before QuoteCraft opens — a deterrent for anyone with casual access to this computer.</p>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label class="toggle-row" for="appLockToggle">
+                <span class="toggle-switch">
+                  <input type="checkbox" id="appLockToggle">
+                  <span class="toggle-track"></span>
+                </span>
+                <span>Require a PIN to open QuoteCraft</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="appLockConfig" class="hidden">
+            <div class="app-lock-status" id="appLockStatus"></div>
+            <div class="form-row">
+              <div class="field app-lock-current-field">
+                <label for="appLockCurrentPin">Current PIN</label>
+                <input type="password" id="appLockCurrentPin" autocomplete="current-password" maxlength="64" placeholder="Required to change or disable">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label for="appLockNewPin">New PIN</label>
+                <input type="password" id="appLockNewPin" autocomplete="new-password" maxlength="64" placeholder="At least 4 characters">
+              </div>
+              <div class="field">
+                <label for="appLockNewPinConfirm">Confirm new PIN</label>
+                <input type="password" id="appLockNewPinConfirm" autocomplete="new-password" maxlength="64" placeholder="Repeat the PIN">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label for="appLockInactivity">Lock after inactivity</label>
+                <select id="appLockInactivity">
+                  <option value="0">Never (lock only on launch)</option>
+                  <option value="1">1 minute</option>
+                  <option value="2">2 minutes</option>
+                  <option value="5" selected>5 minutes</option>
+                  <option value="10">10 minutes</option>
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button type="button" id="appLockSaveBtn" class="btn btn-primary">Save PIN</button>
+                <button type="button" id="appLockDisableBtn" class="btn btn-ghost link-btn">Turn lock off</button>
+              </div>
+            </div>
+            <div class="app-lock-msg" id="appLockMsg"></div>
+          </div>
+
+          <div class="app-lock-recovery">
+            <strong>Read this before turning the lock on.</strong>
+            <p>Your data never leaves this device and there is no cloud account to verify you, so a forgotten PIN <em>cannot</em> be recovered by us — by design. If you forget it, the only ways back in are restoring a backup made <strong>before</strong> the lock was enabled, or deleting the app's data file on this device (which resets everything). Anyone with physical access to this computer could do the same, so treat App Lock as a deterrent, not absolute protection, and pick a PIN you will remember.</p>
+          </div>
+        </div>
+
         <div class="card">
           <h2>Backup &amp; Restore</h2>
           <p class="subtitle">Export all of your data into a single file, or restore from an earlier backup. Backups include clients, quotes, invoices, payments, company settings, and your logo.</p>
@@ -1547,6 +1612,65 @@
               <button type="button" id="restoreBackupBtn" class="btn btn-ghost">Restore from Backup</button>
               <span class="hint">Replaces current data with the contents of a previous backup. A timestamped copy of your current data is saved first.</span>
             </div>
+          </div>
+
+          <hr class="card-divider">
+          <h3 class="card-subtitle">Automatic backups</h3>
+          <p class="subtitle">QuoteCraft keeps a rolling set of recent backups for you, running invisibly in the background — it never blocks while you work.</p>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label class="toggle-row" for="autobackupEnabled">
+                <span class="toggle-switch">
+                  <input type="checkbox" id="autobackupEnabled">
+                  <span class="toggle-track"></span>
+                </span>
+                <span>Automatically back up my data</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="autobackupConfig" class="hidden">
+            <div class="form-row">
+              <div class="field">
+                <label for="autobackupSchedule">Back up</label>
+                <select id="autobackupSchedule">
+                  <option value="daily">Daily</option>
+                  <option value="on_close">When the app closes</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="autobackupRetainCount">Keep recent backups</label>
+                <select id="autobackupRetainCount">
+                  <option value="3">3</option>
+                  <option value="7" selected>7</option>
+                  <option value="14">14</option>
+                  <option value="30">30</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field field-span-2">
+                <label for="autobackupFolder">Backup folder</label>
+                <div class="backup-folder-row">
+                  <input type="text" id="autobackupFolder" readonly placeholder="Choose a folder to store backups">
+                  <button type="button" id="autobackupFolderBtn" class="btn btn-secondary">Choose folder</button>
+                </div>
+                <span class="hint">Older backups beyond the "keep" count are removed automatically, so a bad backup never wipes out your only good one.</span>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field field-span-2">
+                <label for="autobackupSaveBtn">Status</label>
+                <div class="backup-status-row">
+                  <span id="autobackupStatus" class="backup-status-text">Not yet configured.</span>
+                  <button type="button" id="autobackupSaveBtn" class="btn btn-primary">Save</button>
+                  <button type="button" id="autobackupNowBtn" class="btn btn-secondary">Back up now</button>
+                </div>
+              </div>
+            </div>
+            <div id="autobackupRecent" class="backup-recent hidden"></div>
+            <div class="app-lock-msg" id="autobackupMsg"></div>
           </div>
         </div>
 
@@ -2626,6 +2750,22 @@
     </div>
   </div>
 
+  <div id="appLockOverlay" aria-hidden="true">
+    <div class="lock-card">
+      <div class="lock-card-header">
+        <img src="assets/icons/icon.png" alt="QuoteCraft" class="lock-logo">
+        <h2>QuoteCraft is locked</h2>
+        <p class="lock-subtitle">Enter your PIN to continue.</p>
+      </div>
+      <div class="lock-form">
+        <input type="password" id="lockPinInput" autocomplete="current-password" maxlength="64" placeholder="Enter PIN">
+        <button type="button" id="lockUnlockBtn" class="btn btn-primary">Unlock</button>
+      </div>
+      <p id="lockError" class="lock-error" aria-live="polite"></p>
+      <p class="lock-hint">Forgot your PIN? Open Settings → App Lock for recovery options.</p>
+    </div>
+  </div>
+
   <script src="js/currencies.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/settings.js"></script>
@@ -2641,6 +2781,7 @@
   <script src="js/email-settings.js"></script>
   <script src="js/revenue-report.js"></script>
   <script src="js/client-profitability.js"></script>
+  <script src="js/app-lock.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

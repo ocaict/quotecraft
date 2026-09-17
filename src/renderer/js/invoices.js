@@ -7,6 +7,7 @@
   const invoiceListEl = document.getElementById('invoiceList');
   const invoiceSearch = document.getElementById('invoiceSearch');
   const invoiceStatusFilter = document.getElementById('invoiceStatusFilter');
+  const invoicesExportCsvBtn = document.getElementById('invoicesExportCsvBtn');
 
   const invoiceBackBtn = document.getElementById('invoiceBackBtn');
   const invoiceExportBtn = document.getElementById('invoiceExportBtn');
@@ -208,7 +209,7 @@
     return s;
   }
 
-  function renderList() {
+  function filterInvoices() {
     let filtered = invoices.slice();
     const q = searchTerm.trim().toLowerCase();
     if (q || statusFilter !== 'all') {
@@ -221,6 +222,11 @@
         return true;
       });
     }
+    return filtered;
+  }
+
+  function renderList() {
+    const filtered = filterInvoices();
 
     if (filtered.length === 0) {
       if (invoices.length === 0) {
@@ -346,6 +352,30 @@
     table.appendChild(tbody);
     invoiceListEl.innerHTML = '';
     invoiceListEl.appendChild(table);
+  }
+
+  function exportInvoicesCsv() {
+    const filtered = filterInvoices();
+    if (filtered.length === 0) {
+      toast('No invoices available to export.', 'warning');
+      return;
+    }
+
+    const headers = ['Number', 'Client', 'Date', 'Due Date', 'Total', 'Paid', 'Balance', 'Status', 'Currency'];
+    const rows = filtered.map((inv) => [
+      inv.invoice_number || '',
+      clientDisplayName(inv.client),
+      inv.date_created || '',
+      inv.date_due || '',
+      Number(inv.total || 0).toFixed(2),
+      Number(inv.amount_paid || 0).toFixed(2),
+      Number(inv.balance_due || 0).toFixed(2),
+      formatInvoiceStatus(effectiveInvoiceStatus(inv)),
+      inv.currency || currencyCode,
+    ]);
+
+    window.QuoteCraftUtils.downloadCSV(`invoices-${new Date().toISOString().slice(0, 10)}.csv`, [headers].concat(rows));
+    toast('Invoices CSV exported successfully.', 'success');
   }
 
   async function loadInvoices() {
@@ -1347,6 +1377,10 @@
     statusFilter = invoiceStatusFilter.value;
     renderList();
   });
+
+  if (invoicesExportCsvBtn) {
+    invoicesExportCsvBtn.addEventListener('click', exportInvoicesCsv);
+  }
 
   document.getElementById('paymentModalClose').addEventListener('click', closePaymentModal);
   document.getElementById('paymentCancelBtn').addEventListener('click', closePaymentModal);
