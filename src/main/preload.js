@@ -22,6 +22,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateClientNote: (noteId, text) => ipcRenderer.invoke('clients:updateNote', noteId, text),
   deleteClientNote: (noteId) => ipcRenderer.invoke('clients:deleteNote', noteId),
 
+  listProjects: (opts) => ipcRenderer.invoke('projects:list', opts),
+  getProject: (id) => ipcRenderer.invoke('projects:get', id),
+  addProject: (project) => ipcRenderer.invoke('projects:add', project),
+  updateProject: (id, project) => ipcRenderer.invoke('projects:update', id, project),
+  tryDeleteProject: (id) => ipcRenderer.invoke('projects:tryDelete', id),
+  archiveProject: (id) => ipcRenderer.invoke('projects:archive', id),
+
 
   listItems: () => ipcRenderer.invoke('items:list'),
   getItem: (id) => ipcRenderer.invoke('items:get', id),

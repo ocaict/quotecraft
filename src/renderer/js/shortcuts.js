@@ -14,6 +14,7 @@
   // Destructive/confirmation dialogs are intentionally excluded.
   const SAVE_TARGETS = [
     ['clientModal', 'clientSubmitBtn'],
+    ['projectModal', 'projectSubmitBtn'],
     ['itemModal', 'itemSubmitBtn'],
     ['expenseModal', 'expenseSubmitBtn'],
     ['paymentModal', 'paymentSubmitBtn'],
@@ -28,6 +29,7 @@
   // page → search input id for the "/" shortcut.
   const SEARCH_INPUTS = {
     clients: 'clientSearch',
+    projects: 'projectSearch',
     items: 'itemSearch',
     quotes: 'quoteSearch',
     invoices: 'invoiceSearch',

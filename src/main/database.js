@@ -816,6 +816,38 @@ const MIGRATIONS = [
       db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_quote_final ON invoices(quote_id) WHERE invoice_type = 'final'`);
     },
   },
+  {
+    version: 24,
+    up: () => {
+      // Projects (Jobs) — organizing layer above quotes and invoices.
+      db.run(`
+        CREATE TABLE IF NOT EXISTS projects (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          client_id    INTEGER NOT NULL REFERENCES clients(id),
+          name         TEXT NOT NULL,
+          description  TEXT DEFAULT '',
+          status       TEXT NOT NULL DEFAULT 'active'
+                         CHECK (status IN ('active','on_hold','completed','archived')),
+          start_date   TEXT NOT NULL,
+          end_date     TEXT DEFAULT NULL,
+          created_at   TEXT NOT NULL,
+          updated_at   TEXT NOT NULL
+        );
+      `);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_projects_client_id ON projects(client_id);`);
+
+      // Add project_id (nullable) to quotes and invoices — additive, existing rows get NULL.
+      const quoteCols = new Set(db.exec(`PRAGMA table_info(quotes)`)[0].values.map((v) => v[1]));
+      if (!quoteCols.has('project_id')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN project_id INTEGER DEFAULT NULL`);
+      }
+
+      const invCols = new Set(db.exec(`PRAGMA table_info(invoices)`)[0].values.map((v) => v[1]));
+      if (!invCols.has('project_id')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN project_id INTEGER DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -1555,9 +1587,11 @@ function updateClient(id, client) {
 function countClientHistory(id) {
   const quotes = db.exec('SELECT COUNT(*) AS c FROM quotes WHERE client_id = ?', [id]);
   const invoices = db.exec('SELECT COUNT(*) AS c FROM invoices WHERE client_id = ?', [id]);
+  const projects = db.exec('SELECT COUNT(*) AS c FROM projects WHERE client_id = ?', [id]);
   return {
     quoteCount: quotes[0].values[0][0],
     invoiceCount: invoices[0].values[0][0],
+    projectCount: projects[0].values[0][0],
   };
 }
 
@@ -1577,7 +1611,7 @@ function archiveClient(id) {
 
 function deleteClient(id) {
   const history = countClientHistory(id);
-  if (history.quoteCount > 0 || history.invoiceCount > 0) {
+  if (history.quoteCount > 0 || history.invoiceCount > 0 || history.projectCount > 0) {
     return { ok: false, blocked: true, ...history };
   }
   const before = getClient(id);
@@ -1699,6 +1733,203 @@ function deleteClientNote(id) {
   const deleted = db.getRowsModified() > 0;
   saveToDisk();
   return { ok: true, deleted };
+}
+
+// ---------- Projects (Jobs) ----------
+
+const PROJECT_STATUSES = ['active', 'on_hold', 'completed', 'archived'];
+
+function countProjectHistory(id) {
+  const quotes = db.exec('SELECT COUNT(*) AS c FROM quotes WHERE project_id = ?', [id]);
+  const invoices = db.exec('SELECT COUNT(*) AS c FROM invoices WHERE project_id = ?', [id]);
+  return {
+    quoteCount: quotes[0].values[0][0],
+    invoiceCount: invoices[0].values[0][0],
+  };
+}
+
+// listProjects — searchable by name/client, filterable by client and status.
+// opts: { search, clientId, status }
+function listProjects(opts) {
+  const o = opts || {};
+  const where = [];
+  const params = [];
+
+  if (o.clientId) {
+    where.push('p.client_id = ?');
+    params.push(o.clientId);
+  }
+  if (o.status) {
+    where.push('p.status = ?');
+    params.push(o.status);
+  }
+  if (o.search && String(o.search).trim()) {
+    const term = '%' + String(o.search).trim() + '%';
+    where.push('(p.name LIKE ? OR c.name LIKE ? OR c.company_name LIKE ?)');
+    params.push(term, term, term);
+  }
+
+  const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const res = db.exec(
+    `SELECT p.*, c.name AS client_name, c.company_name AS client_company,
+            (SELECT COUNT(*) FROM quotes q WHERE q.project_id = p.id) AS quote_count,
+            (SELECT COUNT(*) FROM invoices i WHERE i.project_id = p.id) AS invoice_count
+       FROM projects p
+       JOIN clients c ON c.id = p.client_id
+       ${whereSql}
+       ORDER BY p.name COLLATE NOCASE ASC, p.id ASC`,
+    params
+  );
+  return rowsToArray(res);
+}
+
+function getProject(id) {
+  const res = db.exec(
+    `SELECT p.*, c.name AS client_name, c.company_name AS client_company,
+            (SELECT COUNT(*) FROM quotes q WHERE q.project_id = p.id) AS quote_count,
+            (SELECT COUNT(*) FROM invoices i WHERE i.project_id = p.id) AS invoice_count
+       FROM projects p
+       JOIN clients c ON c.id = p.client_id
+      WHERE p.id = ?`,
+    [id]
+  );
+  const project = rowToObject(res);
+  if (!project) return null;
+  return project;
+}
+
+function addProject(project) {
+  const errors = validateProjectInput(project);
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO projects (client_id, name, description, status, start_date, end_date, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      project.client_id,
+      String(project.name || '').trim(),
+      String(project.description || '').trim(),
+      String(project.status || '').trim() || 'active',
+      String(project.start_date || '').trim(),
+      project.end_date ? String(project.end_date).trim() : null,
+      now,
+      now,
+    ]
+  );
+
+  const idRes = db.exec('SELECT last_insert_rowid() AS id');
+  const newId = idRes[0].values[0][0];
+  saveToDisk();
+  const created = getProject(newId);
+  addAuditEntry({
+    entityType: 'project',
+    entityRef: created ? created.name : 'Project #' + newId,
+    action: 'created',
+    description: 'Created project "' + ((created && created.name) || '') + '"',
+  });
+  return { ok: true, project: created };
+}
+
+function updateProject(id, project) {
+  const existing = getProject(id);
+  if (!existing) {
+    return { ok: false, errors: { general: 'Project not found.' } };
+  }
+
+  const errors = validateProjectInput(project);
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  const now = new Date().toISOString();
+  db.run(
+    `UPDATE projects SET
+       client_id = ?, name = ?, description = ?, status = ?,
+       start_date = ?, end_date = ?, updated_at = ?
+     WHERE id = ?`,
+    [
+      project.client_id,
+      String(project.name || '').trim(),
+      String(project.description || '').trim(),
+      String(project.status || '').trim() || existing.status,
+      String(project.start_date || '').trim(),
+      project.end_date ? String(project.end_date).trim() : null,
+      now,
+      id,
+    ]
+  );
+
+  saveToDisk();
+  const updated = getProject(id);
+  addAuditEntry({
+    entityType: 'project',
+    entityRef: (updated && updated.name) || 'Project #' + id,
+    action: 'updated',
+    description: 'Updated project "' + ((updated && updated.name) || '') + '"',
+  });
+  return { ok: true, project: updated };
+}
+
+function archiveProject(id) {
+  const existing = getProject(id);
+  if (!existing) return { ok: false, errors: { general: 'Project not found.' } };
+
+  const now = new Date().toISOString();
+  db.run(`UPDATE projects SET status = 'archived', updated_at = ? WHERE id = ?`, [now, id]);
+  saveToDisk();
+  const archived = getProject(id);
+  addAuditEntry({
+    entityType: 'project',
+    entityRef: archived.name || 'Project #' + id,
+    action: 'archived',
+    description: 'Archived project "' + (archived.name || '') + '"',
+  });
+  return { ok: true, project: archived };
+}
+
+function deleteProject(id) {
+  const history = countProjectHistory(id);
+  if (history.quoteCount > 0 || history.invoiceCount > 0) {
+    return { ok: false, blocked: true, ...history };
+  }
+  const before = getProject(id);
+  db.run(`DELETE FROM projects WHERE id = ?`, [id]);
+  const deleted = db.getRowsModified() > 0;
+  saveToDisk();
+  if (deleted && before) {
+    addAuditEntry({
+      entityType: 'project',
+      entityRef: before.name || 'Project #' + id,
+      action: 'deleted',
+      description: 'Deleted project "' + (before.name || '') + '"',
+    });
+  }
+  return { ok: true, deleted };
+}
+
+function validateProjectInput(project) {
+  const errors = {};
+  if (!project || !project.client_id) {
+    errors.client_id = 'Please select a client.';
+  }
+  if (!project.name || !String(project.name).trim()) {
+    errors.name = 'Project name is required.';
+  }
+  if (!project.start_date || !String(project.start_date).trim()) {
+    errors.start_date = 'Start date is required.';
+  } else if (!isValidDateString(String(project.start_date).trim())) {
+    errors.start_date = 'Start date must be a valid date.';
+  }
+  if (project.end_date && !isValidDateString(String(project.end_date).trim())) {
+    errors.end_date = 'End date must be a valid date.';
+  }
+  if (project.status && !PROJECT_STATUSES.includes(String(project.status).trim())) {
+    errors.status = 'Invalid project status.';
+  }
+  return errors;
 }
 
 // ---------- Client Overview (Aggregated Portal View) ----------
@@ -2141,6 +2372,17 @@ function getQuoteLineItems(quoteId) {
   return rowsToArray(res);
 }
 
+// Validate that a project_id (if provided) exists and belongs to the same client.
+function checkProjectBelongsToClient(data, errors) {
+  if (!data.project_id) return;
+  const project = getProject(data.project_id);
+  if (!project) {
+    errors.project_id = 'Selected project no longer exists.';
+  } else if (data.client_id && Number(project.client_id) !== Number(data.client_id)) {
+    errors.project_id = 'Selected project does not belong to the selected client.';
+  }
+}
+
 function duplicateQuote(id) {
   const source = getQuote(id);
   if (!source) {
@@ -2163,6 +2405,7 @@ function duplicateQuote(id) {
   const data = {
     client_id: source.client_id,
     contact_id: source.contact_id || null,
+    project_id: source.project_id || null,
     date_created: today,
     valid_until: validUntil,
     currency: source.currency,
@@ -2197,6 +2440,10 @@ function createQuote(data, lineItems) {
   if (Object.keys(errors).length > 0) {
     return { ok: false, errors };
   }
+  checkProjectBelongsToClient(data, errors);
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
 
   const now = new Date().toISOString();
   const profile = getCompanyProfile();
@@ -2209,10 +2456,10 @@ function createQuote(data, lineItems) {
   try {
     const insertRes = db.run(
       `INSERT INTO quotes (
-        quote_number, quote_number_root, version, is_latest, client_id, contact_id, status, date_created, valid_until,
+        quote_number, quote_number_root, version, is_latest, client_id, contact_id, project_id, status, date_created, valid_until,
         subtotal, discount_amount, discount_type, discount_value, tax_rate,
         tax_amount, total, currency, exchange_rate, notes, terms, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         quoteNumber,
         quoteNumber,
@@ -2220,6 +2467,7 @@ function createQuote(data, lineItems) {
         1,
         data.client_id,
         data.contact_id || null,
+        data.project_id || null,
         'draft',
         data.date_created || new Date().toISOString().slice(0, 10),
         data.valid_until || null,
@@ -2301,6 +2549,10 @@ function updateQuote(id, data, lineItems) {
   if (Object.keys(errors).length > 0) {
     return { ok: false, errors };
   }
+  checkProjectBelongsToClient(data, errors);
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
 
   const existing = getQuote(id);
   if (!existing) {
@@ -2335,10 +2587,10 @@ function updateQuote(id, data, lineItems) {
 
       const insertRes = db.run(
         `INSERT INTO quotes (
-          quote_number, quote_number_root, version, is_latest, client_id, contact_id, status, date_created, valid_until,
+          quote_number, quote_number_root, version, is_latest, client_id, contact_id, project_id, status, date_created, valid_until,
           subtotal, discount_amount, discount_type, discount_value, tax_rate,
           tax_amount, total, currency, exchange_rate, notes, terms, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newQuoteNumber,
           root,
@@ -2346,6 +2598,7 @@ function updateQuote(id, data, lineItems) {
           1,
           data.client_id,
           data.contact_id !== undefined ? (data.contact_id || null) : existing.contact_id,
+          data.project_id !== undefined ? (data.project_id || null) : existing.project_id,
           'draft',
           dateCreatedVal,
           validUntilVal,
@@ -2406,7 +2659,7 @@ function updateQuote(id, data, lineItems) {
   try {
     db.run(
       `UPDATE quotes SET
-        client_id = ?, contact_id = ?, date_created = ?, valid_until = ?,
+        client_id = ?, contact_id = ?, project_id = ?, date_created = ?, valid_until = ?,
         subtotal = ?, discount_amount = ?, discount_type = ?,
         discount_value = ?, tax_rate = ?, tax_amount = ?, total = ?,
         currency = ?, exchange_rate = ?, notes = ?, terms = ?, updated_at = ?
@@ -2414,6 +2667,7 @@ function updateQuote(id, data, lineItems) {
       [
         data.client_id,
         data.contact_id !== undefined ? (data.contact_id || null) : existing.contact_id,
+        data.project_id !== undefined ? (data.project_id || null) : existing.project_id,
         dateCreatedVal,
         validUntilVal,
         Number(data.subtotal) || 0,
@@ -2484,6 +2738,7 @@ function getQuote(id) {
   quote.contact = quote.contact_id ? getContactById(quote.contact_id) : null;
   quote.version_history = getQuoteVersionHistory(id);
   quote.email_logs = getDocumentEmailLogs('quote', id);
+  quote.project = quote.project_id ? projectSummary(quote.project_id) : null;
   return quote;
 }
 
@@ -2496,8 +2751,16 @@ function listQuotes(opts) {
   return quotes.map((q) => {
     const client = getClient(q.client_id);
     q.client = client ? { id: client.id, name: client.name, company_name: client.company_name } : null;
+    q.project = q.project_id ? projectSummary(q.project_id) : null;
     return q;
   });
+}
+
+function projectSummary(projectId) {
+  const project = getProject(projectId);
+  return project
+    ? { id: project.id, name: project.name, client_id: project.client_id, status: project.status }
+    : null;
 }
 
 const ALLOWED_QUOTE_STATUSES = ['draft', 'sent', 'accepted', 'declined'];
@@ -2803,6 +3066,7 @@ function getInvoice(id) {
   invoice.contact = invoice.contact_id ? getContactById(invoice.contact_id) : null;
   invoice.recurring_profile = getRecurringProfileByInvoice(id);
   invoice.email_logs = getDocumentEmailLogs('invoice', id);
+  invoice.project = invoice.project_id ? projectSummary(invoice.project_id) : null;
 
   if (invoice.quote_id) {
     const q = rowToObject(db.exec('SELECT id, quote_number, total, currency, status FROM quotes WHERE id = ?', [invoice.quote_id]));
@@ -2911,19 +3175,20 @@ function duplicateInvoice(id) {
   try {
     db.run(
       `INSERT INTO invoices (
-         invoice_number, quote_id, client_id, contact_id, status,
+         invoice_number, quote_id, client_id, contact_id, project_id, status,
          date_created, date_due, date_sent,
          subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
          currency, exchange_rate,
          notes, terms,
          invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
          recurring_profile_id, is_recurring, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         null,
         source.client_id,
         source.contact_id || null,
+        source.project_id || null,
         'draft',
         today,
         dueDate,
@@ -3046,6 +3311,26 @@ function convertQuoteToInvoice(quoteId, overrides) {
     return { ok: false, errors: { status: 'Invalid invoice status.' } };
   }
 
+  // Project linkage: default to the quote's project; caller may override or clear.
+  let projectId = quote.project_id || null;
+  if (over.project_id !== undefined && over.project_id !== '') {
+    const overrideId = over.project_id === null || over.project_id === 0 ? null : Number(over.project_id);
+    if (overrideId === null) {
+      projectId = null;
+    } else if (!Number.isInteger(overrideId) || overrideId <= 0) {
+      return { ok: false, errors: { project_id: 'Selected project no longer exists.' } };
+    } else {
+      const proj = getProject(overrideId);
+      if (!proj) {
+        return { ok: false, errors: { project_id: 'Selected project no longer exists.' } };
+      }
+      if (Number(proj.client_id) !== Number(quote.client_id)) {
+        return { ok: false, errors: { project_id: 'Selected project does not belong to the quote’s client.' } };
+      }
+      projectId = overrideId;
+    }
+  }
+
   const invoiceNumber = nextInvoiceNumber();
   let invoiceId = null;
 
@@ -3081,17 +3366,18 @@ function convertQuoteToInvoice(quoteId, overrides) {
     try {
       db.run(
         `INSERT INTO invoices (
-          invoice_number, quote_id, client_id, contact_id, status, date_created, date_sent, date_due,
+          invoice_number, quote_id, client_id, contact_id, project_id, status, date_created, date_sent, date_due,
           subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
           currency, exchange_rate, notes, terms,
           invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           invoiceNumber,
           quoteId,
           quote.client_id,
           quote.contact_id || null,
+          projectId,
           status,
           toDateString(today),
           status === 'sent' ? now : null,
@@ -3163,17 +3449,18 @@ function convertQuoteToInvoice(quoteId, overrides) {
   try {
     db.run(
       `INSERT INTO invoices (
-        invoice_number, quote_id, client_id, contact_id, status, date_created, date_sent, date_due,
+        invoice_number, quote_id, client_id, contact_id, project_id, status, date_created, date_sent, date_due,
         subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
         currency, exchange_rate, notes, terms,
         invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         quoteId,
         quote.client_id,
         quote.contact_id || null,
+        projectId,
         status,
         toDateString(today),
         status === 'sent' ? now : null,
@@ -3303,17 +3590,18 @@ function createFinalInvoiceFromDeposit(depositInvoiceId, overrides) {
   try {
     db.run(
       `INSERT INTO invoices (
-        invoice_number, quote_id, client_id, contact_id, status, date_created, date_sent, date_due,
+        invoice_number, quote_id, client_id, contact_id, project_id, status, date_created, date_sent, date_due,
         subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
         currency, exchange_rate, notes, terms,
         invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         quote.id,
         quote.client_id,
         quote.contact_id || null,
+        quote.project_id || depositInv.project_id || null,
         status,
         toDateString(today),
         status === 'sent' ? now : null,
@@ -3418,6 +3706,7 @@ function listInvoices() {
     refreshInvoiceBalance(inv);
     const client = getClient(inv.client_id);
     inv.client = client ? { id: client.id, name: client.name, company_name: client.company_name } : null;
+    inv.project = inv.project_id ? projectSummary(inv.project_id) : null;
     return inv;
   });
 }
@@ -4623,17 +4912,18 @@ function generateNextRecurringInvoice(profileId, forceDate) {
   try {
     db.run(
       `INSERT INTO invoices (
-         invoice_number, quote_id, client_id, contact_id, status,
+         invoice_number, quote_id, client_id, contact_id, project_id, status,
          date_created, date_due, date_sent,
          subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
          currency, exchange_rate,
          notes, terms, recurring_profile_id, is_recurring, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         null,
         source.client_id,
         source.contact_id || null,
+        source.project_id || null,
         'draft',
         issueDate,
         dueDate,
@@ -5631,6 +5921,14 @@ module.exports = {
   updateClientNote,
   deleteClientNote,
   getClientOverview,
+  PROJECT_STATUSES,
+  listProjects,
+  getProject,
+  addProject,
+  updateProject,
+  archiveProject,
+  deleteProject,
+  countProjectHistory,
   createQuote,
   duplicateQuote,
   updateQuote,

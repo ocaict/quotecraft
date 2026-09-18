@@ -67,6 +67,14 @@ const {
   updateClientNote,
   deleteClientNote,
   getClientOverview,
+  PROJECT_STATUSES,
+  listProjects,
+  getProject,
+  addProject,
+  updateProject,
+  archiveProject,
+  deleteProject,
+  countProjectHistory,
   validateBackupBuffer,
   restoreDatabaseFromBuffer,
   PAYMENT_METHODS,
@@ -448,7 +456,7 @@ function registerIpcHandlers() {
     const client = getClient(id);
     const history = countClientHistory(id);
 
-    if (history.quoteCount > 0 || history.invoiceCount > 0) {
+    if (history.quoteCount > 0 || history.invoiceCount > 0 || history.projectCount > 0) {
       return {
         ok: false,
         blocked: true,
@@ -474,6 +482,72 @@ function registerIpcHandlers() {
       return { ok: true, client: archived };
     } catch (err) {
       return { ok: false, errors: { general: `Failed to archive client: ${err.message}` } };
+    }
+  });
+
+  // ---------- Projects (Jobs) ----------
+
+  ipcMain.handle('projects:list', async (event, opts) => {
+    try {
+      const projects = listProjects(opts || {});
+      return { ok: true, projects };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to load projects: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('projects:get', async (event, id) => {
+    try {
+      const project = getProject(id);
+      if (!project) {
+        return { ok: false, errors: { general: 'Project not found.' } };
+      }
+      return { ok: true, project };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to load project: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('projects:add', async (event, project) => {
+    const result = addProject(project);
+    return result;
+  });
+
+  ipcMain.handle('projects:update', async (event, id, project) => {
+    const result = updateProject(id, project);
+    return result;
+  });
+
+  ipcMain.handle('projects:tryDelete', async (event, id) => {
+    const project = getProject(id);
+    const history = countProjectHistory(id);
+
+    if (history.quoteCount > 0 || history.invoiceCount > 0) {
+      return {
+        ok: false,
+        blocked: true,
+        name: project ? project.name : 'Project',
+        ...history,
+      };
+    }
+
+    try {
+      const result = deleteProject(id);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to delete project: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('projects:archive', async (event, id) => {
+    try {
+      const archived = archiveProject(id);
+      if (!archived) {
+        return { ok: false, errors: { general: 'Project not found.' } };
+      }
+      return { ok: true, project: archived };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to archive project: ${err.message}` } };
     }
   });
 

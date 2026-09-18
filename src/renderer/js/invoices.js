@@ -562,6 +562,10 @@
     document.getElementById('invoiceDetailDate').textContent = window.QuoteCraftUtils.formatDate(inv.date_created);
     document.getElementById('invoiceDetailDue').textContent = window.QuoteCraftUtils.formatDate(inv.date_due);
     document.getElementById('invoiceDetailQuote').textContent = inv.quote_id ? '#' + inv.quote_id : '—';
+    const invoiceDetailProjectEl = document.getElementById('invoiceDetailProject');
+    if (invoiceDetailProjectEl) {
+      invoiceDetailProjectEl.textContent = inv.project ? inv.project.name : 'No project';
+    }
 
     const invCurr = inv.currency || currencyCode;
     currentInvoiceCurrency = invCurr;

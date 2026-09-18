@@ -34,6 +34,7 @@
     <nav id="nav">
       <a href="#" data-page="dashboard" class="active">Dashboard</a>
       <a href="#" data-page="clients">Clients</a>
+      <a href="#" data-page="projects" class="nav-projects">Projects</a>
       <a href="#" data-page="items">Items</a>
       <a href="#" data-page="quotes">Quotes</a>
       <a href="#" data-page="invoices">Invoices</a>
@@ -363,6 +364,42 @@
       </div>
     </section>
 
+    <section id="page-projects" class="page">
+      <div class="page-header projects-header">
+        <div>
+          <h1>Projects</h1>
+          <p class="subtitle">Group quotes, invoices, and payments under client jobs. Each project belongs to one client.</p>
+        </div>
+        <button type="button" id="addProjectBtn" class="btn btn-primary">+ New Project</button>
+      </div>
+
+      <div class="projects-toolbar">
+        <input type="text" id="projectSearch" class="search-input" placeholder="Search projects, jobs, descriptions…">
+        <div class="sort-control">
+          <label for="projectClientFilter">Client</label>
+          <select id="projectClientFilter">
+            <option value="">All clients</option>
+          </select>
+        </div>
+        <div class="sort-control">
+          <label for="projectStatusFilter">Status</label>
+          <select id="projectStatusFilter">
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="on_hold">On hold</option>
+            <option value="completed">Completed</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card projects-table-card">
+        <div id="projectList" class="projects-list">
+          <p class="placeholder">Loading projects…</p>
+        </div>
+      </div>
+    </section>
+
     <section id="page-items" class="page">
       <div class="page-header items-header">
         <div>
@@ -457,6 +494,16 @@
               <div class="field">
                 <label for="quoteClientSearch">Search clients</label>
                 <input type="text" id="quoteClientSearch" placeholder="Type to filter…" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="quoteProject">Project / job (optional)</label>
+                <select id="quoteProject" name="project_id">
+                  <option value="">No project / job</option>
+                </select>
+                <span class="hint">Groups this quote under a project for the selected client. Changing the client clears the selection.</span>
               </div>
             </div>
 
@@ -648,6 +695,10 @@
               <span class="detail-label">Currency</span>
               <span id="detailCurrency" class="detail-value badge">—</span>
             </div>
+            <div class="detail-field">
+              <span class="detail-label">Project</span>
+              <span id="detailProject" class="detail-value">—</span>
+            </div>
             <div class="detail-field" id="quoteDetailSentRow">
               <span class="detail-label">Last sent</span>
               <span id="quoteDetailSent" class="detail-value">—</span>
@@ -832,6 +883,10 @@
             <div class="detail-field">
               <span class="detail-label">Source quote</span>
               <span id="invoiceDetailQuote" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Project</span>
+              <span id="invoiceDetailProject" class="detail-value">—</span>
             </div>
             <div class="detail-field">
               <span class="detail-label">Currency</span>
@@ -2087,6 +2142,81 @@
     </div>
   </div>
 
+  <div id="projectDeleteDialog" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Cannot delete this project</h2>
+        <button type="button" class="modal-close" id="projectDeleteClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="projectDeleteMessage"></p>
+        <p class="hint">Projects with linked quotes or invoices are kept for history. Archive instead to hide it from the active list while preserving the records.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="projectDeleteCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="projectDeleteArchive">Archive project</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="projectModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="projectModalTitle">Add Project</h2>
+        <button type="button" class="modal-close" id="projectModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="projectForm" class="modal-form" novalidate>
+        <input type="hidden" id="projectId" name="id">
+        <div class="field field-required">
+          <label for="projectName">Project / job name</label>
+          <input type="text" id="projectName" name="name" placeholder="e.g. Website redesign, Annual audit" autocomplete="off">
+          <span class="field-error" data-error-for="name"></span>
+        </div>
+
+        <div class="field field-required">
+          <label for="projectClient">Client</label>
+          <select id="projectClient" name="client_id">
+            <option value="">Select a client…</option>
+          </select>
+          <span class="field-error" data-error-for="client_id"></span>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="projectStatus">Status</label>
+            <select id="projectStatus" name="status">
+              <option value="active">Active</option>
+              <option value="on_hold">On hold</option>
+              <option value="completed">Completed</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+          <div class="field field-required">
+            <label for="projectStartDate">Start date</label>
+            <input type="date" id="projectStartDate" name="start_date">
+            <span class="field-error" data-error-for="start_date"></span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="projectEndDate">End date (optional)</label>
+          <input type="date" id="projectEndDate" name="end_date">
+          <span class="field-error" data-error-for="end_date"></span>
+        </div>
+
+        <div class="field">
+          <label for="projectDescription">Description (optional)</label>
+          <textarea id="projectDescription" name="description" rows="3" placeholder="Scope, objectives, jobs behind this project…"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="projectCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="projectSubmitBtn">Save project</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="expenseModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -2322,6 +2452,14 @@
               <strong id="depositSummaryRemainder">—</strong>
             </div>
           </div>
+        </div>
+
+        <div class="field">
+          <label for="convertProject">Project / job (optional)</label>
+          <select id="convertProject" name="project_id">
+            <option value="">No project / job</option>
+          </select>
+          <span class="hint">Group this invoice under a project for this quote's client. Defaults to the quote's project.</span>
         </div>
 
         <div class="modal-actions">
@@ -2918,6 +3056,7 @@
   <script src="js/utils.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/clients.js"></script>
+  <script src="js/projects.js"></script>
   <script src="js/items.js"></script>
   <script src="js/document-email.js"></script>
   <script src="js/quotes.js"></script>

@@ -12,6 +12,7 @@
   const clientSelect = document.getElementById('quoteClient');
   const clientSearch = document.getElementById('quoteClientSearch');
   const quoteContactSelect = document.getElementById('quoteContact');
+  const quoteProjectSelect = document.getElementById('quoteProject');
   const itemsBody = document.getElementById('itemsBody');
   const addLineItemBtn = document.getElementById('addLineItemBtn');
   const quoteLibrarySelect = document.getElementById('quoteLibrarySelect');
@@ -90,6 +91,7 @@
   const convertDepositType = document.getElementById('convertDepositType');
   const convertDepositValue = document.getElementById('convertDepositValue');
   const convertDepositValueLabel = document.getElementById('convertDepositValueLabel');
+  const convertProjectSelect = document.getElementById('convertProject');
   const depositSummaryQuoteTotal = document.getElementById('depositSummaryQuoteTotal');
   const depositSummaryDueNow = document.getElementById('depositSummaryDueNow');
   const depositSummaryRemainder = document.getElementById('depositSummaryRemainder');
@@ -413,9 +415,7 @@
   // ---------- Client Contacts ----------
   async function populateContactsForClient(clientId, selectedContactId) {
     if (!quoteContactSelect) return;
-    quoteContactSelect.innerHTML = '<option value="">Default / No specific contact</option>';
-
-    if (!clientId) return;
+    quoteContactSelect.innerHTML = '<option value="">Default / No specific contact</option>';    if (!clientId) return;
 
     try {
       const res = await window.electronAPI.listContacts(clientId);
@@ -441,6 +441,38 @@
         } else if (res.contacts.length > 0) {
           // Default to first contact if none marked primary
           quoteContactSelect.value = String(res.contacts[0].id);
+        }
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  // ---------- Client Projects ----------
+  async function populateProjectsForClient(clientId, selectedProjectId, selectEl) {
+    const target = selectEl || quoteProjectSelect;
+    if (!target) return;
+    target.innerHTML = '<option value="">No project / job</option>';
+
+    if (!clientId) return;
+
+    try {
+      const res = await window.electronAPI.listProjects({ client_id: Number(clientId) });
+      if (res.ok && Array.isArray(res.projects) && res.projects.length > 0) {
+        res.projects.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          const holdTag =
+            p.status === 'on_hold' ? ' (On hold)' :
+            p.status === 'completed' ? ' (Completed)' :
+            p.status === 'archived' ? ' (Archived)' : '';
+          opt.textContent = p.name + holdTag;
+          target.appendChild(opt);
+        });
+
+        const selected = selectedProjectId !== undefined && selectedProjectId !== null ? String(selectedProjectId) : '';
+        if (selected && Array.from(target.options).some((o) => o.value === selected)) {
+          target.value = selected;
         }
       }
     } catch (e) {
@@ -748,7 +780,8 @@
 
     populateClientSelect('');
     clientSelect.value = String(quote.client_id);
-    await populateContactsForClient(quote.client_id, quote.contact_id);
+    await     populateContactsForClient(quote.client_id, quote.contact_id);
+    populateProjectsForClient(quote.client_id, quote.project_id);
 
     if (form.elements['date_created']) form.elements['date_created'].value = quote.date_created || '';
     if (form.elements['valid_until']) form.elements['valid_until'].value = quote.valid_until || '';
@@ -908,6 +941,7 @@
     return {
       data: {
         client_id: clientSelect.value,
+        project_id: quoteProjectSelect && quoteProjectSelect.value ? Number(quoteProjectSelect.value) : null,
         contact_id: quoteContactSelect && quoteContactSelect.value ? Number(quoteContactSelect.value) : null,
         date_created: form.elements['date_created'].value,
         valid_until: form.elements['valid_until'].value,
@@ -1228,6 +1262,10 @@
       const cObj = (window.CURRENCIES || []).find(c => c.code === currency);
       detailCurrencyEl.textContent = cObj ? `${currency} (${cObj.symbol})` : currency;
     }
+    const detailProjectEl = document.getElementById('detailProject');
+    if (detailProjectEl) {
+      detailProjectEl.textContent = q.project ? q.project.name : 'No project';
+    }
     const itemsBody = document.getElementById('detailItemsBody');
     itemsBody.innerHTML = '';
     for (const item of q.line_items || []) {
@@ -1452,6 +1490,9 @@
       convertDepositValue.value = '30';
       updateConvertDepositPreview();
 
+      // Project selector: this quote's client's projects, defaulting to the quote's project.
+      await populateProjectsForClient(currentConvertQuote.client_id, currentConvertQuote.project_id, convertProjectSelect);
+
       convertQuoteModal.classList.remove('hidden');
     } catch (e) {
       toast('Error opening convert dialog: ' + e.message, 'error');
@@ -1493,6 +1534,7 @@
         conversion_type: conversionType,
         deposit_type: depositType,
         deposit_value: depositValue,
+        project_id: convertProjectSelect && convertProjectSelect.value ? Number(convertProjectSelect.value) : null,
       });
 
       if (res.ok) {
@@ -1566,6 +1608,7 @@
   clientSelect.addEventListener('change', () => {
     clearFieldError('client_id');
     populateContactsForClient(clientSelect.value);
+    populateProjectsForClient(clientSelect.value);
   });
 
   discountTypeSelect.addEventListener('change', () => {
