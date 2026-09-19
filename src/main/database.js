@@ -6635,6 +6635,210 @@ function getClientProfitabilityReport({ startDate, endDate, sort = 'collected_de
   };
 }
 
+// ---------- Client Statement (running account summary) ----------
+
+// Builds a chronological statement of account for one client over an inclusive
+// date range, computed purely from invoices, payments and credit notes (no
+// dedicated statement store). Amounts are normalized to the company's
+// reporting currency using each invoice's exchange_rate. Balance math mirrors
+// the rest of the app: balance = invoices - payments + credit notes (an issued
+// credit note raises what is owed, because money was refunded).
+function getClientStatement({ client_id, startDate, endDate } = {}) {
+  const clientId = Number(client_id);
+  if (!Number.isInteger(clientId) || clientId <= 0) {
+    return { ok: false, errors: { client_id: 'Please select a client.' } };
+  }
+  const client = getClient(clientId);
+  if (!client) {
+    return { ok: false, errors: { client_id: 'Selected client no longer exists.' } };
+  }
+  if (!isValidDateString(startDate) || !isValidDateString(endDate)) {
+    return { ok: false, errors: { range: 'Please choose a valid start and end date.' } };
+  }
+  if (startDate > endDate) {
+    return { ok: false, errors: { range: 'Start date cannot be after the end date.' } };
+  }
+
+  const profile = getCompanyProfile();
+  const reportingCurrency = (profile && (profile.reporting_currency || profile.default_currency)) || 'USD';
+
+  function execRows(sql, params = []) {
+    const res = db.exec(sql, params);
+    if (!res.length || !res[0].values.length) return [];
+    const cols = res[0].columns;
+    return res[0].values.map((row) => {
+      const obj = {};
+      cols.forEach((c, i) => { obj[c] = row[i]; });
+      return obj;
+    });
+  }
+
+  const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+  let hasForeignCurrency = false;
+
+  function normalize(amount, rate, currency) {
+    const r = Number(rate) || 1.0;
+    if (r !== 1.0 || (currency && currency !== reportingCurrency)) hasForeignCurrency = true;
+    return round2((Number(amount) || 0) * r);
+  }
+
+  // Non-draft invoices only (drafts have not been issued to the client).
+  const allInvoices = execRows(
+    `SELECT id, invoice_number, date_created, total, currency,
+            COALESCE(exchange_rate, 1.0) AS rate
+       FROM invoices
+      WHERE client_id = ? AND status NOT IN ('draft')
+      ORDER BY date_created ASC, id ASC`,
+    [clientId]
+  );
+
+  const allPayments = execRows(
+    `SELECT p.id, p.invoice_id, p.amount, p.payment_date, p.payment_method,
+            p.reference_number, i.invoice_number, i.currency,
+            COALESCE(i.exchange_rate, 1.0) AS rate
+       FROM payments p
+       JOIN invoices i ON i.id = p.invoice_id
+      WHERE i.client_id = ? AND i.status NOT IN ('draft')
+      ORDER BY p.payment_date ASC, p.id ASC`,
+    [clientId]
+  );
+
+  const allCredits = execRows(
+    `SELECT cn.id, cn.credit_note_number, cn.invoice_id, cn.amount, cn.reason,
+            cn.date_created, i.invoice_number, i.currency,
+            COALESCE(i.exchange_rate, 1.0) AS rate
+       FROM credit_notes cn
+       JOIN invoices i ON i.id = cn.invoice_id
+      WHERE cn.client_id = ? AND i.status NOT IN ('draft')
+      ORDER BY cn.date_created ASC, cn.id ASC`,
+    [clientId]
+  );
+
+  let openingCharges = 0;
+  let openingPayments = 0;
+  let openingCredits = 0;
+  const rows = [];
+
+  for (const inv of allInvoices) {
+    const amount = normalize(inv.total, inv.rate, inv.currency);
+    const date = String(inv.date_created);
+    if (date < startDate) {
+      openingCharges += amount;
+    } else if (date <= endDate) {
+      rows.push({
+        date: inv.date_created,
+        type: 'invoice',
+        reference: inv.invoice_number || '',
+        description: 'Invoice ' + (inv.invoice_number || ''),
+        charge: amount,
+        credit: 0,
+        invoice_id: inv.id,
+        payment_id: null,
+        credit_note_id: null,
+      });
+    }
+  }
+
+  for (const pay of allPayments) {
+    const amount = normalize(pay.amount, pay.rate, pay.currency);
+    const date = String(pay.payment_date);
+    if (date < startDate) {
+      openingPayments += amount;
+    } else if (date <= endDate) {
+      const ref = pay.invoice_number || '';
+      const method = pay.payment_method ? ' · ' + pay.payment_method : '';
+      rows.push({
+        date: pay.payment_date,
+        type: 'payment',
+        reference: ref,
+        description: 'Payment received' + (ref ? ' — ' + ref : '') + method,
+        charge: 0,
+        credit: amount,
+        invoice_id: pay.invoice_id,
+        payment_id: pay.id,
+        credit_note_id: null,
+      });
+    }
+  }
+
+  for (const cn of allCredits) {
+    const amount = normalize(cn.amount, cn.rate, cn.currency);
+    const date = String(cn.date_created);
+    if (date < startDate) {
+      openingCredits += amount;
+    } else if (date <= endDate) {
+      const ref = cn.credit_note_number || '';
+      rows.push({
+        date: cn.date_created,
+        type: 'credit_note',
+        reference: ref,
+        description: 'Credit note ' + ref + (cn.invoice_number ? ' — ' + cn.invoice_number : ''),
+        charge: amount,
+        credit: 0,
+        invoice_id: cn.invoice_id,
+        payment_id: null,
+        credit_note_id: cn.id,
+      });
+    }
+  }
+
+  const openingBalance = round2(openingCharges - openingPayments + openingCredits);
+
+  // Deterministic chronological order; on the same day charges are shown
+  // before payments before credit notes.
+  const TYPE_ORDER = { invoice: 0, payment: 1, credit_note: 2 };
+  rows.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    const t = TYPE_ORDER[a.type] - TYPE_ORDER[b.type];
+    if (t !== 0) return t;
+    const aid = a.invoice_id || a.payment_id || a.credit_note_id || 0;
+    const bid = b.invoice_id || b.payment_id || b.credit_note_id || 0;
+    return aid - bid;
+  });
+
+  let balance = openingBalance;
+  for (const r of rows) {
+    balance = round2(balance + r.charge - r.credit);
+    r.balance = balance;
+  }
+
+  const totalCharges = round2(rows.reduce((s, r) => s + r.charge, 0));
+  const totalCredits = round2(rows.reduce((s, r) => s + r.credit, 0));
+  const totalInvoiced = round2(rows.filter((r) => r.type === 'invoice').reduce((s, r) => s + r.charge, 0));
+  const totalCreditNotes = round2(rows.filter((r) => r.type === 'credit_note').reduce((s, r) => s + r.charge, 0));
+
+  return {
+    ok: true,
+    client: {
+      id: client.id,
+      name: client.name,
+      company_name: client.company_name || '',
+      email: client.email || '',
+      phone: client.phone || '',
+    },
+    startDate,
+    endDate,
+    currency: reportingCurrency,
+    hasForeignCurrency,
+    openingBalance,
+    closingBalance: balance,
+    rows,
+    totals: {
+      invoiced: totalInvoiced,
+      paid: totalCredits,
+      credited: totalCreditNotes,
+      charges: totalCharges,
+      credits: totalCredits,
+      netChange: round2(totalCharges - totalCredits),
+    },
+    counts: {
+      invoices: rows.filter((r) => r.type === 'invoice').length,
+      payments: rows.filter((r) => r.type === 'payment').length,
+      creditNotes: rows.filter((r) => r.type === 'credit_note').length,
+    },
+  };
+}
+
 // ---------- App Lock (PIN) ----------
 
 function getAppLockRow() {
@@ -6936,6 +7140,7 @@ module.exports = {
   logReminderSent,
   getRevenueReport,
   getClientProfitabilityReport,
+  getClientStatement,
   getAppLockSettings,
   setAppLockPin,
   verifyAppLockPin,

@@ -50,6 +50,7 @@
   const overviewBackBtn = document.getElementById('overviewBackBtn');
   const overviewEditBtn = document.getElementById('overviewEditBtn');
   const overviewNewQuoteBtn = document.getElementById('overviewNewQuoteBtn');
+  const overviewStatementBtn = document.getElementById('overviewStatementBtn');
 
   let clients = [];
   let searchTerm = '';
@@ -1163,6 +1164,16 @@
             clientSel.dispatchEvent(new Event('change'));
           }
         }, 100);
+      }, 50);
+    });
+  }
+
+  if (overviewStatementBtn) {
+    overviewStatementBtn.addEventListener('click', () => {
+      if (!currentOverviewId) return;
+      window.QuoteCraftUtils.goToPage('client-statements');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('qc-open-client-statement', { detail: currentOverviewId }));
       }, 50);
     });
   }

@@ -1,0 +1,450 @@
+/* Client Statements Styles */
+
+/* ─── Page Header ─────────────────────────────────────────── */
+.cs-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cs-header-left h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-heading, #e2e8f0);
+  margin: 0 0 4px;
+}
+
+.cs-header-left p {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 620px;
+}
+
+.cs-header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ─── Filter Bar ──────────────────────────────────────────── */
+.cs-filter-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.cs-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cs-filter-client {
+  min-width: 260px;
+  flex: 1 1 260px;
+}
+
+.cs-filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.cs-client-select,
+.cs-preset-select,
+.cs-date-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.18s;
+}
+
+.cs-client-select:focus,
+.cs-preset-select:focus,
+.cs-date-input:focus {
+  border-color: var(--accent);
+}
+
+/* ─── Placeholder ─────────────────────────────────────────── */
+.cs-placeholder {
+  padding: 72px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.cs-placeholder-icon {
+  font-size: 42px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.cs-placeholder.hidden {
+  display: none;
+}
+
+/* ─── Statement Document Header ───────────────────────────── */
+.cs-doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 20px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+}
+
+.cs-doc-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.cs-doc-client h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-heading, #e2e8f0);
+  margin: 0 0 4px;
+}
+
+.cs-client-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.cs-doc-period {
+  text-align: right;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* ─── Summary Chips ───────────────────────────────────────── */
+.cs-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1100px) {
+  .cs-summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .cs-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.cs-summary-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.cs-summary-chip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--border);
+}
+
+.cs-summary-chip.opening::before { background: linear-gradient(90deg, #64748b, #94a3b8); }
+.cs-summary-chip.invoiced::before { background: linear-gradient(90deg, #6366f1, #818cf8); }
+.cs-summary-chip.paid::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.cs-summary-chip.credited::before { background: linear-gradient(90deg, #f43f5e, #fb7185); }
+.cs-summary-chip.closing::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+
+.cs-summary-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.cs-summary-value {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-heading, #e2e8f0);
+  letter-spacing: -0.01em;
+}
+
+.cs-summary-chip.paid .cs-summary-value { color: #34d399; }
+.cs-summary-chip.credited .cs-summary-value { color: #fb7185; }
+.cs-summary-chip.closing .cs-summary-value { color: #fbbf24; }
+
+/* ─── Foreign Currency Notice ─────────────────────────────── */
+.cs-fx-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.cs-fx-notice.hidden {
+  display: none;
+}
+
+.cs-fx-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+/* ─── Statement Table ─────────────────────────────────────── */
+.cs-table-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 28px;
+}
+
+.cs-table-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cs-table-header h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-heading, #e2e8f0);
+  margin: 0;
+}
+
+.cs-table-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cs-table-wrap {
+  overflow-x: auto;
+}
+
+.cs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.cs-table th {
+  background: var(--bg, #0f172a);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.cs-table th.num,
+.cs-table td.num {
+  text-align: right;
+}
+
+.cs-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.cs-table tbody tr {
+  transition: background 0.15s;
+}
+
+.cs-table tbody tr.cs-clickable {
+  cursor: pointer;
+}
+
+.cs-table tbody tr:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.03));
+}
+
+.cs-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.cs-table tfoot td {
+  background: var(--bg, #0f172a);
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+  color: var(--text-heading, #e2e8f0);
+  padding: 13px 16px;
+}
+
+.cs-empty-state {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.cs-empty-icon {
+  font-size: 34px;
+  margin-bottom: 10px;
+  opacity: 0.6;
+}
+
+.cs-cell-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 2px;
+}
+
+.cs-amount-charge {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.cs-amount-credit {
+  color: #34d399;
+  font-weight: 600;
+}
+
+.cs-balance-pos {
+  font-weight: 700;
+  color: var(--text-heading, #e2e8f0);
+}
+
+.cs-balance-zero {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Type badges */
+.cs-type-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.cs-type-badge.invoice {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.cs-type-badge.payment {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.cs-type-badge.credit_note {
+  background: rgba(244, 63, 94, 0.15);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.cs-bring-forward td {
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ─── Print Styles ────────────────────────────────────────── */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .sidebar,
+  .cs-filter-card,
+  .cs-header-actions,
+  .cs-placeholder {
+    display: none !important;
+  }
+
+  .main {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .cs-doc-header,
+  .cs-summary-chip,
+  .cs-table-card {
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .cs-header-left h1,
+  .cs-doc-client h2,
+  .cs-summary-value,
+  .cs-table th,
+  .cs-table td,
+  .cs-table tfoot td {
+    color: #000 !important;
+  }
+
+  .cs-table th {
+    background: #f1f5f9 !important;
+  }
+
+  .cs-type-badge {
+    border: 1px solid #999 !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  .cs-table tbody tr {
+    page-break-inside: avoid;
+  }
+}

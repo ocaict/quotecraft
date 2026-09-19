@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="styles/email-settings.css">
   <link rel="stylesheet" href="styles/revenue-report.css">
   <link rel="stylesheet" href="styles/client-profitability.css">
+  <link rel="stylesheet" href="styles/client-statements.css">
   <link rel="stylesheet" href="styles/audit-log.css">
   <link rel="stylesheet" href="styles/app-lock.css">
   <script src="js/theme.js"></script>
@@ -48,6 +49,7 @@
       <a href="#" data-page="email-settings">Email Settings</a>
       <a href="#" data-page="revenue-report">Revenue Report</a>
       <a href="#" data-page="client-profitability">Client Profitability</a>
+      <a href="#" data-page="client-statements">Client Statements</a>
       <a href="#" data-page="audit-log">Audit Log</a>
     </nav>
   </aside>
@@ -213,6 +215,7 @@
           </div>
           <div class="detail-actions">
             <button type="button" id="overviewNewQuoteBtn" class="btn btn-primary">+ New Quote</button>
+            <button type="button" id="overviewStatementBtn" class="btn btn-secondary">Statement</button>
             <button type="button" id="overviewEditBtn" class="btn btn-secondary">Edit Client</button>
             <button type="button" id="overviewBackBtn" class="btn btn-secondary">Back to clients</button>
           </div>
@@ -3391,6 +3394,123 @@
       </div>
     </section>
 
+    <!-- Client Statements -->
+    <section id="page-client-statements" class="page">
+      <div class="cs-header-row">
+        <div class="cs-header-left">
+          <h1>Client Statements</h1>
+          <p>Generate a running statement of account — invoices, payments and credit notes with a live balance — for any client and date range.</p>
+        </div>
+        <div class="cs-header-actions">
+          <button type="button" class="btn btn-secondary btn-small" id="csPrintBtn">🖨️ Print</button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="cs-filter-card">
+        <div class="cs-filter-group cs-filter-client">
+          <label for="csClientSelect">Client</label>
+          <select id="csClientSelect" class="cs-client-select">
+            <option value="">Select a client…</option>
+          </select>
+        </div>
+        <div class="cs-filter-group">
+          <label for="csPresetSelect">Date Range</label>
+          <select id="csPresetSelect" class="cs-preset-select">
+            <option value="this_year">This Year</option>
+            <option value="last_year">Last Year</option>
+            <option value="last_12_months">Last 12 Months</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_month">This Month</option>
+            <option value="all_time">All Time</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+        <div class="cs-filter-group">
+          <label for="csStartDate">Start Date</label>
+          <input type="date" id="csStartDate" class="cs-date-input">
+        </div>
+        <div class="cs-filter-group">
+          <label for="csEndDate">End Date</label>
+          <input type="date" id="csEndDate" class="cs-date-input">
+        </div>
+      </div>
+
+      <!-- Placeholder until a client is selected -->
+      <div id="csPlaceholder" class="cs-placeholder">
+        <div class="cs-placeholder-icon">📄</div>
+        <div>Select a client to generate their statement of account.</div>
+      </div>
+
+      <!-- Statement -->
+      <div id="csStatement" class="hidden">
+        <div class="cs-doc-header">
+          <div class="cs-doc-client">
+            <div class="cs-doc-eyebrow">Statement of Account</div>
+            <h2 id="csClientName">—</h2>
+            <div id="csClientMeta" class="cs-client-meta">—</div>
+          </div>
+          <div class="cs-doc-period">
+            <div class="cs-doc-eyebrow">Statement Period</div>
+            <div id="csPeriodLabel">—</div>
+            <div class="cs-cell-sub">Currency: <strong id="csCurrencyBadge">USD</strong></div>
+          </div>
+        </div>
+
+        <div class="cs-summary-grid">
+          <div class="cs-summary-chip opening">
+            <span class="cs-summary-label">Opening Balance</span>
+            <span class="cs-summary-value" id="csOpeningBalance">$0.00</span>
+          </div>
+          <div class="cs-summary-chip invoiced">
+            <span class="cs-summary-label">Invoiced</span>
+            <span class="cs-summary-value" id="csTotalInvoiced">$0.00</span>
+          </div>
+          <div class="cs-summary-chip paid">
+            <span class="cs-summary-label">Paid</span>
+            <span class="cs-summary-value" id="csTotalPaid">$0.00</span>
+          </div>
+          <div class="cs-summary-chip credited">
+            <span class="cs-summary-label">Credit Notes</span>
+            <span class="cs-summary-value" id="csTotalCredited">$0.00</span>
+          </div>
+          <div class="cs-summary-chip closing">
+            <span class="cs-summary-label">Closing Balance</span>
+            <span class="cs-summary-value" id="csClosingBalance">$0.00</span>
+          </div>
+        </div>
+
+        <div id="csFxNotice" class="cs-fx-notice hidden">
+          <span class="cs-fx-icon">💱</span>
+          <span>Amounts are normalized to base reporting currency (<strong id="csCurrencyBadgeFx">USD</strong>) using stored invoice exchange rates.</span>
+        </div>
+
+        <div class="cs-table-card">
+          <div class="cs-table-header">
+            <h2>Transaction History</h2>
+            <span class="cs-table-count" id="csTableCount">0 entries</span>
+          </div>
+          <div class="cs-table-wrap">
+            <table class="cs-table">
+              <thead>
+                <tr>
+                  <th style="width: 100px;">Date</th>
+                  <th style="width: 110px;">Type</th>
+                  <th>Reference</th>
+                  <th>Description</th>
+                  <th class="num">Charge</th>
+                  <th class="num">Credit</th>
+                  <th class="num">Balance</th>
+                </tr>
+              </thead>
+              <tbody id="csTableBody"></tbody>
+              <tfoot id="csTableFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Audit Log -->
     <section id="page-audit-log" class="page">
       <div class="page-header">
@@ -3511,6 +3631,7 @@
   <script src="js/email-settings.js"></script>
   <script src="js/revenue-report.js"></script>
   <script src="js/client-profitability.js"></script>
+  <script src="js/client-statements.js"></script>
   <script src="js/audit-log.js"></script>
   <script src="js/shortcuts.js"></script>
   <script src="js/app-lock.js"></script>

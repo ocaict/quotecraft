@@ -110,6 +110,7 @@ const {
   logReminderSent,
   getRevenueReport,
   getClientProfitabilityReport,
+  getClientStatement,
   getAppLockSettings,
   setAppLockPin,
   verifyAppLockPin,
@@ -1905,6 +1906,15 @@ function registerIpcHandlers() {
       return { ok: true, report };
     } catch (err) {
       return { ok: false, error: err.message };
+    }
+  });
+
+  // ---------- Client Statement ----------
+  ipcMain.handle('reports:clientStatement', async (event, filter) => {
+    try {
+      return getClientStatement(filter || {});
+    } catch (err) {
+      return { ok: false, errors: { general: err.message } };
     }
   });
 
