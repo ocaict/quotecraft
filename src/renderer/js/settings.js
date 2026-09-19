@@ -5,12 +5,24 @@
   // ---------- Theme (Appearance) ----------
   const themeInputs = document.querySelectorAll('input[name="themeMode"]');
   if (themeInputs.length && window.QuoteCraftTheme) {
-    const current = window.QuoteCraftTheme.getMode();
-    themeInputs.forEach((el) => {
-      el.checked = el.value === current;
-      el.addEventListener('change', () => {
-        if (el.checked) window.QuoteCraftTheme.setMode(el.value);
+    const syncThemeInputs = (activeMode) => {
+      themeInputs.forEach((el) => {
+        el.checked = el.value === activeMode;
       });
+    };
+
+    syncThemeInputs(window.QuoteCraftTheme.getMode());
+
+    themeInputs.forEach((el) => {
+      el.addEventListener('change', () => {
+        if (el.checked && el.value) {
+          window.QuoteCraftTheme.setMode(el.value);
+        }
+      });
+    });
+
+    document.addEventListener('themechange', (e) => {
+      syncThemeInputs(e.detail);
     });
   }
 
@@ -100,9 +112,22 @@
     }
     for (const key of Object.keys(form.elements)) {
       const el = form.elements[key];
-      if (el && el.name && el.name !== 'logo_path' && !isRadioGroup(el)) {
+      if (
+        el &&
+        el.name &&
+        el.name !== 'logo_path' &&
+        el.name !== 'themeMode' &&
+        el.type !== 'radio' &&
+        !isRadioGroup(el)
+      ) {
         el.value = data[el.name] !== undefined && data[el.name] !== null ? data[el.name] : '';
       }
+    }
+    if (window.QuoteCraftTheme) {
+      const activeMode = window.QuoteCraftTheme.getMode();
+      themeInputs.forEach((el) => {
+        el.checked = el.value === activeMode;
+      });
     }
     window.prepareCurrencySelect(currencySelect, data.default_currency || 'USD');
     if (reportingCurrencySelect) {
@@ -136,8 +161,14 @@
     const data = {};
     for (const key of Object.keys(form.elements)) {
       const el = form.elements[key];
-      // Skip radio groups (e.g. themeMode) — they are prefs, not company profile fields.
-      if (el && el.name && !isRadioGroup(el)) {
+      // Skip radio inputs (e.g. themeMode) — they are app preferences, not company profile database fields.
+      if (
+        el &&
+        el.name &&
+        el.name !== 'themeMode' &&
+        el.type !== 'radio' &&
+        !isRadioGroup(el)
+      ) {
         data[el.name] = el.value;
       }
     }

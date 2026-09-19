@@ -36,22 +36,99 @@
       <span>QuoteCraft</span>
     </div>
     <nav id="nav">
-      <a href="#" data-page="dashboard" class="active">Dashboard</a>
-      <a href="#" data-page="clients">Clients</a>
-      <a href="#" data-page="projects" class="nav-projects">Projects</a>
-      <a href="#" data-page="items">Items</a>
-      <a href="#" data-page="quotes">Quotes</a>
-      <a href="#" data-page="invoices">Invoices</a>
-      <a href="#" data-page="payments">Payments</a>
-      <a href="#" data-page="expenses">Expenses</a>
-      <a href="#" data-page="time-entries">Time Entries</a>
-      <a href="#" data-page="profit-loss">Profit &amp; Loss</a>
-      <a href="#" data-page="settings">Settings</a>
-      <a href="#" data-page="email-settings">Email Settings</a>
-      <a href="#" data-page="revenue-report">Revenue Report</a>
-      <a href="#" data-page="client-profitability">Client Profitability</a>
-      <a href="#" data-page="client-statements">Client Statements</a>
-      <a href="#" data-page="audit-log">Audit Log</a>
+      <!-- Overview -->
+      <div class="nav-group">
+        <div class="nav-group-title">Overview</div>
+        <a href="#" data-page="dashboard" class="active">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span class="nav-label">Dashboard</span>
+        </a>
+      </div>
+
+      <!-- Work & Clients -->
+      <div class="nav-group">
+        <div class="nav-group-title">Work &amp; Clients</div>
+        <a href="#" data-page="clients">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span class="nav-label">Clients</span>
+        </a>
+        <a href="#" data-page="projects">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="nav-label">Projects</span>
+        </a>
+        <a href="#" data-page="time-entries">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span class="nav-label">Time Entries</span>
+        </a>
+      </div>
+
+      <!-- Billing & Sales -->
+      <div class="nav-group">
+        <div class="nav-group-title">Billing &amp; Sales</div>
+        <a href="#" data-page="quotes">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          <span class="nav-label">Quotes</span>
+        </a>
+        <a href="#" data-page="invoices">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>
+          <span class="nav-label">Invoices</span>
+        </a>
+        <a href="#" data-page="payments">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          <span class="nav-label">Payments</span>
+        </a>
+        <a href="#" data-page="items">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          <span class="nav-label">Line Item Library</span>
+        </a>
+      </div>
+
+      <!-- Finances -->
+      <div class="nav-group">
+        <div class="nav-group-title">Finances</div>
+        <a href="#" data-page="expenses">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><circle cx="18" cy="14" r="2"/></svg>
+          <span class="nav-label">Expenses</span>
+        </a>
+      </div>
+
+      <!-- Reports & Analytics -->
+      <div class="nav-group">
+        <div class="nav-group-title">Reports &amp; Analytics</div>
+        <a href="#" data-page="revenue-report">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+          <span class="nav-label">Revenue Report</span>
+        </a>
+        <a href="#" data-page="client-profitability">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+          <span class="nav-label">Client Profitability</span>
+        </a>
+        <a href="#" data-page="profit-loss">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="m3 7 4 7H1l4-7z"/><path d="m15 11 4 7h-6l4-7z"/><path d="M5 7h14"/></svg>
+          <span class="nav-label">Profit &amp; Loss</span>
+        </a>
+        <a href="#" data-page="client-statements">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span class="nav-label">Client Statements</span>
+        </a>
+      </div>
+
+      <!-- Settings & System -->
+      <div class="nav-group">
+        <div class="nav-group-title">Settings &amp; System</div>
+        <a href="#" data-page="settings">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span class="nav-label">Company Profile</span>
+        </a>
+        <a href="#" data-page="email-settings">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <span class="nav-label">Email Configuration</span>
+        </a>
+        <a href="#" data-page="audit-log">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span class="nav-label">Audit Log</span>
+        </a>
+      </div>
     </nav>
   </aside>
 
@@ -1703,6 +1780,362 @@
       </div>
     </section>
 
+    <!-- ════════════════════════════════════════════════════ -->
+    <!-- Revenue Report Page                                  -->
+    <!-- ════════════════════════════════════════════════════ -->
+    <section id="page-revenue-report" class="page">
+      <div class="page-header rr-header-row">
+        <div class="rr-header-left">
+          <h1>Revenue Report</h1>
+          <p>Track total invoiced vs. collected revenue over time, normalised to your reporting currency.</p>
+        </div>
+        <div class="rr-header-actions">
+          <span id="rrCurrencyBadge" class="rr-currency-note">Reporting in USD</span>
+          <button type="button" class="btn btn-ghost" id="rrExportCsvBtn">⬇ Export CSV</button>
+          <button type="button" class="btn btn-ghost" id="rrPrintBtn">🖨 Print</button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="rr-filter-card">
+        <div class="rr-filter-group">
+          <label>Group by Period</label>
+          <div class="rr-period-pills">
+            <button type="button" class="rr-period-pill" data-period="week">Week</button>
+            <button type="button" class="rr-period-pill active" data-period="month">Month</button>
+            <button type="button" class="rr-period-pill" data-period="quarter">Quarter</button>
+            <button type="button" class="rr-period-pill" data-period="year">Year</button>
+          </div>
+        </div>
+        <div class="rr-filter-group">
+          <label for="rrPresetSelect">Date Preset</label>
+          <select id="rrPresetSelect" class="rr-preset-select">
+            <option value="this_year">This Year</option>
+            <option value="last_year">Last Year</option>
+            <option value="last_12_months">Last 12 Months</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_month">This Month</option>
+            <option value="all_time">All Time</option>
+            <option value="custom">Custom Range…</option>
+          </select>
+        </div>
+        <div class="rr-filter-group">
+          <label>Custom Date Range</label>
+          <div class="rr-date-range">
+            <input type="date" id="rrStartDate" class="rr-date-input" aria-label="Start date">
+            <span class="rr-date-sep">→</span>
+            <input type="date" id="rrEndDate" class="rr-date-input" aria-label="End date">
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="rr-kpi-grid">
+        <div class="rr-kpi-card invoiced">
+          <span class="rr-kpi-icon">📄</span>
+          <div class="rr-kpi-label">Total Invoiced</div>
+          <div class="rr-kpi-value" id="rrKpiInvoiced">—</div>
+          <div class="rr-kpi-sub" id="rrKpiInvoicedSub">0 invoices</div>
+        </div>
+        <div class="rr-kpi-card collected">
+          <span class="rr-kpi-icon">💳</span>
+          <div class="rr-kpi-label">Total Collected</div>
+          <div class="rr-kpi-value" id="rrKpiCollected">—</div>
+          <div class="rr-kpi-sub" id="rrKpiCollectedSub">0 payments</div>
+        </div>
+        <div class="rr-kpi-card uncollected">
+          <span class="rr-kpi-icon">⏳</span>
+          <div class="rr-kpi-label">Outstanding Balance</div>
+          <div class="rr-kpi-value" id="rrKpiUncollected">—</div>
+          <div class="rr-kpi-sub">Invoiced minus collected</div>
+        </div>
+        <div class="rr-kpi-card rate">
+          <span class="rr-kpi-icon">📊</span>
+          <div class="rr-kpi-label">Collection Rate</div>
+          <div class="rr-kpi-value" id="rrKpiRate">—</div>
+          <div class="rr-kpi-sub">% of invoiced revenue collected</div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="rr-chart-card">
+        <div class="rr-chart-header">
+          <span class="rr-chart-title">Invoiced vs. Collected by Period</span>
+          <div class="rr-chart-legend">
+            <div class="rr-legend-item"><span class="rr-legend-dot invoiced"></span> Total Invoiced</div>
+            <div class="rr-legend-item"><span class="rr-legend-dot collected"></span> Total Collected</div>
+          </div>
+        </div>
+        <div class="rr-chart-wrap" id="rrChartWrap">
+          <div class="rr-chart-empty">
+            <span class="rr-empty-icon">📊</span>
+            <p>Select a period to see your chart.</p>
+          </div>
+        </div>
+        <div id="rrFxNotice" class="rr-fx-notice" style="display:none;">
+          <span class="rr-fx-icon">ℹ️</span>
+          <span>Some invoices use foreign currencies. Amounts have been converted to your base reporting currency using each invoice's stored exchange rate.</span>
+        </div>
+      </div>
+
+      <!-- Breakdown Table -->
+      <div class="rr-table-card">
+        <div class="rr-table-header">
+          <span class="rr-table-title">Period Breakdown</span>
+        </div>
+        <div class="rr-table-wrap">
+          <table class="rr-table" id="rrTable">
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th class="num">Invoices</th>
+                <th class="num">Total Invoiced</th>
+                <th class="num">Payments</th>
+                <th class="num">Total Collected</th>
+                <th class="num">Outstanding</th>
+                <th class="num">Collection %</th>
+              </tr>
+            </thead>
+            <tbody id="rrTableBody"></tbody>
+            <tfoot id="rrTableFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Client Profitability Report -->
+    <section id="page-client-profitability" class="page">
+      <div class="cp-header-row">
+        <div class="cp-header-left">
+          <h1>Client Profitability</h1>
+          <p>Analyze revenue, cash collections, and outstanding receivables by client.</p>
+        </div>
+        <div class="cp-header-actions">
+          <button type="button" class="btn btn-secondary btn-small" id="cpExportCsvBtn">📊 Export CSV</button>
+          <button type="button" class="btn btn-secondary btn-small" id="cpPrintBtn">🖨️ Print / PDF</button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="cp-filter-card">
+        <div class="cp-filter-group">
+          <label for="cpPresetSelect">Date Range</label>
+          <select id="cpPresetSelect" class="cp-preset-select">
+            <option value="this_year">This Year</option>
+            <option value="last_year">Last Year</option>
+            <option value="last_12_months">Last 12 Months</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_month">This Month</option>
+            <option value="all_time">All Time</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+        <div class="cp-filter-group">
+          <label for="cpStartDate">Start Date</label>
+          <input type="date" id="cpStartDate" class="cp-date-input">
+        </div>
+        <div class="cp-filter-group">
+          <label for="cpEndDate">End Date</label>
+          <input type="date" id="cpEndDate" class="cp-date-input">
+        </div>
+        <div class="cp-filter-group">
+          <label for="cpSearchInput">Search Client</label>
+          <input type="text" id="cpSearchInput" class="cp-search-input" placeholder="Search by name, company, email...">
+        </div>
+        <label class="cp-checkbox-group">
+          <input type="checkbox" id="cpIncludeInactive">
+          <span>Include inactive clients ($0 billed/collected)</span>
+        </label>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="cp-kpi-grid">
+        <div class="cp-kpi-card billed">
+          <div class="cp-kpi-label">
+            <span>Total Billed</span>
+            <span class="cp-kpi-icon">📄</span>
+          </div>
+          <div class="cp-kpi-value" id="cpKpiBilled">$0.00</div>
+          <div class="cp-kpi-sub" id="cpKpiBilledSub">0 active clients</div>
+        </div>
+        <div class="cp-kpi-card collected">
+          <div class="cp-kpi-label">
+            <span>Total Collected</span>
+            <span class="cp-kpi-icon">💰</span>
+          </div>
+          <div class="cp-kpi-value" id="cpKpiCollected">$0.00</div>
+          <div class="cp-kpi-sub" id="cpKpiCollectedSub">0.0% collected</div>
+        </div>
+        <div class="cp-kpi-card outstanding">
+          <div class="cp-kpi-label">
+            <span>Outstanding Balance</span>
+            <span class="cp-kpi-icon">⏳</span>
+          </div>
+          <div class="cp-kpi-value" id="cpKpiOutstanding">$0.00</div>
+          <div class="cp-kpi-sub" id="cpKpiOutstandingSub">0.0% unpaid</div>
+        </div>
+        <div class="cp-kpi-card top-client">
+          <div class="cp-kpi-label">
+            <span>Top Paying Client</span>
+            <span class="cp-kpi-icon">🏆</span>
+          </div>
+          <div class="cp-kpi-value" id="cpKpiTopClient">None</div>
+          <div class="cp-kpi-sub" id="cpKpiTopClientSub">No payments in period</div>
+        </div>
+      </div>
+
+      <!-- Multi-currency notice -->
+      <div id="cpFxNotice" class="cp-fx-notice hidden">
+        <span class="cp-fx-icon">💱</span>
+        <span>Amounts are normalized to base reporting currency (<strong id="cpCurrencyBadge">USD</strong>) using stored invoice exchange rates.</span>
+      </div>
+
+      <!-- Client Profitability Table Card -->
+      <div class="cp-table-card">
+        <div class="cp-table-header">
+          <h2>Client Profitability Breakdown</h2>
+          <span class="cp-table-count" id="cpTableCount">Showing 0 clients</span>
+        </div>
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">Rank</th>
+                <th class="cp-th-sortable" data-sort="name">Client <span class="sort-icon">↕</span></th>
+                <th class="num cp-th-sortable" data-sort="billed">Total Billed <span class="sort-icon">↕</span></th>
+                <th class="num cp-th-sortable sorted" data-sort="collected">Total Collected <span class="sort-icon">↓</span></th>
+                <th class="num cp-th-sortable" data-sort="outstanding">Outstanding <span class="sort-icon">↕</span></th>
+                <th class="num cp-th-sortable" data-sort="rate" style="text-align: center;">Collection % <span class="sort-icon">↕</span></th>
+                <th style="text-align: right; width: 100px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="cpTableBody"></tbody>
+            <tfoot id="cpTableFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Client Statements -->
+    <section id="page-client-statements" class="page">
+      <div class="cs-header-row">
+        <div class="cs-header-left">
+          <h1>Client Statements</h1>
+          <p>Generate a running statement of account — invoices, payments and credit notes with a live balance — for any client and date range.</p>
+        </div>
+        <div class="cs-header-actions">
+          <button type="button" class="btn btn-secondary btn-small" id="csExportPdfBtn">📄 Export PDF</button>
+          <button type="button" class="btn btn-secondary btn-small" id="csPrintBtn">🖨️ Print</button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="cs-filter-card">
+        <div class="cs-filter-group cs-filter-client">
+          <label for="csClientSelect">Client</label>
+          <select id="csClientSelect" class="cs-client-select">
+            <option value="">Select a client…</option>
+          </select>
+        </div>
+        <div class="cs-filter-group">
+          <label for="csPresetSelect">Date Range</label>
+          <select id="csPresetSelect" class="cs-preset-select">
+            <option value="this_year">This Year</option>
+            <option value="last_year">Last Year</option>
+            <option value="last_12_months">Last 12 Months</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_month">This Month</option>
+            <option value="all_time">All Time</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+        <div class="cs-filter-group">
+          <label for="csStartDate">Start Date</label>
+          <input type="date" id="csStartDate" class="cs-date-input">
+        </div>
+        <div class="cs-filter-group">
+          <label for="csEndDate">End Date</label>
+          <input type="date" id="csEndDate" class="cs-date-input">
+        </div>
+      </div>
+
+      <!-- Placeholder until a client is selected -->
+      <div id="csPlaceholder" class="cs-placeholder">
+        <div class="cs-placeholder-icon">📄</div>
+        <div>Select a client to generate their statement of account.</div>
+      </div>
+
+      <!-- Statement -->
+      <div id="csStatement" class="hidden">
+        <div class="cs-doc-header">
+          <div class="cs-doc-client">
+            <div class="cs-doc-eyebrow">Statement of Account</div>
+            <h2 id="csClientName">—</h2>
+            <div id="csClientMeta" class="cs-client-meta">—</div>
+          </div>
+          <div class="cs-doc-period">
+            <div class="cs-doc-eyebrow">Statement Period</div>
+            <div id="csPeriodLabel">—</div>
+            <div class="cs-cell-sub">Currency: <strong id="csCurrencyBadge">USD</strong></div>
+          </div>
+        </div>
+
+        <div class="cs-summary-grid">
+          <div class="cs-summary-chip opening">
+            <span class="cs-summary-label">Opening Balance</span>
+            <span class="cs-summary-value" id="csOpeningBalance">$0.00</span>
+          </div>
+          <div class="cs-summary-chip invoiced">
+            <span class="cs-summary-label">Invoiced</span>
+            <span class="cs-summary-value" id="csTotalInvoiced">$0.00</span>
+          </div>
+          <div class="cs-summary-chip paid">
+            <span class="cs-summary-label">Paid</span>
+            <span class="cs-summary-value" id="csTotalPaid">$0.00</span>
+          </div>
+          <div class="cs-summary-chip credited">
+            <span class="cs-summary-label">Credit Notes</span>
+            <span class="cs-summary-value" id="csTotalCredited">$0.00</span>
+          </div>
+          <div class="cs-summary-chip closing">
+            <span class="cs-summary-label">Closing Balance</span>
+            <span class="cs-summary-value" id="csClosingBalance">$0.00</span>
+          </div>
+        </div>
+
+        <div id="csOverdueNote" class="cs-overdue-note hidden"></div>
+
+        <div id="csFxNotice" class="cs-fx-notice hidden">
+          <span class="cs-fx-icon">💱</span>
+          <span>Amounts are normalized to base reporting currency (<strong id="csCurrencyBadgeFx">USD</strong>) using stored invoice exchange rates.</span>
+        </div>
+
+        <div class="cs-table-card">
+          <div class="cs-table-header">
+            <h2>Transaction History</h2>
+            <span class="cs-table-count" id="csTableCount">0 entries</span>
+          </div>
+          <div class="cs-table-wrap">
+            <table class="cs-table">
+              <thead>
+                <tr>
+                  <th style="width: 100px;">Date</th>
+                  <th style="width: 110px;">Type</th>
+                  <th>Reference</th>
+                  <th>Description</th>
+                  <th class="num">Charge</th>
+                  <th class="num">Credit</th>
+                  <th class="num">Balance</th>
+                </tr>
+              </thead>
+              <tbody id="csTableBody"></tbody>
+              <tfoot id="csTableFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="page-settings" class="page">
       <div class="page-header">
         <h1>Company Profile / Settings</h1>
@@ -1946,22 +2379,22 @@
                 <label class="theme-option">
                   <input type="radio" name="themeMode" value="system">
                   <span class="theme-option-body">
-                    <strong>System</strong>
+                    <strong>🖥️ System</strong>
                     <small>Follow your operating system's light/dark preference automatically.</small>
                   </span>
                 </label>
                 <label class="theme-option">
                   <input type="radio" name="themeMode" value="light">
                   <span class="theme-option-body">
-                    <strong>Light</strong>
+                    <strong>☀️ Light</strong>
                     <small>Bright, high-contrast interface.</small>
                   </span>
                 </label>
                 <label class="theme-option">
                   <input type="radio" name="themeMode" value="dark">
                   <span class="theme-option-body">
-                    <strong>Dark</strong>
-                    <small>Low-glare, dark interface (the current look).</small>
+                    <strong>🌙 Dark</strong>
+                    <small>Low-glare dark interface for reduced eye strain.</small>
                   </span>
                 </label>
               </div>
@@ -2308,6 +2741,97 @@
         <button type="button" id="es-save-btn-bottom" class="btn btn-primary">💾 Save Settings</button>
       </div>
     </section>
+
+    <!-- Audit Log -->
+    <section id="page-audit-log" class="page">
+      <div class="page-header">
+        <div>
+          <h1>Audit Log</h1>
+          <p class="subtitle">Chronological, read-only record of changes to your data.</p>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="audit-filter-card">
+        <div class="audit-filter-group">
+          <label for="auditPresetSelect">Date Range</label>
+          <select id="auditPresetSelect" class="audit-preset-select">
+            <option value="today">Today</option>
+            <option value="this_week" selected>This Week</option>
+            <option value="this_month">This Month</option>
+            <option value="this_year">This Year</option>
+            <option value="all_time">All Time</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+        <div class="audit-filter-group">
+          <label for="auditStartDate">From Date</label>
+          <input type="date" id="auditStartDate" class="audit-date-input">
+        </div>
+        <div class="audit-filter-group">
+          <label for="auditEndDate">To Date</label>
+          <input type="date" id="auditEndDate" class="audit-date-input">
+        </div>
+        <div class="audit-filter-group">
+          <label for="auditTypeSelect">Record Type</label>
+          <select id="auditTypeSelect" class="audit-preset-select">
+            <option value="all">All types</option>
+            <option value="client">Client</option>
+            <option value="project">Project</option>
+            <option value="quote">Quote</option>
+            <option value="invoice">Invoice</option>
+            <option value="payment">Payment</option>
+            <option value="credit_note">Credit note</option>
+            <option value="settings">Settings</option>
+          </select>
+        </div>
+        <button type="button" class="btn btn-secondary btn-small" id="auditRefreshBtn">🔄 Refresh</button>
+      </div>
+
+      <!-- Audit Entries Table -->
+      <div class="audit-table-card">
+        <div class="audit-table-header">
+          <h2>Activity</h2>
+          <span class="audit-table-count" id="auditTableCount">0 entries</span>
+        </div>
+        <div class="audit-table-wrap">
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th style="width:170px;">When</th>
+                <th style="width:120px;">Type</th>
+                <th style="width:160px;">Action</th>
+                <th style="width:200px;">Record</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   </main>
 
   <div id="liveTimerIndicator" class="live-timer-indicator hidden">
@@ -3183,430 +3707,13 @@
     </div>
   </div>
 
-    <!-- ════════════════════════════════════════════════════ -->
-    <!-- Revenue Report Page                                  -->
-    <!-- ════════════════════════════════════════════════════ -->
-    <section id="page-revenue-report" class="page">
-      <div class="page-header rr-header-row">
-        <div class="rr-header-left">
-          <h1>Revenue Report</h1>
-          <p>Track total invoiced vs. collected revenue over time, normalised to your reporting currency.</p>
-        </div>
-        <div class="rr-header-actions">
-          <span id="rrCurrencyBadge" class="rr-currency-note">Reporting in USD</span>
-          <button type="button" class="btn btn-ghost" id="rrExportCsvBtn">⬇ Export CSV</button>
-          <button type="button" class="btn btn-ghost" id="rrPrintBtn">🖨 Print</button>
-        </div>
-      </div>
 
-      <!-- Filter Bar -->
-      <div class="rr-filter-card">
-        <div class="rr-filter-group">
-          <label>Group by Period</label>
-          <div class="rr-period-pills">
-            <button type="button" class="rr-period-pill" data-period="week">Week</button>
-            <button type="button" class="rr-period-pill active" data-period="month">Month</button>
-            <button type="button" class="rr-period-pill" data-period="quarter">Quarter</button>
-            <button type="button" class="rr-period-pill" data-period="year">Year</button>
-          </div>
-        </div>
-        <div class="rr-filter-group">
-          <label for="rrPresetSelect">Date Preset</label>
-          <select id="rrPresetSelect" class="rr-preset-select">
-            <option value="this_year">This Year</option>
-            <option value="last_year">Last Year</option>
-            <option value="last_12_months">Last 12 Months</option>
-            <option value="this_quarter">This Quarter</option>
-            <option value="this_month">This Month</option>
-            <option value="all_time">All Time</option>
-            <option value="custom">Custom Range…</option>
-          </select>
-        </div>
-        <div class="rr-filter-group">
-          <label>Custom Date Range</label>
-          <div class="rr-date-range">
-            <input type="date" id="rrStartDate" class="rr-date-input" aria-label="Start date">
-            <span class="rr-date-sep">→</span>
-            <input type="date" id="rrEndDate" class="rr-date-input" aria-label="End date">
-          </div>
-        </div>
-      </div>
 
-      <!-- KPI Cards -->
-      <div class="rr-kpi-grid">
-        <div class="rr-kpi-card invoiced">
-          <span class="rr-kpi-icon">📄</span>
-          <div class="rr-kpi-label">Total Invoiced</div>
-          <div class="rr-kpi-value" id="rrKpiInvoiced">—</div>
-          <div class="rr-kpi-sub" id="rrKpiInvoicedSub">0 invoices</div>
-        </div>
-        <div class="rr-kpi-card collected">
-          <span class="rr-kpi-icon">💳</span>
-          <div class="rr-kpi-label">Total Collected</div>
-          <div class="rr-kpi-value" id="rrKpiCollected">—</div>
-          <div class="rr-kpi-sub" id="rrKpiCollectedSub">0 payments</div>
-        </div>
-        <div class="rr-kpi-card uncollected">
-          <span class="rr-kpi-icon">⏳</span>
-          <div class="rr-kpi-label">Outstanding Balance</div>
-          <div class="rr-kpi-value" id="rrKpiUncollected">—</div>
-          <div class="rr-kpi-sub">Invoiced minus collected</div>
-        </div>
-        <div class="rr-kpi-card rate">
-          <span class="rr-kpi-icon">📊</span>
-          <div class="rr-kpi-label">Collection Rate</div>
-          <div class="rr-kpi-value" id="rrKpiRate">—</div>
-          <div class="rr-kpi-sub">% of invoiced revenue collected</div>
-        </div>
-      </div>
 
-      <!-- Chart -->
-      <div class="rr-chart-card">
-        <div class="rr-chart-header">
-          <span class="rr-chart-title">Invoiced vs. Collected by Period</span>
-          <div class="rr-chart-legend">
-            <div class="rr-legend-item"><span class="rr-legend-dot invoiced"></span> Total Invoiced</div>
-            <div class="rr-legend-item"><span class="rr-legend-dot collected"></span> Total Collected</div>
-          </div>
-        </div>
-        <div class="rr-chart-wrap" id="rrChartWrap">
-          <div class="rr-chart-empty">
-            <span class="rr-empty-icon">📊</span>
-            <p>Select a period to see your chart.</p>
-          </div>
-        </div>
-        <div id="rrFxNotice" class="rr-fx-notice" style="display:none;">
-          <span class="rr-fx-icon">ℹ️</span>
-          <span>Some invoices use foreign currencies. Amounts have been converted to your base reporting currency using each invoice's stored exchange rate.</span>
-        </div>
-      </div>
 
-      <!-- Breakdown Table -->
-      <div class="rr-table-card">
-        <div class="rr-table-header">
-          <span class="rr-table-title">Period Breakdown</span>
-        </div>
-        <div class="rr-table-wrap">
-          <table class="rr-table" id="rrTable">
-            <thead>
-              <tr>
-                <th>Period</th>
-                <th class="num">Invoices</th>
-                <th class="num">Total Invoiced</th>
-                <th class="num">Payments</th>
-                <th class="num">Total Collected</th>
-                <th class="num">Outstanding</th>
-                <th class="num">Collection %</th>
-              </tr>
-            </thead>
-            <tbody id="rrTableBody"></tbody>
-            <tfoot id="rrTableFoot"></tfoot>
-          </table>
-        </div>
-      </div>
-    </section>
 
-    <!-- Client Profitability Report -->
-    <section id="page-client-profitability" class="page">
-      <div class="cp-header-row">
-        <div class="cp-header-left">
-          <h1>Client Profitability</h1>
-          <p>Analyze revenue, cash collections, and outstanding receivables by client.</p>
-        </div>
-        <div class="cp-header-actions">
-          <button type="button" class="btn btn-secondary btn-small" id="cpExportCsvBtn">📊 Export CSV</button>
-          <button type="button" class="btn btn-secondary btn-small" id="cpPrintBtn">🖨️ Print / PDF</button>
-        </div>
-      </div>
 
-      <!-- Filter Bar -->
-      <div class="cp-filter-card">
-        <div class="cp-filter-group">
-          <label for="cpPresetSelect">Date Range</label>
-          <select id="cpPresetSelect" class="cp-preset-select">
-            <option value="this_year">This Year</option>
-            <option value="last_year">Last Year</option>
-            <option value="last_12_months">Last 12 Months</option>
-            <option value="this_quarter">This Quarter</option>
-            <option value="this_month">This Month</option>
-            <option value="all_time">All Time</option>
-            <option value="custom">Custom Range</option>
-          </select>
-        </div>
-        <div class="cp-filter-group">
-          <label for="cpStartDate">Start Date</label>
-          <input type="date" id="cpStartDate" class="cp-date-input">
-        </div>
-        <div class="cp-filter-group">
-          <label for="cpEndDate">End Date</label>
-          <input type="date" id="cpEndDate" class="cp-date-input">
-        </div>
-        <div class="cp-filter-group">
-          <label for="cpSearchInput">Search Client</label>
-          <input type="text" id="cpSearchInput" class="cp-search-input" placeholder="Search by name, company, email...">
-        </div>
-        <label class="cp-checkbox-group">
-          <input type="checkbox" id="cpIncludeInactive">
-          <span>Include inactive clients ($0 billed/collected)</span>
-        </label>
-      </div>
 
-      <!-- KPI Grid -->
-      <div class="cp-kpi-grid">
-        <div class="cp-kpi-card billed">
-          <div class="cp-kpi-label">
-            <span>Total Billed</span>
-            <span class="cp-kpi-icon">📄</span>
-          </div>
-          <div class="cp-kpi-value" id="cpKpiBilled">$0.00</div>
-          <div class="cp-kpi-sub" id="cpKpiBilledSub">0 active clients</div>
-        </div>
-        <div class="cp-kpi-card collected">
-          <div class="cp-kpi-label">
-            <span>Total Collected</span>
-            <span class="cp-kpi-icon">💰</span>
-          </div>
-          <div class="cp-kpi-value" id="cpKpiCollected">$0.00</div>
-          <div class="cp-kpi-sub" id="cpKpiCollectedSub">0.0% collected</div>
-        </div>
-        <div class="cp-kpi-card outstanding">
-          <div class="cp-kpi-label">
-            <span>Outstanding Balance</span>
-            <span class="cp-kpi-icon">⏳</span>
-          </div>
-          <div class="cp-kpi-value" id="cpKpiOutstanding">$0.00</div>
-          <div class="cp-kpi-sub" id="cpKpiOutstandingSub">0.0% unpaid</div>
-        </div>
-        <div class="cp-kpi-card top-client">
-          <div class="cp-kpi-label">
-            <span>Top Paying Client</span>
-            <span class="cp-kpi-icon">🏆</span>
-          </div>
-          <div class="cp-kpi-value" id="cpKpiTopClient">None</div>
-          <div class="cp-kpi-sub" id="cpKpiTopClientSub">No payments in period</div>
-        </div>
-      </div>
-
-      <!-- Multi-currency notice -->
-      <div id="cpFxNotice" class="cp-fx-notice hidden">
-        <span class="cp-fx-icon">💱</span>
-        <span>Amounts are normalized to base reporting currency (<strong id="cpCurrencyBadge">USD</strong>) using stored invoice exchange rates.</span>
-      </div>
-
-      <!-- Client Profitability Table Card -->
-      <div class="cp-table-card">
-        <div class="cp-table-header">
-          <h2>Client Profitability Breakdown</h2>
-          <span class="cp-table-count" id="cpTableCount">Showing 0 clients</span>
-        </div>
-        <div class="cp-table-wrap">
-          <table class="cp-table">
-            <thead>
-              <tr>
-                <th style="width: 50px;">Rank</th>
-                <th class="cp-th-sortable" data-sort="name">Client <span class="sort-icon">↕</span></th>
-                <th class="num cp-th-sortable" data-sort="billed">Total Billed <span class="sort-icon">↕</span></th>
-                <th class="num cp-th-sortable sorted" data-sort="collected">Total Collected <span class="sort-icon">↓</span></th>
-                <th class="num cp-th-sortable" data-sort="outstanding">Outstanding <span class="sort-icon">↕</span></th>
-                <th class="num cp-th-sortable" data-sort="rate" style="text-align: center;">Collection % <span class="sort-icon">↕</span></th>
-                <th style="text-align: right; width: 100px;">Action</th>
-              </tr>
-            </thead>
-            <tbody id="cpTableBody"></tbody>
-            <tfoot id="cpTableFoot"></tfoot>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- Client Statements -->
-    <section id="page-client-statements" class="page">
-      <div class="cs-header-row">
-        <div class="cs-header-left">
-          <h1>Client Statements</h1>
-          <p>Generate a running statement of account — invoices, payments and credit notes with a live balance — for any client and date range.</p>
-        </div>
-        <div class="cs-header-actions">
-          <button type="button" class="btn btn-secondary btn-small" id="csExportPdfBtn">📄 Export PDF</button>
-          <button type="button" class="btn btn-secondary btn-small" id="csPrintBtn">🖨️ Print</button>
-        </div>
-      </div>
-
-      <!-- Filter Bar -->
-      <div class="cs-filter-card">
-        <div class="cs-filter-group cs-filter-client">
-          <label for="csClientSelect">Client</label>
-          <select id="csClientSelect" class="cs-client-select">
-            <option value="">Select a client…</option>
-          </select>
-        </div>
-        <div class="cs-filter-group">
-          <label for="csPresetSelect">Date Range</label>
-          <select id="csPresetSelect" class="cs-preset-select">
-            <option value="this_year">This Year</option>
-            <option value="last_year">Last Year</option>
-            <option value="last_12_months">Last 12 Months</option>
-            <option value="this_quarter">This Quarter</option>
-            <option value="this_month">This Month</option>
-            <option value="all_time">All Time</option>
-            <option value="custom">Custom Range</option>
-          </select>
-        </div>
-        <div class="cs-filter-group">
-          <label for="csStartDate">Start Date</label>
-          <input type="date" id="csStartDate" class="cs-date-input">
-        </div>
-        <div class="cs-filter-group">
-          <label for="csEndDate">End Date</label>
-          <input type="date" id="csEndDate" class="cs-date-input">
-        </div>
-      </div>
-
-      <!-- Placeholder until a client is selected -->
-      <div id="csPlaceholder" class="cs-placeholder">
-        <div class="cs-placeholder-icon">📄</div>
-        <div>Select a client to generate their statement of account.</div>
-      </div>
-
-      <!-- Statement -->
-      <div id="csStatement" class="hidden">
-        <div class="cs-doc-header">
-          <div class="cs-doc-client">
-            <div class="cs-doc-eyebrow">Statement of Account</div>
-            <h2 id="csClientName">—</h2>
-            <div id="csClientMeta" class="cs-client-meta">—</div>
-          </div>
-          <div class="cs-doc-period">
-            <div class="cs-doc-eyebrow">Statement Period</div>
-            <div id="csPeriodLabel">—</div>
-            <div class="cs-cell-sub">Currency: <strong id="csCurrencyBadge">USD</strong></div>
-          </div>
-        </div>
-
-        <div class="cs-summary-grid">
-          <div class="cs-summary-chip opening">
-            <span class="cs-summary-label">Opening Balance</span>
-            <span class="cs-summary-value" id="csOpeningBalance">$0.00</span>
-          </div>
-          <div class="cs-summary-chip invoiced">
-            <span class="cs-summary-label">Invoiced</span>
-            <span class="cs-summary-value" id="csTotalInvoiced">$0.00</span>
-          </div>
-          <div class="cs-summary-chip paid">
-            <span class="cs-summary-label">Paid</span>
-            <span class="cs-summary-value" id="csTotalPaid">$0.00</span>
-          </div>
-          <div class="cs-summary-chip credited">
-            <span class="cs-summary-label">Credit Notes</span>
-            <span class="cs-summary-value" id="csTotalCredited">$0.00</span>
-          </div>
-          <div class="cs-summary-chip closing">
-            <span class="cs-summary-label">Closing Balance</span>
-            <span class="cs-summary-value" id="csClosingBalance">$0.00</span>
-          </div>
-        </div>
-
-        <div id="csOverdueNote" class="cs-overdue-note hidden"></div>
-
-        <div id="csFxNotice" class="cs-fx-notice hidden">
-          <span class="cs-fx-icon">💱</span>
-          <span>Amounts are normalized to base reporting currency (<strong id="csCurrencyBadgeFx">USD</strong>) using stored invoice exchange rates.</span>
-        </div>
-
-        <div class="cs-table-card">
-          <div class="cs-table-header">
-            <h2>Transaction History</h2>
-            <span class="cs-table-count" id="csTableCount">0 entries</span>
-          </div>
-          <div class="cs-table-wrap">
-            <table class="cs-table">
-              <thead>
-                <tr>
-                  <th style="width: 100px;">Date</th>
-                  <th style="width: 110px;">Type</th>
-                  <th>Reference</th>
-                  <th>Description</th>
-                  <th class="num">Charge</th>
-                  <th class="num">Credit</th>
-                  <th class="num">Balance</th>
-                </tr>
-              </thead>
-              <tbody id="csTableBody"></tbody>
-              <tfoot id="csTableFoot"></tfoot>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Audit Log -->
-    <section id="page-audit-log" class="page">
-      <div class="page-header">
-        <div>
-          <h1>Audit Log</h1>
-          <p class="subtitle">Chronological, read-only record of changes to your data.</p>
-        </div>
-      </div>
-
-      <!-- Filter Bar -->
-      <div class="audit-filter-card">
-        <div class="audit-filter-group">
-          <label for="auditPresetSelect">Date Range</label>
-          <select id="auditPresetSelect" class="audit-preset-select">
-            <option value="today">Today</option>
-            <option value="this_week" selected>This Week</option>
-            <option value="this_month">This Month</option>
-            <option value="this_year">This Year</option>
-            <option value="all_time">All Time</option>
-            <option value="custom">Custom Range</option>
-          </select>
-        </div>
-        <div class="audit-filter-group">
-          <label for="auditStartDate">From Date</label>
-          <input type="date" id="auditStartDate" class="audit-date-input">
-        </div>
-        <div class="audit-filter-group">
-          <label for="auditEndDate">To Date</label>
-          <input type="date" id="auditEndDate" class="audit-date-input">
-        </div>
-        <div class="audit-filter-group">
-          <label for="auditTypeSelect">Record Type</label>
-          <select id="auditTypeSelect" class="audit-preset-select">
-            <option value="all">All types</option>
-            <option value="client">Client</option>
-            <option value="project">Project</option>
-            <option value="quote">Quote</option>
-            <option value="invoice">Invoice</option>
-            <option value="payment">Payment</option>
-            <option value="credit_note">Credit note</option>
-            <option value="settings">Settings</option>
-          </select>
-        </div>
-        <button type="button" class="btn btn-secondary btn-small" id="auditRefreshBtn">🔄 Refresh</button>
-      </div>
-
-      <!-- Audit Entries Table -->
-      <div class="audit-table-card">
-        <div class="audit-table-header">
-          <h2>Activity</h2>
-          <span class="audit-table-count" id="auditTableCount">0 entries</span>
-        </div>
-        <div class="audit-table-wrap">
-          <table class="audit-table">
-            <thead>
-              <tr>
-                <th style="width:170px;">When</th>
-                <th style="width:120px;">Type</th>
-                <th style="width:160px;">Action</th>
-                <th style="width:200px;">Record</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody id="auditTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
 
   <div id="restoreModal" class="modal-overlay hidden">
     <div class="modal">
