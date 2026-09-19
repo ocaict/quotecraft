@@ -348,6 +348,35 @@
           </div>
         </div>
 
+        <!-- Unbilled Time Card -->
+        <div class="card">
+          <div class="section-card-header">
+            <h2>Unbilled Time</h2>
+            <span id="overviewTimeCount" class="badge">0 entries</span>
+          </div>
+          <p class="subtitle" style="margin-bottom:12px">Logged hours not yet billed. Select entries to turn them into one invoice.</p>
+          <div class="items-table-wrap">
+            <table class="data-table" id="overviewTimeTable">
+              <thead>
+                <tr>
+                  <th style="width:36px"><input type="checkbox" id="overviewTimeSelectAll" title="Select all" aria-label="Select all time entries"></th>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Project</th>
+                  <th>Hours</th>
+                  <th>Rate</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody id="overviewTimeBody"></tbody>
+            </table>
+          </div>
+          <div class="unbilled-time-actions">
+            <span id="overviewTimeSummary" class="unbilled-time-summary"></span>
+            <button type="button" id="overviewCreateInvoiceBtn" class="btn btn-primary" disabled>Create Invoice from Selected</button>
+          </div>
+        </div>
+
         <!-- Activity & Notes Timeline Card -->
         <div class="card">
           <h2>Activity &amp; Notes Log</h2>
@@ -517,6 +546,34 @@
               </thead>
               <tbody id="projOverviewInvoicesBody"></tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- Unbilled Time Card -->
+        <div class="card">
+          <div class="section-card-header">
+            <h2>Unbilled Time</h2>
+            <span id="projOverviewTimeCount" class="badge">0 entries</span>
+          </div>
+          <p class="subtitle" style="margin-bottom:12px">Logged hours not yet billed for this project. Select entries to turn them into one invoice.</p>
+          <div class="items-table-wrap">
+            <table class="data-table" id="projOverviewTimeTable">
+              <thead>
+                <tr>
+                  <th style="width:36px"><input type="checkbox" id="projOverviewTimeSelectAll" title="Select all" aria-label="Select all time entries"></th>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Hours</th>
+                  <th>Rate</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody id="projOverviewTimeBody"></tbody>
+            </table>
+          </div>
+          <div class="unbilled-time-actions">
+            <span id="projOverviewTimeSummary" class="unbilled-time-summary"></span>
+            <button type="button" id="projOverviewCreateInvoiceBtn" class="btn btn-primary" disabled>Create Invoice from Selected</button>
           </div>
         </div>
       </div>

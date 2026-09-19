@@ -221,6 +221,19 @@
 
     renderQuoteRows(overview.quotes || []);
     renderInvoiceRows(overview.invoices || []);
+
+    window.QuoteCraftUtils.mountUnbilledTimeCard({
+      bodyId: 'projOverviewTimeBody',
+      countId: 'projOverviewTimeCount',
+      selectAllId: 'projOverviewTimeSelectAll',
+      createBtnId: 'projOverviewCreateInvoiceBtn',
+      summaryId: 'projOverviewTimeSummary',
+      showProject: false,
+      currency: currencyCode,
+      scope: { clientId: p.client_id, projectId: p.id },
+      emptyText: 'No unbilled time entries for this project.',
+      onCreated: function () { openOverview(p.id); },
+    });
   }
 
   function renderQuoteRows(quotes) {

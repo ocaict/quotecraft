@@ -31,6 +31,7 @@ const {
   markQuoteDeclined,
   convertQuoteToInvoice,
   createFinalInvoiceFromDeposit,
+  createInvoiceFromTimeEntries,
   duplicateInvoice,
   getInvoice,
   getInvoiceByQuote,
@@ -874,6 +875,15 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       return { ok: false, errors: { general: `Failed to create final invoice: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('invoices:createFromTimeEntries', async (event, payload) => {
+    try {
+      const result = createInvoiceFromTimeEntries(payload);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to create invoice: ${err.message}` } };
     }
   });
 

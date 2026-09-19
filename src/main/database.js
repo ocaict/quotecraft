@@ -956,6 +956,21 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 27,
+    up: () => {
+      // Invoice linkage for billed time entries: once a time entry is included
+      // on an invoice it carries that invoice's id, so (a) it is traceable back
+      // to the invoice it was billed on and (b) a future delete/void path can
+      // safely unbill and re-select it instead of leaving it in a broken or
+      // double-billable state.
+      const entryCols = new Set(db.exec(`PRAGMA table_info(time_entries)`)[0].values.map((v) => v[1]));
+      if (!entryCols.has('invoice_id')) {
+        db.run(`ALTER TABLE time_entries ADD COLUMN invoice_id INTEGER DEFAULT NULL`);
+      }
+      db.run(`CREATE INDEX IF NOT EXISTS idx_time_entries_invoice_id ON time_entries(invoice_id);`);
+    },
+  },
 ];
 
 function runMigrations() {
@@ -2560,6 +2575,12 @@ function decorateTimeEntry(entry) {
   const project = entry.project_id ? getProject(entry.project_id) : null;
   entry.project_name = project ? project.name : '';
   entry.billed = Number(entry.billed) ? 1 : 0;
+  entry.invoice_id = entry.invoice_id != null ? Number(entry.invoice_id) : null;
+  entry.invoice_number = '';
+  if (entry.billed && entry.invoice_id) {
+    const inv = rowToObject(db.exec('SELECT invoice_number FROM invoices WHERE id = ?', [entry.invoice_id]));
+    entry.invoice_number = inv ? inv.invoice_number : '';
+  }
   entry.amount = Math.round((Number(entry.hours) || 0) * (Number(entry.hourly_rate) || 0) * 100) / 100;
   return entry;
 }
@@ -3811,12 +3832,253 @@ function getInvoiceByQuote(quoteId) {
   return getInvoice(res[0].values[0][0]);
 }
 
+// Creates a standard draft invoice from a set of Unbilled time entries. Each
+// distinct hourly rate becomes one grouped line item (quantity = total hours at
+// that rate), so each amount is hours x rate. The invoice flows through the
+// normal numbering/status pipeline (draft, invoice_type 'standard') like any
+// other invoice. The included entries are marked Billed and linked to the new
+// invoice in the same transaction, so they cannot be double-billed.
+function createInvoiceFromTimeEntries(input) {
+  const over = input || {};
+  const clientId = Number(over.client_id);
+  const projectId =
+    over.project_id === undefined || over.project_id === null || over.project_id === ''
+      ? null
+      : Number(over.project_id);
+  const entryIds = (Array.isArray(over.entry_ids) ? over.entry_ids : [])
+    .map((id) => Number(id))
+    .filter((id) => id > 0);
+
+  if (!Number.isInteger(clientId) || clientId <= 0) {
+    return { ok: false, errors: { client_id: 'Please select a client.' } };
+  }
+  const client = getClient(clientId);
+  if (!client) {
+    return { ok: false, errors: { client_id: 'Selected client no longer exists.' } };
+  }
+  if (entryIds.length === 0) {
+    return { ok: false, errors: { entry_ids: 'Select at least one Unbilled time entry.' } };
+  }
+
+  if (projectId !== null) {
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return { ok: false, errors: { project_id: 'Selected project no longer exists.' } };
+    }
+    const project = getProject(projectId);
+    if (!project) {
+      return { ok: false, errors: { project_id: 'Selected project no longer exists.' } };
+    }
+    if (Number(project.client_id) !== clientId) {
+      return { ok: false, errors: { project_id: 'Selected project does not belong to the client.' } };
+    }
+  }
+
+  // Load the exact rows for the requested ids and re-validate scope/billing
+  // (defense in depth: the renderer selection is just a convenience).
+  const placeholders = entryIds.map(() => '?').join(', ');
+  const selected = rowsToArray(db.exec(`SELECT * FROM time_entries WHERE id IN (${placeholders})`, entryIds));
+  const byId = new Map(selected.map((r) => [Number(r.id), r]));
+
+  const missing = entryIds.filter((id) => !byId.has(id));
+  if (missing.length > 0) {
+    return { ok: false, errors: { entry_ids: 'One or more selected time entries no longer exist.' } };
+  }
+
+  if (selected.some((e) => Number(e.client_id) !== clientId)) {
+    return { ok: false, errors: { client_id: 'All selected time entries must belong to the same client.' } };
+  }
+  if (projectId !== null && selected.some((e) => e.project_id == null || Number(e.project_id) !== projectId)) {
+    return { ok: false, errors: { project_id: 'All selected time entries must belong to the selected project.' } };
+  }
+  if (selected.some((e) => Number(e.billed) === 1 || (e.invoice_id != null && Number(e.invoice_id) > 0))) {
+    return { ok: false, errors: { general: 'One or more selected time entries are already Billed.' } };
+  }
+
+  const profile = getCompanyProfile();
+  const taxRate = Math.max(0, Number((profile && profile.default_tax_rate) || 0));
+
+  // Group by hourly rate: one summarized line per distinct rate.
+  const rateGroups = new Map();
+  for (const e of selected) {
+    const rate = Number(e.hourly_rate) || 0;
+    if (!rateGroups.has(rate)) rateGroups.set(rate, { hours: 0, count: 0 });
+    const g = rateGroups.get(rate);
+    g.hours = Math.round((g.hours + (Number(e.hours) || 0)) * 1000000) / 1000000;
+    g.count += 1;
+  }
+
+  const lineItems = [];
+  const rateOrder = [...rateGroups.keys()];
+  for (const rate of rateOrder) {
+    const g = rateGroups.get(rate);
+    const qty = Math.round(g.hours * 100) / 100;
+    const unitTally = Math.round(qty * rate * 100) / 100;
+    const taxTally = Math.round(unitTally * (taxRate / 100) * 100) / 100;
+    lineItems.push({
+      description: `Billable time (${g.count} ${g.count === 1 ? 'entry' : 'entries'}) — ${qty.toFixed(2)} h @ ${rate.toFixed(2)}`,
+      quantity: qty,
+      unit_price: rate,
+      line_subtotal: unitTally,
+      line_tax: taxTally,
+      amount: Math.round((unitTally + taxTally) * 100) / 100,
+    });
+  }
+
+  const subtotal = Math.round(lineItems.reduce((s, l) => s + l.line_subtotal, 0) * 100) / 100;
+  const taxAmount = Math.round(lineItems.reduce((s, l) => s + l.line_tax, 0) * 100) / 100;
+  const total = Math.round((subtotal + taxAmount) * 100) / 100;
+
+  // Due date: overrides > payment terms > +14 days (same as convertQuoteToInvoice).
+  const today = toDateString(new Date());
+  let dueDate;
+  if (over.date_due && !isValidDateString(over.date_due)) {
+    return { ok: false, errors: { date_due: 'Due date must be a valid date.' } };
+  }
+  if (over.date_due && over.date_due < today) {
+    return { ok: false, errors: { date_due: 'Due date cannot be before today.' } };
+  }
+  if (over.date_due) {
+    dueDate = over.date_due;
+  } else {
+    const termsSource = over.terms !== undefined ? over.terms : (profile && profile.default_terms) || '';
+    const days = parsePaymentTermsDays(termsSource);
+    const due = new Date(today + 'T00:00:00');
+    due.setDate(due.getDate() + (days === null ? 14 : days));
+    dueDate = toDateString(due);
+  }
+
+  const dateCreated = over.date_created && isValidDateString(over.date_created) ? over.date_created : today;
+  const currency = (profile && profile.default_currency) || 'USD';
+  const invoiceNumber = nextInvoiceNumber();
+  const now = new Date().toISOString();
+  let invoiceId = null;
+
+  db.run('BEGIN');
+  try {
+    db.run(
+      `INSERT INTO invoices (
+        invoice_number, quote_id, client_id, contact_id, project_id, status, date_created, date_sent, date_due,
+        subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
+        currency, exchange_rate, notes, terms,
+        invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        invoiceNumber,
+        null,
+        clientId,
+        null,
+        projectId,
+        'draft',
+        dateCreated,
+        null,
+        dueDate,
+        subtotal,
+        taxAmount,
+        0,
+        total,
+        0,
+        total,
+        currency,
+        1.0,
+        '',
+        over.terms !== undefined ? String(over.terms) : ((profile && profile.default_terms) || ''),
+        'standard',
+        null,
+        null,
+        null,
+        null,
+        0,
+        now,
+        now,
+      ]
+    );
+    const idRes = db.exec('SELECT last_insert_rowid() AS id');
+    invoiceId = idRes[0].values[0][0];
+
+    lineItems.forEach((item, idx) => {
+      db.run(
+        `INSERT INTO invoice_line_items (
+          invoice_id, description, quantity, unit_price,
+          tax_rate, discount_type, discount_value, discount_amount,
+          discount_percent, amount, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          invoiceId,
+          item.description,
+          Number(item.quantity),
+          Number(item.unit_price),
+          taxRate,
+          'none',
+          0,
+          0,
+          0,
+          item.amount,
+          idx,
+        ]
+      );
+    });
+
+    const scopedPlaceholders = selected.map(() => '?').join(', ');
+    db.run(
+      `UPDATE time_entries SET billed = 1, invoice_id = ?, updated_at = ? WHERE id IN (${scopedPlaceholders}) AND billed = 0`,
+      [invoiceId, now, ...selected.map((e) => Number(e.id))]
+    );
+    const updated = db.getRowsModified();
+    if (updated !== selected.length) {
+      throw new Error('A selected time entry could not be marked as Billed — it may already be on another invoice.');
+    }
+
+    db.run('COMMIT');
+  } catch (err) {
+    db.run('ROLLBACK');
+    return { ok: false, errors: { general: `Failed to create invoice: ${err.message}` } };
+  }
+
+  saveToDisk();
+  const created = getInvoice(invoiceId);
+  addAuditEntry({
+    entityType: 'invoice',
+    entityRef: created.invoice_number || 'Invoice #' + invoiceId,
+    action: 'created',
+    description:
+      'Created invoice ' +
+      (created.invoice_number || '') +
+      ' from ' +
+      selected.length +
+      ' billed time entr' +
+      (selected.length === 1 ? 'y' : 'ies') +
+      ' for ' +
+      (Number(created.total) || 0).toFixed(2) +
+      ' ' +
+      (created.currency || ''),
+  });
+  return { ok: true, invoice: created, billedCount: selected.length };
+}
+
+// Reverts every time entry linked to an invoice back to Unbilled (clearing the
+// invoice link). Today invoices cannot be deleted, so nothing calls this in the
+// app — it exists so a future void/delete path can safely restore entries
+// instead of leaving them Billed-but-broken or double-billable.
+function unbillTimeEntriesForInvoice(invoiceId) {
+  const id = Number(invoiceId);
+  if (!Number.isInteger(id) || id <= 0) {
+    return { ok: false, errors: { general: 'Invoice not found.' } };
+  }
+  db.run(
+    `UPDATE time_entries SET billed = 0, invoice_id = NULL, updated_at = ? WHERE invoice_id = ?`,
+    [new Date().toISOString(), id]
+  );
+  const count = db.getRowsModified();
+  saveToDisk();
+  return { ok: true, count };
+}
+
 function duplicateInvoice(id) {
   const source = getInvoice(id);
   if (!source) {
     return { ok: false, errors: { general: 'Invoice not found.' } };
   }
-
   const today = toDateString(new Date());
   let days = parsePaymentTermsDays(source.terms);
   if (days === null && source.date_created && source.date_due) {
@@ -6607,6 +6869,8 @@ module.exports = {
   parsePaymentTermsDays,
   convertQuoteToInvoice,
   createFinalInvoiceFromDeposit,
+  createInvoiceFromTimeEntries,
+  unbillTimeEntriesForInvoice,
   duplicateInvoice,
   getInvoice,
   getInvoiceByQuote,

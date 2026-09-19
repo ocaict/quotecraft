@@ -173,4 +173,192 @@ window.QuoteCraftUtils = {
     if (!overlay) return;
     overlay.classList.add('hidden');
   },
+
+  // Mounts the "Unbilled Time" card used by the client and project overview
+  // screens: lists unbilled time entries in the given scope with per-row
+  // checkboxes, then creates one standard draft invoice (one grouped line per
+  // distinct rate) from the selected entries. Selected entries are marked
+  // Billed and locked by the main process. Returns { reload } or null.
+  mountUnbilledTimeCard(config) {
+    const opts = config || {};
+    const bodyEl = document.getElementById(opts.bodyId);
+    const countEl = document.getElementById(opts.countId);
+    const selectAllEl = document.getElementById(opts.selectAllId);
+    const createBtn = document.getElementById(opts.createBtnId);
+    const summaryEl = document.getElementById(opts.summaryId);
+    if (!bodyEl) return null;
+
+    const showProject = opts.showProject !== false;
+    const scope = opts.scope || {};
+    const currency = opts.currency || 'USD';
+    const colCount = showProject ? 7 : 6;
+
+    let entries = [];
+    let selected = new Set();
+    let taxRate = 0;
+    let taxLoaded = false;
+
+    const money = (v) => QuoteCraftUtils.formatCurrency(v, currency);
+    const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+
+    function updateControls() {
+      const chosen = entries.filter((e) => selected.has(e.id));
+      const hours = chosen.reduce((s, e) => s + (Number(e.hours) || 0), 0);
+      const amount = chosen.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      if (createBtn) {
+        createBtn.disabled = chosen.length === 0;
+        createBtn.textContent = chosen.length === 0
+          ? 'Create Invoice from Selected'
+          : 'Create Invoice from Selected (' + chosen.length + ')';
+      }
+      if (summaryEl) {
+        summaryEl.textContent = chosen.length === 0
+          ? ''
+          : chosen.length + ' selected · ' + round2(hours).toFixed(2) + ' h · ' + money(amount);
+      }
+      if (selectAllEl) {
+        selectAllEl.checked = entries.length > 0 && chosen.length === entries.length;
+        selectAllEl.indeterminate = chosen.length > 0 && chosen.length < entries.length;
+      }
+    }
+
+    function render() {
+      bodyEl.innerHTML = '';
+      if (countEl) countEl.textContent = entries.length + ' entr' + (entries.length === 1 ? 'y' : 'ies');
+      if (entries.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = colCount;
+        td.style.textAlign = 'center';
+        td.style.color = 'var(--text-muted)';
+        td.style.padding = '24px';
+        td.textContent = opts.emptyText || 'No unbilled time entries in this scope.';
+        tr.appendChild(td);
+        bodyEl.appendChild(tr);
+        return;
+      }
+
+      entries.forEach((e) => {
+        const tr = document.createElement('tr');
+
+        const checkTd = document.createElement('td');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = selected.has(e.id);
+        cb.setAttribute('aria-label', 'Select time entry');
+        cb.onchange = () => {
+          if (cb.checked) selected.add(e.id); else selected.delete(e.id);
+          updateControls();
+        };
+        checkTd.appendChild(cb);
+
+        const dateTd = document.createElement('td');
+        dateTd.textContent = QuoteCraftUtils.formatDate(e.date);
+
+        const descTd = document.createElement('td');
+        descTd.className = 'cell-name';
+        descTd.textContent = e.description || '—';
+
+        tr.appendChild(checkTd);
+        tr.appendChild(dateTd);
+        tr.appendChild(descTd);
+
+        if (showProject) {
+          const projTd = document.createElement('td');
+          projTd.textContent = e.project_name || '—';
+          tr.appendChild(projTd);
+        }
+
+        const hoursTd = document.createElement('td');
+        hoursTd.textContent = Number(e.hours).toFixed(2);
+
+        const rateTd = document.createElement('td');
+        rateTd.textContent = money(e.hourly_rate);
+
+        const amountTd = document.createElement('td');
+        amountTd.className = 'cell-balance';
+        amountTd.textContent = money(e.amount);
+
+        tr.appendChild(hoursTd);
+        tr.appendChild(rateTd);
+        tr.appendChild(amountTd);
+        bodyEl.appendChild(tr);
+      });
+    }
+
+    async function reload() {
+      selected = new Set();
+      try {
+        const filter = { billed: 'unbilled' };
+        if (scope.clientId) filter.client_id = scope.clientId;
+        if (scope.projectId) filter.project_id = scope.projectId;
+        const res = await window.electronAPI.listTimeEntries(filter);
+        entries = res && res.ok && Array.isArray(res.entries) ? res.entries : [];
+      } catch (e) {
+        entries = [];
+      }
+      if (!taxLoaded) {
+        taxLoaded = true;
+        try {
+          const p = await window.electronAPI.getCompanyProfile();
+          taxRate = p && p.ok && p.profile ? Math.max(0, Number(p.profile.default_tax_rate) || 0) : 0;
+        } catch (e) { /* ignore */ }
+      }
+      render();
+      updateControls();
+    }
+
+    async function create() {
+      const chosen = entries.filter((e) => selected.has(e.id));
+      if (chosen.length === 0) return;
+
+      const hours = round2(chosen.reduce((s, e) => s + (Number(e.hours) || 0), 0));
+      const subtotal = round2(chosen.reduce((s, e) => s + (Number(e.amount) || 0), 0));
+      const tax = round2(subtotal * (taxRate / 100));
+      const total = round2(subtotal + tax);
+      const rates = new Set(chosen.map((e) => Number(e.hourly_rate) || 0));
+
+      const ok = await QuoteCraftUtils.confirmAction({
+        title: 'Create invoice from time?',
+        message:
+          'Bill ' + chosen.length + ' time entr' + (chosen.length === 1 ? 'y' : 'ies') +
+          ' (' + hours.toFixed(2) + ' h across ' + rates.size + ' rate' + (rates.size === 1 ? '' : 's') + '). ' +
+          'Subtotal ' + money(subtotal) + ' + tax ' + money(tax) + ' = ' + money(total) + '. ' +
+          'This creates a draft invoice and locks the selected entries.',
+        confirmText: 'Create invoice',
+      });
+      if (!ok) return;
+
+      try {
+        const res = await window.electronAPI.createInvoiceFromTimeEntries({
+          client_id: scope.clientId,
+          project_id: scope.projectId || null,
+          entry_ids: chosen.map((e) => e.id),
+        });
+        if (!res || !res.ok || !res.invoice) {
+          const msg = res && res.errors && res.errors.general ? res.errors.general : 'Could not create invoice from time.';
+          QuoteCraftUtils.showToast(msg, 'error');
+          return;
+        }
+        QuoteCraftUtils.showToast('Invoice ' + res.invoice.invoice_number + ' created · ' + money(res.invoice.total), 'success');
+        if (typeof opts.onCreated === 'function') opts.onCreated(res.invoice);
+        else await reload();
+      } catch (e) {
+        QuoteCraftUtils.showToast('Could not create invoice: ' + e.message, 'error');
+      }
+    }
+
+    if (selectAllEl) {
+      selectAllEl.onchange = () => {
+        selected = new Set();
+        if (selectAllEl.checked) entries.forEach((e) => selected.add(e.id));
+        render();
+        updateControls();
+      };
+    }
+    if (createBtn) createBtn.onclick = create;
+
+    reload();
+    return { reload };
+  },
 };

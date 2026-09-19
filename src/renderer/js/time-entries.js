@@ -192,6 +192,12 @@
     entries.forEach(function (entry) {
       const tr = document.createElement('tr');
       const billed = Number(entry.billed) ? 1 : 0;
+      const statusCell = billed
+        ? '<span class="badge status-billed">Billed</span>' +
+          (entry.invoice_number
+            ? ' <a href="#" class="time-invoice-link" title="View the invoice this entry was billed on">' + escapeHtml(entry.invoice_number) + '</a>'
+            : '')
+        : '<span class="badge status-unbilled">Unbilled</span>';
       tr.innerHTML =
         '<td style="white-space: nowrap;">' + window.QuoteCraftUtils.formatDate(entry.date) + '</td>' +
         '<td>' + escapeHtml(entry.client_name || '') + (entry.client_company ? ' <span class="time-entry-hint">(' + escapeHtml(entry.client_company) + ')</span>' : '') + '</td>' +
@@ -200,13 +206,24 @@
         '<td style="text-align: right;">' + Number(entry.hours || 0).toFixed(2) + '</td>' +
         '<td style="text-align: right;">' + formatCurrency(entry.hourly_rate) + '</td>' +
         '<td style="text-align: right;">' + formatCurrency(entry.amount) + '</td>' +
-        '<td><span class="badge ' + (billed ? 'status-billed' : 'status-unbilled') + '">' + (billed ? 'Billed' : 'Unbilled') + '</span></td>' +
+        '<td>' + statusCell + '</td>' +
         '<td class="th-actions">' +
         '  <div class="time-actions">' +
         '    <button type="button" class="expense-action-btn edit-btn">Edit</button>' +
         '    <button type="button" class="expense-action-btn delete delete-btn">Delete</button>' +
         '  </div>' +
         '</td>';
+
+      const invoiceLink = tr.querySelector('.time-invoice-link');
+      if (invoiceLink) {
+        invoiceLink.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          window.QuoteCraftUtils.goToPage('invoices');
+          setTimeout(function () {
+            window.dispatchEvent(new CustomEvent('qc-open-invoice', { detail: entry.invoice_id }));
+          }, 50);
+        });
+      }
 
       const editBtn = tr.querySelector('.edit-btn');
       editBtn.addEventListener('click', function () {

@@ -927,6 +927,20 @@
       });
     }
 
+    // Unbilled time → invoice
+    window.QuoteCraftUtils.mountUnbilledTimeCard({
+      bodyId: 'overviewTimeBody',
+      countId: 'overviewTimeCount',
+      selectAllId: 'overviewTimeSelectAll',
+      createBtnId: 'overviewCreateInvoiceBtn',
+      summaryId: 'overviewTimeSummary',
+      showProject: true,
+      currency: currencyCode,
+      scope: { clientId: c.id },
+      emptyText: 'No unbilled time entries for this client.',
+      onCreated: function () { openOverview(c.id); },
+    });
+
     // Notes timeline
     renderNotesTimeline(overview.notes || []);
   }

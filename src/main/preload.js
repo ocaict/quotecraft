@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   convertQuoteToInvoice: (quoteId, overrides) => ipcRenderer.invoke('invoices:convertFromQuote', quoteId, overrides),
   createFinalInvoiceFromDeposit: (depositInvoiceId, overrides) => ipcRenderer.invoke('invoices:createFinalFromDeposit', depositInvoiceId, overrides),
+  createInvoiceFromTimeEntries: (payload) => ipcRenderer.invoke('invoices:createFromTimeEntries', payload),
   duplicateInvoice: (id) => ipcRenderer.invoke('invoices:duplicate', id),
   getInvoiceByQuote: (quoteId) => ipcRenderer.invoke('invoices:getByQuote', quoteId),
   listInvoices: () => ipcRenderer.invoke('invoices:list'),

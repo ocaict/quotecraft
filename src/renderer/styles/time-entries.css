@@ -49,3 +49,31 @@
 .lock-banner.hidden {
   display: none;
 }
+.unbilled-time-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.unbilled-time-summary {
+  font-size: 13px;
+  color: var(--text-muted, #6b7280);
+}
+
+.unbilled-time-actions .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.time-invoice-link {
+  font-size: 12px;
+  color: var(--accent, #58a6ff);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.time-invoice-link:hover {
+  text-decoration: underline;
+}
