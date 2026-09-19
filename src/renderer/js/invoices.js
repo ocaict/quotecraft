@@ -542,6 +542,13 @@
   function renderDetail(inv) {
     document.getElementById('invoiceDetailNumber').textContent = inv.invoice_number;
     const eff = effectiveInvoiceStatus(inv);
+
+    if (window.QuoteCraftAttachments) {
+      window.QuoteCraftAttachments.mount(document.getElementById('invoiceAttachmentsPanel'), {
+        entityType: 'invoice',
+        entityId: inv.id,
+      });
+    }
     const statusBadge = document.getElementById('invoiceDetailStatus');
     statusBadge.textContent = formatInvoiceStatus(eff);
     statusBadge.className = 'badge status-' + eff;

@@ -135,6 +135,27 @@ function createTables() {
     );
   `);
 
+  // Files (contracts, scope docs, reference photos) attached to a client,
+  // project, quote or invoice. The bytes live on disk under the app's
+  // attachments folder; this table only stores metadata. entity_type/entity_id
+  // are polymorphic (no FK is possible across four tables), so existence is
+  // validated in application code.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS attachments (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_type       TEXT NOT NULL
+                          CHECK (entity_type IN ('client','project','quote','invoice')),
+      entity_id         INTEGER NOT NULL,
+      original_filename TEXT NOT NULL,
+      stored_filename   TEXT NOT NULL UNIQUE,
+      mime_type         TEXT NOT NULL DEFAULT '',
+      file_size         INTEGER NOT NULL DEFAULT 0,
+      created_at        TEXT NOT NULL,
+      updated_at        TEXT NOT NULL
+    );
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id);`);
+
   db.run(`
     CREATE TABLE IF NOT EXISTS quotes (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -969,6 +990,30 @@ const MIGRATIONS = [
         db.run(`ALTER TABLE time_entries ADD COLUMN invoice_id INTEGER DEFAULT NULL`);
       }
       db.run(`CREATE INDEX IF NOT EXISTS idx_time_entries_invoice_id ON time_entries(invoice_id);`);
+    },
+  },
+  {
+    version: 28,
+    up: () => {
+      // Attachments: files copied into the app's own data folder and linked to
+      // a client, project, quote or invoice by metadata. Kept as a separate
+      // table (rather than BLOBs) so the in-memory DB stays small and every
+      // saveToDisk() does not rewrite file contents.
+      db.run(`
+        CREATE TABLE IF NOT EXISTS attachments (
+          id                INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_type       TEXT NOT NULL
+                              CHECK (entity_type IN ('client','project','quote','invoice')),
+          entity_id         INTEGER NOT NULL,
+          original_filename TEXT NOT NULL,
+          stored_filename   TEXT NOT NULL UNIQUE,
+          mime_type         TEXT NOT NULL DEFAULT '',
+          file_size         INTEGER NOT NULL DEFAULT 0,
+          created_at        TEXT NOT NULL,
+          updated_at        TEXT NOT NULL
+        );
+      `);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id);`);
     },
   },
 ];
@@ -1870,6 +1915,127 @@ function deleteClientNote(id) {
   const deleted = db.getRowsModified() > 0;
   saveToDisk();
   return { ok: true, deleted };
+}
+
+// ---------- Attachments (file metadata) ----------
+// The file bytes are copied into the app's attachments folder; only metadata
+// lives here. Rows are polymorphic across the four attachable record types.
+
+const ATTACHMENT_ENTITY_TYPES = ['client', 'project', 'quote', 'invoice'];
+
+function attachmentEntityExists(entityType, entityId) {
+  switch (entityType) {
+    case 'client': return Boolean(getClient(entityId));
+    case 'project': return Boolean(getProject(entityId));
+    case 'quote': return Boolean(getQuote(entityId));
+    case 'invoice': return Boolean(getInvoice(entityId));
+    default: return false;
+  }
+}
+
+function listAttachments(entityType, entityId) {
+  const res = db.exec(
+    `SELECT * FROM attachments WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC, id DESC`,
+    [entityType, entityId]
+  );
+  return rowsToArray(res);
+}
+
+function listAllAttachments() {
+  const res = db.exec('SELECT * FROM attachments ORDER BY id ASC');
+  return rowsToArray(res);
+}
+
+function getAttachment(id) {
+  const res = db.exec('SELECT * FROM attachments WHERE id = ?', [id]);
+  return rowToObject(res);
+}
+
+function addAttachment(meta) {
+  const entityType = String((meta && meta.entity_type) || '');
+  const entityId = Number(meta && meta.entity_id);
+  const errors = {};
+
+  if (!ATTACHMENT_ENTITY_TYPES.includes(entityType)) {
+    errors.entity_type = 'Unsupported attachment target.';
+  } else if (!Number.isInteger(entityId) || entityId <= 0) {
+    errors.entity_id = 'Missing attachment target.';
+  } else if (!attachmentEntityExists(entityType, entityId)) {
+    errors.entity_id = 'The record this file belongs to no longer exists.';
+  }
+
+  const originalFilename = String((meta && meta.original_filename) || '').trim();
+  if (!originalFilename) errors.original_filename = 'A filename is required.';
+
+  const storedFilename = String((meta && meta.stored_filename) || '').trim();
+  if (!storedFilename) errors.stored_filename = 'A stored filename is required.';
+
+  const fileSize = Number(meta && meta.file_size);
+  if (!Number.isFinite(fileSize) || fileSize < 0) errors.file_size = 'A valid file size is required.';
+
+  if (Object.keys(errors).length) return { ok: false, errors };
+
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO attachments
+       (entity_type, entity_id, original_filename, stored_filename, mime_type, file_size, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      entityType,
+      entityId,
+      originalFilename,
+      storedFilename,
+      String((meta && meta.mime_type) || ''),
+      Math.round(fileSize),
+      now,
+      now,
+    ]
+  );
+  const idRes = db.exec('SELECT last_insert_rowid() AS id');
+  const id = idRes[0].values[0][0];
+  saveToDisk();
+
+  const attachment = getAttachment(id);
+  addAuditEntry({
+    entityType,
+    entityRef: originalFilename,
+    action: 'attachment_added',
+    description: 'Attached "' + originalFilename + '"',
+  });
+  return { ok: true, attachment };
+}
+
+function deleteAttachment(id) {
+  const before = getAttachment(id);
+  if (!before) return { ok: false, deleted: false };
+  db.run('DELETE FROM attachments WHERE id = ?', [id]);
+  const deleted = db.getRowsModified() > 0;
+  saveToDisk();
+  if (deleted) {
+    addAuditEntry({
+      entityType: before.entity_type,
+      entityRef: before.original_filename,
+      action: 'attachment_removed',
+      description: 'Removed attachment "' + before.original_filename + '"',
+    });
+  }
+  return { ok: true, deleted, attachment: before };
+}
+
+// Removes every attachment row for a record. Returns the stored filenames so
+// the caller can delete the physical files (kept out of the DB layer).
+function deleteAttachmentsForEntity(entityType, entityId) {
+  const rows = listAttachments(entityType, entityId);
+  if (!rows.length) return { ok: true, deleted: 0, storedFilenames: [] };
+  db.run('DELETE FROM attachments WHERE entity_type = ? AND entity_id = ?', [entityType, entityId]);
+  saveToDisk();
+  return { ok: true, deleted: rows.length, storedFilenames: rows.map((r) => r.stored_filename) };
+}
+
+function getAttachmentTotals() {
+  const res = db.exec('SELECT COUNT(*) AS c, COALESCE(SUM(file_size), 0) AS s FROM attachments');
+  if (!res.length || !res[0].values.length) return { count: 0, totalSize: 0 };
+  return { count: Number(res[0].values[0][0]) || 0, totalSize: Number(res[0].values[0][1]) || 0 };
 }
 
 // ---------- Projects (Jobs) ----------
@@ -6064,13 +6230,24 @@ async function validateBackupBuffer(buffer) {
     return { ok: false, error: 'This file is not a valid QuoteCraft backup (it could not be read as JSON).' };
   }
 
+  const SUPPORTED_BACKUP_VERSIONS = [1, 2];
   if (
     !payload ||
     payload.app !== 'QuoteCraft' ||
     payload.magic !== 'QUOTECRAFT_BACKUP' ||
-    payload.version !== 1
+    !SUPPORTED_BACKUP_VERSIONS.includes(payload.version)
   ) {
     return { ok: false, error: 'This file is not a valid QuoteCraft backup.' };
+  }
+
+  if (payload.attachments !== undefined && !Array.isArray(payload.attachments)) {
+    return { ok: false, error: 'The backup attachment data is malformed.' };
+  }
+  const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
+  for (const item of attachments) {
+    if (!item || typeof item.stored_filename !== 'string' || typeof item.data !== 'string') {
+      return { ok: false, error: 'The backup attachment data is malformed.' };
+    }
   }
 
   if (typeof payload.database !== 'string' || payload.database.length < 20) {
@@ -6117,13 +6294,14 @@ async function validateBackupBuffer(buffer) {
       quotes: table('quotes'),
       invoices: table('invoices'),
       payments: table('payments'),
+      attachments: table('attachments'),
     };
     trial.close();
   } catch (e) {
     return { ok: false, error: `The backup database could not be opened: ${e.message}` };
   }
 
-  return { ok: true, payload, dbBytes, counts };
+  return { ok: true, payload, dbBytes, counts, attachments };
 }
 
 async function restoreDatabaseFromBuffer(dbBytes) {
@@ -7074,6 +7252,14 @@ module.exports = {
   addClientNote,
   updateClientNote,
   deleteClientNote,
+  ATTACHMENT_ENTITY_TYPES,
+  listAttachments,
+  listAllAttachments,
+  getAttachment,
+  addAttachment,
+  deleteAttachment,
+  deleteAttachmentsForEntity,
+  getAttachmentTotals,
   getClientOverview,
   getProjectOverview,
   PROJECT_STATUSES,

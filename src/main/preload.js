@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   ping: () => 'pong',
@@ -21,6 +21,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addClientNote: (clientId, text) => ipcRenderer.invoke('clients:addNote', clientId, text),
   updateClientNote: (noteId, text) => ipcRenderer.invoke('clients:updateNote', noteId, text),
   deleteClientNote: (noteId) => ipcRenderer.invoke('clients:deleteNote', noteId),
+
+  // Drag-and-drop needs the real path of a dropped File (File.path was removed
+  // in Electron 32+); webUtils.getPathForFile must run in the preload context.
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch (e) {
+      return '';
+    }
+  },
+
+  listAttachments: (entityType, entityId) => ipcRenderer.invoke('attachments:list', { entity_type: entityType, entity_id: entityId }),
+  addAttachments: (payload) => ipcRenderer.invoke('attachments:add', payload),
+  openAttachment: (id) => ipcRenderer.invoke('attachments:open', id),
+  showAttachmentInFolder: (id) => ipcRenderer.invoke('attachments:showInFolder', id),
+  saveAttachmentAs: (id) => ipcRenderer.invoke('attachments:saveAs', id),
+  deleteAttachment: (id) => ipcRenderer.invoke('attachments:delete', id),
+  getAttachmentStats: () => ipcRenderer.invoke('attachments:stats'),
 
   listProjects: (opts) => ipcRenderer.invoke('projects:list', opts),
   getProject: (id) => ipcRenderer.invoke('projects:get', id),

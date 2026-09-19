@@ -85,7 +85,8 @@ async function runTests() {
   const payload = JSON.parse(raw);
   assert.strictEqual(payload.app, 'QuoteCraft');
   assert.strictEqual(payload.magic, 'QUOTECRAFT_BACKUP');
-  assert.strictEqual(payload.version, 1);
+  assert.strictEqual(payload.version, 2);
+  assert.ok(Array.isArray(payload.attachments), 'Backup carries an attachments array');
   const dbB64 = Buffer.from(payload.database, 'base64');
   assert.strictEqual(dbB64.slice(0, 16).toString('latin1'), 'SQLite format 3\u0000', 'DB payload is valid SQLite');
   console.log('✓ Back up now writes a valid QuoteCraft backup file');

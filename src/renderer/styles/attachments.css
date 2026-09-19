@@ -1,0 +1,149 @@
+/* Attachments panel — shared by client, project, quote and invoice detail views. */
+
+.attachments-panel {
+  display: block;
+}
+
+.attachments-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.attachments-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.attachments-dropzone {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 6px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.attachments-dropzone.is-empty {
+  padding: 6px;
+}
+
+.attachments-dropzone.drag-over {
+  border-color: var(--accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+}
+
+.attachment-row + .attachment-row {
+  border-top: 1px solid var(--border);
+}
+
+.attachment-row:hover {
+  background: var(--bg-hover);
+}
+
+.attachment-badge {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.attachment-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.attachment-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.attachment-name:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.attachment-meta {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.attachment-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.attachments-empty {
+  text-align: center;
+  padding: 20px 12px;
+  color: var(--text-muted);
+}
+
+.attachments-empty-icon {
+  font-size: 26px;
+  margin-bottom: 6px;
+}
+
+.attachments-empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.attachments-empty-text {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.attachments-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+@media (max-width: 720px) {
+  .attachment-row {
+    flex-wrap: wrap;
+  }
+
+  .attachment-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

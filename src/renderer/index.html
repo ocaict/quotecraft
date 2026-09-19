@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="styles/client-profitability.css">
   <link rel="stylesheet" href="styles/client-statements.css">
   <link rel="stylesheet" href="styles/audit-log.css">
+  <link rel="stylesheet" href="styles/attachments.css">
   <link rel="stylesheet" href="styles/app-lock.css">
   <script src="js/theme.js"></script>
 </head>
@@ -396,6 +397,12 @@
 
           <div id="overviewNotesTimeline" class="notes-timeline" style="margin-top:20px"></div>
         </div>
+
+        <div class="card" id="clientAttachmentsCard">
+          <h2>Attachments</h2>
+          <p class="subtitle" style="margin-bottom:12px">Signed contracts, scope documents, and reference files. Files are copied into the app, so they keep working even if the original is moved or deleted.</p>
+          <div id="clientAttachmentsPanel" class="attachments-panel" data-entity-type="client"></div>
+        </div>
       </div>
     </section>
 
@@ -578,6 +585,12 @@
             <span id="projOverviewTimeSummary" class="unbilled-time-summary"></span>
             <button type="button" id="projOverviewCreateInvoiceBtn" class="btn btn-primary" disabled>Create Invoice from Selected</button>
           </div>
+        </div>
+
+        <div class="card" id="projectAttachmentsCard">
+          <h2>Attachments</h2>
+          <p class="subtitle" style="margin-bottom:12px">Signed contracts, scope documents, and reference files. Files are copied into the app, so they keep working even if the original is moved or deleted.</p>
+          <div id="projectAttachmentsPanel" class="attachments-panel" data-entity-type="project"></div>
         </div>
       </div>
     </section>
@@ -971,6 +984,12 @@
             <p class="empty">No emails sent yet for this quote.</p>
           </div>
         </div>
+
+        <div class="card" id="quoteAttachmentsCard">
+          <h2>Attachments</h2>
+          <p class="subtitle" style="margin-bottom:12px">Signed contracts, scope documents, and reference files. Files are copied into the app, so they keep working even if the original is moved or deleted.</p>
+          <div id="quoteAttachmentsPanel" class="attachments-panel" data-entity-type="quote"></div>
+        </div>
       </div>
     </section>
 
@@ -1217,6 +1236,12 @@
           <div id="invoiceEmailActivityList" class="email-activity-list">
             <p class="empty">No emails sent yet for this invoice.</p>
           </div>
+        </div>
+
+        <div class="card" id="invoiceAttachmentsCard">
+          <h2>Attachments</h2>
+          <p class="subtitle" style="margin-bottom:12px">Signed contracts, scope documents, and reference files. Files are copied into the app, so they keep working even if the original is moved or deleted.</p>
+          <div id="invoiceAttachmentsPanel" class="attachments-panel" data-entity-type="invoice"></div>
         </div>
       </div>
     </section>
@@ -3549,6 +3574,7 @@
           <select id="auditTypeSelect" class="audit-preset-select">
             <option value="all">All types</option>
             <option value="client">Client</option>
+            <option value="project">Project</option>
             <option value="quote">Quote</option>
             <option value="invoice">Invoice</option>
             <option value="payment">Payment</option>
@@ -3618,6 +3644,7 @@
 
   <script src="js/currencies.js"></script>
   <script src="js/utils.js"></script>
+  <script src="js/attachments.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/clients.js"></script>
   <script src="js/projects.js"></script>

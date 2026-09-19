@@ -505,6 +505,13 @@
     const c = overview.client;
     const stats = overview.stats;
 
+    if (window.QuoteCraftAttachments) {
+      window.QuoteCraftAttachments.mount(document.getElementById('clientAttachmentsPanel'), {
+        entityType: 'client',
+        entityId: c.id,
+      });
+    }
+
     overviewClientName.textContent = c.name;
     overviewClientCompany.textContent = c.company_name ? c.company_name : 'No company listed';
 

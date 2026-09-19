@@ -68,6 +68,11 @@ const {
   addClientNote,
   updateClientNote,
   deleteClientNote,
+  listAttachments,
+  getAttachment,
+  deleteAttachment,
+  deleteAttachmentsForEntity,
+  getAttachmentTotals,
   getClientOverview,
   getProjectOverview,
   PROJECT_STATUSES,
@@ -128,6 +133,15 @@ const {
   getAuditLogEntries,
 } = require('./database');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
+const {
+  ALLOWED_EXTENSIONS,
+  MAX_ATTACHMENT_LABEL,
+  getAttachmentsDir,
+  storeAttachmentFromPath,
+  getAttachmentPath,
+  deleteAttachmentFile,
+  restoreAttachments,
+} = require('./attachments');
 const {
   createBackupPayload,
   runNow: runAutoBackupNow,
@@ -485,6 +499,11 @@ function registerIpcHandlers() {
 
     try {
       const result = deleteClient(id);
+      if (result && result.ok && result.deleted) {
+        // Remove attachment rows + their files along with the client.
+        const cleanup = deleteAttachmentsForEntity('client', id);
+        cleanup.storedFilenames.forEach((f) => deleteAttachmentFile(f));
+      }
       return result;
     } catch (err) {
       return { ok: false, errors: { general: `Failed to delete client: ${err.message}` } };
@@ -563,6 +582,11 @@ function registerIpcHandlers() {
 
     try {
       const result = deleteProject(id);
+      if (result && result.ok && result.deleted) {
+        // Remove attachment rows + their files along with the project.
+        const cleanup = deleteAttachmentsForEntity('project', id);
+        cleanup.storedFilenames.forEach((f) => deleteAttachmentFile(f));
+      }
       return result;
     } catch (err) {
       return { ok: false, errors: { general: `Failed to delete project: ${err.message}` } };
@@ -657,6 +681,138 @@ function registerIpcHandlers() {
       return res;
     } catch (err) {
       return { ok: false, errors: { general: `Failed to delete note: ${err.message}` } };
+    }
+  });
+
+  // ---------- Attachments ----------
+  // Files are copied into the app's own attachments folder (never referenced in
+  // place), so moving/renaming/deleting the original cannot break an attachment.
+
+  ipcMain.handle('attachments:list', async (event, payload) => {
+    try {
+      const p = payload || {};
+      const attachments = listAttachments(p.entity_type, Number(p.entity_id));
+      return { ok: true, attachments };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to load attachments: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('attachments:add', async (event, payload) => {
+    const p = payload || {};
+    try {
+      // Drag-and-drop supplies explicit paths; the button opens the picker.
+      let paths = Array.isArray(p.paths) ? p.paths.filter(Boolean) : null;
+
+      if (!paths) {
+        const result = await dialog.showOpenDialog({
+          title: 'Attach files',
+          properties: ['openFile', 'multiSelections'],
+          filters: [
+            { name: 'Documents & Images', extensions: ALLOWED_EXTENSIONS },
+            { name: 'All Files', extensions: ['*'] },
+          ],
+        });
+        if (result.canceled || result.filePaths.length === 0) {
+          return { ok: true, cancelled: true, added: [], skipped: [] };
+        }
+        paths = result.filePaths;
+      }
+
+      const added = [];
+      const skipped = [];
+      for (const src of paths) {
+        const res = storeAttachmentFromPath({
+          entity_type: p.entity_type,
+          entity_id: Number(p.entity_id),
+          sourcePath: src,
+        });
+        if (res.ok) {
+          added.push(res.attachment);
+        } else {
+          skipped.push({ name: res.name || path.basename(String(src || '')), reason: res.error });
+        }
+      }
+      return { ok: true, added, skipped, limit: MAX_ATTACHMENT_LABEL };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to attach files: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('attachments:open', async (event, id) => {
+    try {
+      const attachment = getAttachment(id);
+      if (!attachment) return { ok: false, errors: { general: 'Attachment not found.' } };
+      const filePath = getAttachmentPath(attachment.stored_filename);
+      if (!filePath || !fs.existsSync(filePath)) {
+        return { ok: false, errors: { general: 'The attached file is missing from the app folder.' } };
+      }
+      const openError = await shell.openPath(filePath);
+      if (openError) return { ok: false, errors: { general: openError } };
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not open attachment: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('attachments:showInFolder', async (event, id) => {
+    try {
+      const attachment = getAttachment(id);
+      if (!attachment) return { ok: false, errors: { general: 'Attachment not found.' } };
+      const filePath = getAttachmentPath(attachment.stored_filename);
+      if (!filePath || !fs.existsSync(filePath)) {
+        return { ok: false, errors: { general: 'The attached file is missing from the app folder.' } };
+      }
+      shell.showItemInFolder(filePath);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not reveal attachment: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('attachments:saveAs', async (event, id) => {
+    try {
+      const attachment = getAttachment(id);
+      if (!attachment) return { ok: false, errors: { general: 'Attachment not found.' } };
+      const src = getAttachmentPath(attachment.stored_filename);
+      if (!src || !fs.existsSync(src)) {
+        return { ok: false, errors: { general: 'The attached file is missing from the app folder.' } };
+      }
+      const result = await dialog.showSaveDialog({
+        title: 'Save a copy of the attachment',
+        defaultPath: attachment.original_filename,
+      });
+      if (result.canceled || !result.filePath) return { ok: true, cancelled: true };
+      fs.copyFileSync(src, result.filePath);
+      return { ok: true, savedPath: result.filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not save a copy: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('attachments:delete', async (event, id) => {
+    try {
+      const res = deleteAttachment(id);
+      if (!res.ok) return { ok: false, errors: { general: 'Attachment not found.' } };
+      if (res.deleted && res.attachment) deleteAttachmentFile(res.attachment.stored_filename);
+      return { ok: true, deleted: res.deleted };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to delete attachment: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('attachments:stats', async () => {
+    try {
+      const totals = getAttachmentTotals();
+      return {
+        ok: true,
+        count: totals.count,
+        totalSize: totals.totalSize,
+        limit: MAX_ATTACHMENT_LABEL,
+        dir: getAttachmentsDir(),
+      };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to load attachment stats: ${err.message}` } };
     }
   });
 
@@ -1365,12 +1521,21 @@ function registerIpcHandlers() {
         fs.writeFileSync(newLogoPath, Buffer.from(v.payload.logo, 'base64'));
       }
 
+      // Restore attachment files next to the (now replaced) database. The DB
+      // rows already point at these stored filenames; we only write the bytes.
+      const attachmentRestore = restoreAttachments(v.attachments || []);
+
       const restoredProfile = getCompanyProfile();
       if (restoredProfile) {
         saveCompanyProfile(Object.assign({}, restoredProfile, { logo_path: newLogoPath }));
       }
 
-      return { ok: true, autoBackupPath: autoPath };
+      return {
+        ok: true,
+        autoBackupPath: autoPath,
+        attachmentsRestored: attachmentRestore.restored,
+        attachmentsSkipped: attachmentRestore.skipped,
+      };
     } catch (err) {
       return { ok: false, errors: { general: `Could not restore backup: ${err.message}` } };
     }

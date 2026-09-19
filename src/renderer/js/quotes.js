@@ -1234,6 +1234,13 @@
   function renderDetail(q) {
     document.getElementById('detailQuoteNumber').textContent = q.quote_number;
     const eff = effectiveStatus(q);
+
+    if (window.QuoteCraftAttachments) {
+      window.QuoteCraftAttachments.mount(document.getElementById('quoteAttachmentsPanel'), {
+        entityType: 'quote',
+        entityId: q.id,
+      });
+    }
     const statusBadge = document.getElementById('detailQuoteStatus');
     statusBadge.textContent = formatQuoteStatus(eff);
     statusBadge.className = 'badge status-' + eff;

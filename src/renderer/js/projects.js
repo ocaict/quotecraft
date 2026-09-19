@@ -200,6 +200,13 @@
     var c = overview.client || {};
     var stats = overview.stats || {};
 
+    if (window.QuoteCraftAttachments) {
+      window.QuoteCraftAttachments.mount(document.getElementById('projectAttachmentsPanel'), {
+        entityType: 'project',
+        entityId: p.id,
+      });
+    }
+
     overviewTitle.textContent = p.name || 'Project Overview';
     overviewStatusBadge.textContent = statusLabel(p.status);
     overviewStatusBadge.className = 'badge ' + statusClass(p.status);

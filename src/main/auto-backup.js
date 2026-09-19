@@ -6,10 +6,12 @@ const {
   getAutoBackupSettings,
   saveAutoBackupSettings,
 } = require('./database');
+const { buildBackupAttachments } = require('./attachments');
 
 const AUTO_PREFIX = 'quoteCraft-auto-';
 const AUTO_EXT = '.json';
 const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const BACKUP_VERSION = 2;
 
 function createBackupPayload(profile) {
   const dbBytes = getDatabaseBuffer();
@@ -26,14 +28,21 @@ function createBackupPayload(profile) {
       }
     }
   }
+
+  // Attachments live on disk, so embed their bytes too — otherwise a restored
+  // database would reference files that no longer exist. Version 1 backups had
+  // no attachments and still restore (with none).
+  const attachmentBackup = buildBackupAttachments();
   return {
     app: 'QuoteCraft',
     magic: 'QUOTECRAFT_BACKUP',
-    version: 1,
+    version: BACKUP_VERSION,
     createdAt: new Date().toISOString(),
     database: dbBytes.toString('base64'),
     logo,
     logoFileName,
+    attachments: attachmentBackup.files,
+    attachmentsMissing: attachmentBackup.missing,
   };
 }
 

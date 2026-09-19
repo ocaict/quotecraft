@@ -12,6 +12,7 @@
 
   const TYPE_LABELS = {
     client: 'Client',
+    project: 'Project',
     quote: 'Quote',
     invoice: 'Invoice',
     payment: 'Payment',
@@ -27,6 +28,8 @@
     status_changed: 'Status changed',
     payment_recorded: 'Payment recorded',
     credit_note_issued: 'Credit note issued',
+    attachment_added: 'Attachment added',
+    attachment_removed: 'Attachment removed',
     settings_changed: 'Settings changed',
   };
 
