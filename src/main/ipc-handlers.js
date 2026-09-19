@@ -5,6 +5,7 @@ const {
   renderQuotePdf,
   renderInvoicePdf,
   renderCreditNotePdf,
+  renderClientStatementPdf,
   renderQuoteHtml,
   renderQuotePrintHtml,
   renderInvoicePrintHtml,
@@ -1915,6 +1916,31 @@ function registerIpcHandlers() {
       return getClientStatement(filter || {});
     } catch (err) {
       return { ok: false, errors: { general: err.message } };
+    }
+  });
+
+  ipcMain.handle('reports:exportStatementPdf', async (event, filter) => {
+    try {
+      const statement = getClientStatement(filter || {});
+      if (!statement.ok) {
+        return statement;
+      }
+      const profile = getCompanyProfile();
+      const buffer = await renderClientStatementPdf(statement, profile);
+
+      const safeName = String((statement.client && statement.client.name) || 'client').replace(/[^\w-]+/g, '_');
+      const result = await dialog.showSaveDialog({
+        title: 'Save Client Statement PDF',
+        defaultPath: `Statement - ${safeName} - ${statement.startDate} to ${statement.endDate}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { ok: true, cancelled: true };
+      }
+      fs.writeFileSync(result.filePath, buffer);
+      return { ok: true, savedPath: result.filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not export PDF: ${err.message}` } };
     }
   });
 

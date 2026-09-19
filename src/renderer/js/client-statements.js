@@ -11,6 +11,7 @@
   const csStartDate    = document.getElementById('csStartDate');
   const csEndDate      = document.getElementById('csEndDate');
   const csPrintBtn     = document.getElementById('csPrintBtn');
+  const csExportPdfBtn = document.getElementById('csExportPdfBtn');
 
   const csPlaceholder  = document.getElementById('csPlaceholder');
   const csStatement    = document.getElementById('csStatement');
@@ -27,6 +28,7 @@
   const csTotalCredited  = document.getElementById('csTotalCredited');
   const csClosingBalance = document.getElementById('csClosingBalance');
   const csFxNotice       = document.getElementById('csFxNotice');
+  const csOverdueNote    = document.getElementById('csOverdueNote');
 
   const csTableCount = document.getElementById('csTableCount');
   const csTableBody  = document.getElementById('csTableBody');
@@ -213,6 +215,21 @@
     csTotalCredited.textContent = fmt(statement.totals && statement.totals.credited, curr);
     csClosingBalance.textContent = fmt(statement.closingBalance, curr);
 
+    // Overdue closing balance (mirrors the PDF flag): red chip + note.
+    const overdue = statement.overdue || {};
+    const closingChip = csClosingBalance ? csClosingBalance.closest('.cs-summary-chip') : null;
+    if (closingChip) closingChip.classList.toggle('overdue', Boolean(overdue.hasOverdue));
+    if (csOverdueNote) {
+      if (overdue.hasOverdue) {
+        const since = overdue.earliestDueDate ? ` (oldest due ${fmtDate(overdue.earliestDueDate)})` : '';
+        csOverdueNote.innerHTML = `⚠️ Includes <strong>${escapeHtml(fmt(overdue.balance, curr))}</strong> overdue${escapeHtml(since)}.`;
+        csOverdueNote.classList.remove('hidden');
+      } else {
+        csOverdueNote.textContent = '';
+        csOverdueNote.classList.add('hidden');
+      }
+    }
+
     renderTable(statement.rows || [], curr);
   }
 
@@ -297,6 +314,44 @@
     }
   }
 
+  // ── Export PDF ──────────────────────────────────────────────
+  async function exportStatementPdf() {
+    const clientId = csClientSelect ? csClientSelect.value : '';
+    const startDate = csStartDate ? csStartDate.value : '';
+    const endDate = csEndDate ? csEndDate.value : '';
+
+    if (!clientId || !currentStatement) {
+      window.QuoteCraftUtils.showToast('Generate a statement first.', 'error');
+      return;
+    }
+    if (!startDate || !endDate || startDate > endDate) {
+      window.QuoteCraftUtils.showToast('Please choose a valid date range first.', 'error');
+      return;
+    }
+
+    csExportPdfBtn.disabled = true;
+    if (window.QuoteCraftUtils.showBusy) window.QuoteCraftUtils.showBusy('Generating PDF…');
+    try {
+      const res = await window.electronAPI.exportStatementPdf({
+        client_id: Number(clientId),
+        startDate,
+        endDate,
+      });
+      if (res.ok && res.cancelled) return;
+      if (res.ok) {
+        window.QuoteCraftUtils.showToast('PDF saved to ' + res.savedPath, 'success');
+      } else {
+        const errors = (res && res.errors) || {};
+        window.QuoteCraftUtils.showToast(errors.general || errors.range || errors.client_id || 'Could not export PDF.', 'error');
+      }
+    } catch (e) {
+      window.QuoteCraftUtils.showToast('Could not export PDF: ' + e.message, 'error');
+    } finally {
+      if (window.QuoteCraftUtils.hideBusy) window.QuoteCraftUtils.hideBusy();
+      csExportPdfBtn.disabled = false;
+    }
+  }
+
   // ── Event Setup ─────────────────────────────────────────────
   function setupEvents() {
     if (csClientSelect) {
@@ -326,6 +381,10 @@
 
     if (csPrintBtn) {
       csPrintBtn.addEventListener('click', () => window.print());
+    }
+
+    if (csExportPdfBtn) {
+      csExportPdfBtn.addEventListener('click', exportStatementPdf);
     }
 
     document.addEventListener('pagechange', (e) => {

@@ -6684,7 +6684,7 @@ function getClientStatement({ client_id, startDate, endDate } = {}) {
 
   // Non-draft invoices only (drafts have not been issued to the client).
   const allInvoices = execRows(
-    `SELECT id, invoice_number, date_created, total, currency,
+    `SELECT id, invoice_number, date_created, date_due, total, balance_due, currency,
             COALESCE(exchange_rate, 1.0) AS rate
        FROM invoices
       WHERE client_id = ? AND status NOT IN ('draft')
@@ -6807,15 +6807,31 @@ function getClientStatement({ client_id, startDate, endDate } = {}) {
   const totalInvoiced = round2(rows.filter((r) => r.type === 'invoice').reduce((s, r) => s + r.charge, 0));
   const totalCreditNotes = round2(rows.filter((r) => r.type === 'credit_note').reduce((s, r) => s + r.charge, 0));
 
+  // Overdue (relative to today, mirroring the invoice PDF and renderer): the
+  // portion of the closing balance still owed on non-draft invoices that are
+  // already past their due date.
+  const today = toDateString(new Date());
+  let overdueTotal = 0;
+  let overdueCount = 0;
+  let earliestDueDate = null;
+  for (const inv of allInvoices) {
+    if (String(inv.date_created) > endDate) continue;
+    const due = inv.date_due ? String(inv.date_due) : '';
+    if (!due || due >= today) continue;
+    const bal = normalize(inv.balance_due, inv.rate, inv.currency);
+    if (bal <= 0.0001) continue;
+    overdueTotal += bal;
+    overdueCount += 1;
+    if (!earliestDueDate || due < earliestDueDate) earliestDueDate = due;
+  }
+
   return {
     ok: true,
-    client: {
-      id: client.id,
-      name: client.name,
+    client: Object.assign({}, client, {
       company_name: client.company_name || '',
       email: client.email || '',
       phone: client.phone || '',
-    },
+    }),
     startDate,
     endDate,
     currency: reportingCurrency,
@@ -6830,6 +6846,13 @@ function getClientStatement({ client_id, startDate, endDate } = {}) {
       charges: totalCharges,
       credits: totalCredits,
       netChange: round2(totalCharges - totalCredits),
+    },
+    overdue: {
+      balance: round2(overdueTotal),
+      count: overdueCount,
+      earliestDueDate,
+      asOf: today,
+      hasOverdue: overdueTotal > 0.0001,
     },
     counts: {
       invoices: rows.filter((r) => r.type === 'invoice').length,

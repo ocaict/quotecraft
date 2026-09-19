@@ -383,6 +383,7 @@ function buildPdfTaxRows(lineItems, subtotal, discountAmount, currency) {
 function drawTotals(ctx, opts) {
   const { doc, W } = ctx;
   const { rows, grandLabel, grandValue, extra } = opts;
+  const grandColor = opts.grandColor || COLORS.ink;
   const totalsW = 250;
   const totalsX = MARGIN + W - totalsW;
   const labelW = totalsW * 0.60;
@@ -411,17 +412,17 @@ function drawTotals(ctx, opts) {
   const grandH = 34;
   doc.rect(totalsX, ctx.y, totalsW, grandH).fill(COLORS.grandFill);
   doc.moveTo(totalsX, ctx.y).lineTo(totalsX + totalsW, ctx.y).strokeColor(COLORS.ink).lineWidth(1.5).stroke();
-  doc.font('Helvetica-Bold').fontSize(11).fillColor(COLORS.ink);
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(grandColor);
   doc.text(grandLabel, totalsX + 10, ctx.y + 11, { width: labelW, lineGap: 0 });
   doc.text(grandValue, totalsX + labelW - 10, ctx.y + 11, { width: valueW + 10, align: 'right', lineGap: 0 });
   ctx.y += grandH + 8;
 
-  for (const [label, value] of extra) {
+  for (const [label, value, color] of extra) {
     if (ctx.y + 22 > ctx.pageBottom) {
       doc.addPage();
       ctx.y = doc.y;
     }
-    doc.font('Helvetica').fontSize(9.5).fillColor(label === 'Balance due' ? COLORS.ink : COLORS.muted);
+    doc.font('Helvetica').fontSize(9.5).fillColor(color || (label === 'Balance due' ? COLORS.ink : COLORS.muted));
     doc.text(label, totalsX, ctx.y + 3, { width: labelW, lineGap: 0 });
     doc.text(value, totalsX + labelW, ctx.y + 3, { width: valueW, align: 'right', lineGap: 0 });
     ctx.y += 22;
@@ -1184,6 +1185,190 @@ function renderCreditNotePdf(creditNote, invoice, client, profile) {
   return ctx.done;
 }
 
+// ---------- Client Statement PDF ----------
+
+const STATEMENT_TYPE_LABELS = {
+  invoice: 'Invoice',
+  payment: 'Payment',
+  credit_note: 'Credit Note',
+};
+
+// Transaction ledger for a statement: DATE / TYPE / REFERENCE / DESCRIPTION /
+// CHARGE / CREDIT / BALANCE. Mirrors drawItemsTable's header fill, alt rows and
+// repeated-header page breaks, but with statement-specific columns.
+function drawStatementTable(ctx, rows, currency) {
+  const { doc, W } = ctx;
+  const dateW = 58;
+  const typeW = 70;
+  const refW = 80;
+  const chargeW = 66;
+  const creditW = 66;
+  const balanceW = 72;
+  const descW = W - dateW - typeW - refW - chargeW - creditW - balanceW;
+  const dateX = MARGIN;
+  const typeX = dateX + dateW;
+  const refX = typeX + typeW;
+  const descX = refX + refW;
+  const chargeX = descX + descW;
+  const creditX = chargeX + chargeW;
+  const balanceX = creditX + creditW;
+  const rowPadY = 5.5;
+  const headerH = 22;
+
+  function drawTableHeader(yPos) {
+    doc.rect(MARGIN, yPos, W, headerH).fill(COLORS.headerFill);
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(COLORS.muted);
+    doc.text('DATE', dateX + 6, yPos + 8, { width: dateW - 8, lineGap: 0 });
+    doc.text('TYPE', typeX, yPos + 8, { width: typeW - 6, lineGap: 0 });
+    doc.text('REFERENCE', refX, yPos + 8, { width: refW - 6, lineGap: 0 });
+    doc.text('DESCRIPTION', descX, yPos + 8, { width: descW - 8, lineGap: 0 });
+    doc.text('CHARGE', chargeX, yPos + 8, { width: chargeW - 6, align: 'right', lineGap: 0 });
+    doc.text('CREDIT', creditX, yPos + 8, { width: creditW - 6, align: 'right', lineGap: 0 });
+    doc.text('BALANCE', balanceX, yPos + 8, { width: balanceW - 6, align: 'right', lineGap: 0 });
+    doc.moveTo(MARGIN, yPos + headerH).lineTo(MARGIN + W, yPos + headerH).strokeColor(COLORS.line).lineWidth(1).stroke();
+  }
+
+  function ensureSpace(needed) {
+    if (ctx.y + needed > ctx.pageBottom) {
+      doc.addPage();
+      ctx.y = doc.y;
+      drawTableHeader(ctx.y);
+      ctx.y += headerH;
+    }
+  }
+
+  drawTableHeader(ctx.y);
+  ctx.y += headerH;
+
+  if (!rows.length) {
+    doc.font('Helvetica-Oblique').fontSize(9.5).fillColor(COLORS.muted).text('No account activity in this period.', MARGIN + 6, ctx.y + 7, { width: W - 12 });
+    ctx.y += 30;
+    return;
+  }
+
+  rows.forEach((row, idx) => {
+    const description = String(row.description || '');
+    doc.font('Helvetica').fontSize(9);
+    const descH = doc.heightOfString(description, { width: descW - 8 }) + rowPadY * 2;
+    const rowH = Math.max(22, Math.ceil(descH));
+
+    ensureSpace(rowH + 2);
+    if (idx % 2 === 1) {
+      doc.rect(MARGIN, ctx.y, W, rowH).fill(COLORS.altFill);
+    }
+
+    const textY = ctx.y + rowPadY;
+
+    doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted);
+    doc.text(formatDate(row.date), dateX + 6, textY + 0.5, { width: dateW - 8, lineGap: 0 });
+
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLORS.ink);
+    doc.text(STATEMENT_TYPE_LABELS[row.type] || String(row.type || ''), typeX, textY + 0.5, { width: typeW - 6, lineGap: 0 });
+
+    doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted);
+    doc.text(String(row.reference || '\u2014'), refX, textY + 0.5, { width: refW - 6, lineGap: 0 });
+
+    doc.font('Helvetica').fontSize(9).fillColor(COLORS.ink);
+    doc.text(description, descX, textY, { width: descW - 8, lineGap: 1, height: rowH - rowPadY * 2 });
+
+    const charge = Number(row.charge) || 0;
+    const credit = Number(row.credit) || 0;
+    const balance = Number(row.balance) || 0;
+
+    if (charge > 0.0001) {
+      doc.font('Helvetica').fontSize(9).fillColor(COLORS.ink);
+      doc.text(money(charge, currency), chargeX, textY + 0.5, { width: chargeW - 6, align: 'right', lineGap: 0 });
+    } else {
+      doc.font('Helvetica').fontSize(9).fillColor(COLORS.muted);
+      doc.text('\u2014', chargeX, textY + 0.5, { width: chargeW - 6, align: 'right', lineGap: 0 });
+    }
+
+    if (credit > 0.0001) {
+      doc.font('Helvetica').fontSize(9).fillColor(COLORS.paid);
+      doc.text(money(credit, currency), creditX, textY + 0.5, { width: creditW - 6, align: 'right', lineGap: 0 });
+    } else {
+      doc.font('Helvetica').fontSize(9).fillColor(COLORS.muted);
+      doc.text('\u2014', creditX, textY + 0.5, { width: creditW - 6, align: 'right', lineGap: 0 });
+    }
+
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.ink);
+    doc.text(money(balance, currency), balanceX, textY + 0.5, { width: balanceW - 6, align: 'right', lineGap: 0 });
+
+    ctx.y += rowH;
+    doc.moveTo(MARGIN, ctx.y).lineTo(MARGIN + W, ctx.y).strokeColor(COLORS.line).lineWidth(0.75).stroke();
+    ctx.y += 1;
+  });
+
+  ctx.y += 20;
+}
+
+function renderClientStatementPdf(statement, profile) {
+  const currency = statement.currency || (profile && profile.default_currency) || 'USD';
+  const businessName = (profile && profile.business_name) || 'QuoteCraft';
+  const client = statement.client || {};
+  const overdue = statement.overdue || {};
+  const generatedOn = new Date().toISOString().slice(0, 10);
+
+  const ctx = createDocument({
+    title: `Statement of Account - ${client.name || 'Client'}`,
+    author: businessName,
+    subject: 'Statement of Account',
+  });
+  const { doc } = ctx;
+
+  drawHeaderBrand(ctx, {
+    profile,
+    businessName,
+    rightLabel: 'STATEMENT OF ACCOUNT',
+    rightNumber: '',
+    metaRows: [
+      ['Period', `${formatDate(statement.startDate)} to ${formatDate(statement.endDate)}`],
+      ['Generated', formatDate(generatedOn)],
+      ['Currency', currency],
+    ],
+  });
+  drawDivider(ctx);
+  drawClientBlock(ctx, client, 'STATEMENT FOR');
+
+  // Opening balance, highlighted in a totals panel to match the closing panel.
+  drawTotals(ctx, {
+    rows: [],
+    grandLabel: 'OPENING BALANCE',
+    grandValue: money(statement.openingBalance, currency),
+    extra: [],
+  });
+
+  drawStatementTable(ctx, statement.rows || [], currency);
+
+  const totals = statement.totals || {};
+  const extraRows = [];
+  if (overdue.hasOverdue) {
+    const since = overdue.earliestDueDate ? ` (oldest due ${formatDate(overdue.earliestDueDate)})` : '';
+    extraRows.push([`Overdue${since}`, money(overdue.balance, currency), COLORS.overdue]);
+  }
+
+  drawTotals(ctx, {
+    rows: [
+      ['Total invoiced', money(totals.invoiced, currency)],
+      ['Payments received', `\u2212${money(totals.paid, currency)}`],
+      ['Credit notes', money(totals.credited, currency)],
+    ],
+    grandLabel: 'CLOSING BALANCE',
+    grandValue: money(statement.closingBalance, currency),
+    grandColor: overdue.hasOverdue ? COLORS.overdue : COLORS.ink,
+    extra: extraRows,
+  });
+
+  drawFooter(ctx, `Statement generated by ${businessName}`);
+
+  if (overdue.hasOverdue) {
+    drawStampOnFirstPage(ctx, 'OVERDUE', COLORS.overdue);
+  }
+
+  doc.end();
+  return ctx.done;
+}
+
 // ---------- Shareable Standalone HTML Quote ----------
 
 function escapeHtml(str) {
@@ -1671,6 +1856,7 @@ module.exports = {
   renderQuotePdf,
   renderInvoicePdf,
   renderCreditNotePdf,
+  renderClientStatementPdf,
   renderQuoteHtml,
   renderQuotePrintHtml,
   renderInvoicePrintHtml,

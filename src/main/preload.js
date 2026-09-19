@@ -132,6 +132,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRevenueReport: (filter) => ipcRenderer.invoke('reports:revenue', filter),
   getClientProfitabilityReport: (filter) => ipcRenderer.invoke('reports:clientProfitability', filter),
   getClientStatement: (filter) => ipcRenderer.invoke('reports:clientStatement', filter),
+  exportStatementPdf: (filter) => ipcRenderer.invoke('reports:exportStatementPdf', filter),
   getAppLockSettings: () => ipcRenderer.invoke('lock:getSettings'),
   setAppLockPin: (payload) => ipcRenderer.invoke('lock:setPin', payload),
   verifyAppLockPin: (pin) => ipcRenderer.invoke('lock:verify', { pin }),

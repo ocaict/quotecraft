@@ -3402,6 +3402,7 @@
           <p>Generate a running statement of account — invoices, payments and credit notes with a live balance — for any client and date range.</p>
         </div>
         <div class="cs-header-actions">
+          <button type="button" class="btn btn-secondary btn-small" id="csExportPdfBtn">📄 Export PDF</button>
           <button type="button" class="btn btn-secondary btn-small" id="csPrintBtn">🖨️ Print</button>
         </div>
       </div>
@@ -3479,6 +3480,8 @@
             <span class="cs-summary-value" id="csClosingBalance">$0.00</span>
           </div>
         </div>
+
+        <div id="csOverdueNote" class="cs-overdue-note hidden"></div>
 
         <div id="csFxNotice" class="cs-fx-notice hidden">
           <span class="cs-fx-icon">💱</span>

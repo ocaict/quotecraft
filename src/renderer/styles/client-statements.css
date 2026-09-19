@@ -211,6 +211,23 @@
 .cs-summary-chip.credited .cs-summary-value { color: #fb7185; }
 .cs-summary-chip.closing .cs-summary-value { color: #fbbf24; }
 
+.cs-summary-chip.closing.overdue::before { background: linear-gradient(90deg, #dc2626, #f87171); }
+.cs-summary-chip.closing.overdue .cs-summary-value { color: #f87171; }
+
+/* ─── Overdue Notice ──────────────────────────────────────── */
+.cs-overdue-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: #fca5a5;
+  margin-bottom: 20px;
+}
+
 /* ─── Foreign Currency Notice ─────────────────────────────── */
 .cs-fx-notice {
   display: flex;

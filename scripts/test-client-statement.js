@@ -60,7 +60,18 @@ async function runTests() {
     default_tax_rate: '0',
   });
 
-  const clientA = addClient({ name: 'Acme Corp', status: 'active' });
+  const clientA = addClient({
+    name: 'Acme Corp',
+    company_name: 'Acme Industries',
+    email: 'billing@acme.test',
+    phone: '555-0100',
+    address_line1: '1 Acme Way',
+    city: 'Springfield',
+    state: 'IL',
+    postal_code: '62701',
+    country: 'USA',
+    status: 'active',
+  });
   const clientB = addClient({ name: 'Globex', status: 'active' });
   assert.ok(clientA && clientA.id, 'Client A created');
   assert.ok(clientB && clientB.id, 'Client B created');
@@ -99,6 +110,14 @@ async function runTests() {
   backdateCreditNote(cnIn.credit_note.id, '2026-03-26');
   console.log('✓ Payments + credit notes placed before/inside the range');
 
+  // Make invIn1 overdue: its due date is in the past and it still has a balance
+  // (200 invoiced - 50 paid + 10 credited = 160 outstanding).
+  const pastDue = new Date();
+  pastDue.setDate(pastDue.getDate() - 30);
+  const pastDueStr = pastDue.toISOString().slice(0, 10);
+  getDb().run('UPDATE invoices SET date_due = ? WHERE id = ?', [pastDueStr, invIn1.id]);
+  console.log('✓ invIn1 backdated to be overdue (' + pastDueStr + ')');
+
   // ---------- 1. Opening balance + counts ----------
   const res = getClientStatement({ client_id: clientA.id, startDate: RANGE_START, endDate: RANGE_END });
   assert.strictEqual(res.ok, true, 'Statement generated');
@@ -110,6 +129,14 @@ async function runTests() {
   assert.strictEqual(res.counts.creditNotes, 1, 'One in-range credit note');
   assert.strictEqual(res.rows.length, 7, 'Seven in-range rows');
   console.log('✓ Opening balance 70 and range counts (draft excluded)');
+
+  // Client record is passed through in full so the PDF can render the address.
+  assert.strictEqual(res.client.name, 'Acme Corp', 'Client name passed through');
+  assert.strictEqual(res.client.company_name, 'Acme Industries', 'Client company passed through');
+  assert.strictEqual(res.client.email, 'billing@acme.test', 'Client email passed through');
+  assert.strictEqual(res.client.address_line1, '1 Acme Way', 'Client address passed through for the PDF');
+  assert.strictEqual(res.client.city, 'Springfield', 'Client city passed through for the PDF');
+  console.log('✓ Full client record available for PDF rendering');
 
   // ---------- 2. Draft excluded ----------
   assert.ok(!res.rows.some((r) => r.reference === invDraft.invoice_number), 'Draft invoice never appears');
@@ -172,7 +199,17 @@ async function runTests() {
   assert.strictEqual(resFx.closingBalance, 200, 'Closing balance is normalized');
   console.log('✓ Amounts normalized to the reporting currency');
 
-  // ---------- 8. Validation ----------
+  // ---------- 8. Overdue aggregation (relative to today) ----------
+  assert.strictEqual(res.overdue.hasOverdue, true, 'Statement reports an overdue balance');
+  assert.strictEqual(res.overdue.balance, 160, 'invIn1: 200 - 50 paid + 10 credited = 160 overdue');
+  assert.strictEqual(res.overdue.count, 1, 'Only the backdated invoice is overdue');
+  assert.strictEqual(res.overdue.earliestDueDate, pastDueStr, 'Earliest overdue due date reported');
+  assert.strictEqual(res.overdue.asOf, new Date().toISOString().slice(0, 10), 'Overdue is measured as of today');
+  assert.strictEqual(resB.overdue.hasOverdue, false, 'Client B has nothing overdue');
+  assert.strictEqual(resFx.overdue.hasOverdue, false, 'A future-due invoice is not overdue');
+  console.log('✓ Overdue balance, count, earliest due date and as-of date');
+
+  // ---------- 9. Validation ----------
   let v = getClientStatement({ startDate: RANGE_START, endDate: RANGE_END });
   assert.strictEqual(v.ok, false, 'Missing client rejected');
   assert.ok(v.errors.client_id, 'client_id error expected');
