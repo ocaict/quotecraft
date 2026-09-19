@@ -1,6 +1,6 @@
 // Global keyboard shortcuts controller.
 // Loaded after utils.js; registers one keydown listener for the whole app.
-//
+//  Ctrl/Cmd+K — Open Command Palette
 //  N          — New quote
 //  I          — New invoice
 //  C          — New client
@@ -158,6 +158,13 @@
     if (withModifier && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       saveCurrent();
+      return;
+    }
+
+    // Ctrl/Cmd+K — Command Palette
+    if (withModifier && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent('qc-open-command-palette'));
       return;
     }
 

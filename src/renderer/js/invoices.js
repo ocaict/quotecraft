@@ -500,6 +500,9 @@
       if (res.ok) {
         invoices = res.invoices || [];
         renderList();
+        if (window.QuoteCraftUtils && window.QuoteCraftUtils.refreshSidebarBadges) {
+          window.QuoteCraftUtils.refreshSidebarBadges();
+        }
       } else {
         toast('Could not load invoices.', 'error');
       }

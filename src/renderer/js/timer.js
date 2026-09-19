@@ -34,6 +34,9 @@
   var clientEl = document.getElementById('liveTimerClient');
   var stopBtn = document.getElementById('liveTimerStopBtn');
   var discardBtn = document.getElementById('liveTimerDiscardBtn');
+  var sidebarTimerBadge = document.getElementById('sidebarTimerBadge');
+  var sidebarTimerTime = document.getElementById('sidebarTimerTime');
+  var timerClickArea = document.getElementById('liveTimerClickArea');
 
   // ---------- Formatting ----------
   function pad(n) {
@@ -80,13 +83,19 @@
   function render() {
     if (!state.timer) {
       indicator.classList.add('hidden');
+      if (sidebarTimerBadge) sidebarTimerBadge.classList.add('hidden');
       if (document.title !== 'QuoteCraft') document.title = 'QuoteCraft';
       return;
     }
     var elapsed = Date.now() - state.startOffset;
+    var formatted = fmtElapsed(elapsed);
     indicator.classList.remove('hidden');
-    elapsedEl.textContent = fmtElapsed(elapsed);
-    document.title = '⏱ ' + fmtElapsed(elapsed) + ' · QuoteCraft';
+    elapsedEl.textContent = formatted;
+    if (sidebarTimerBadge) {
+      sidebarTimerBadge.classList.remove('hidden');
+      if (sidebarTimerTime) sidebarTimerTime.textContent = formatted;
+    }
+    document.title = '⏱ ' + formatted + ' · QuoteCraft';
   }
 
   function setInfo(timer) {
@@ -183,6 +192,7 @@
       if (res.ok) {
         toast('Timer discarded — no time was logged.', 'success');
         clearTimer();
+        window.dispatchEvent(new CustomEvent('qc-timer-discarded'));
       } else {
         toast(res.errors && res.errors.general ? res.errors.general : 'Could not discard the timer.', 'error');
       }
@@ -314,6 +324,7 @@
         render();
         closeStartModal();
         toast('Timer started for ' + (res.timer.client_name || 'the client') + '.', 'success');
+        window.dispatchEvent(new CustomEvent('qc-timer-started', { detail: res.timer }));
       } else {
         if (res.errors) {
           let showed = false;
@@ -341,6 +352,14 @@
   });
   timerClient.addEventListener('change', fillProjectOptions);
   startForm.addEventListener('submit', handleStartSubmit);
+
+  if (timerClickArea) {
+    timerClickArea.addEventListener('click', function () {
+      if (window.QuoteCraftUtils && window.QuoteCraftUtils.goToPage) {
+        window.QuoteCraftUtils.goToPage('time-entries');
+      }
+    });
+  }
 
   window.QuoteCraftTimer = {
     openStart: openStart,

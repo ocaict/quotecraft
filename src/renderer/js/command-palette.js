@@ -1,0 +1,581 @@
+// Command Palette (Ctrl+K) Controller for QuoteCraft
+// Provides fast keyboard-driven navigation, quick actions, and fuzzy search.
+(function () {
+  'use strict';
+
+  var SVG_WRAPPER_START = '<svg class="cmd-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">';
+  var SVG_WRAPPER_END = '</svg>';
+
+  function makeIcon(innerSvg) {
+    return SVG_WRAPPER_START + innerSvg + SVG_WRAPPER_END;
+  }
+
+  var ICONS = {
+    dashboard: makeIcon('<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>'),
+    clients: makeIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+    projects: makeIcon('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>'),
+    timer: makeIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
+    quotes: makeIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>'),
+    invoices: makeIcon('<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/>'),
+    payments: makeIcon('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>'),
+    items: makeIcon('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>'),
+    expenses: makeIcon('<path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><circle cx="18" cy="14" r="2"/>'),
+    revenue: makeIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>'),
+    profitability: makeIcon('<circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>'),
+    profitloss: makeIcon('<path d="M12 3v18"/><path d="m3 7 4 7H1l4-7z"/><path d="m15 11 4 7h-6l4-7z"/><path d="M5 7h14"/>'),
+    statements: makeIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'),
+    settings: makeIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
+    email: makeIcon('<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>'),
+    audit: makeIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+    plus: makeIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
+    play: makeIcon('<polygon points="5 3 19 12 5 21 5 3"/>'),
+    theme: makeIcon('<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>'),
+    search: makeIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
+    help: makeIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>')
+  };
+
+  var COMMANDS = [
+    // --- Actions ---
+    {
+      id: 'action-new-quote',
+      label: 'New Quote',
+      category: 'Actions',
+      icon: ICONS.plus,
+      shortcut: 'N',
+      keywords: 'create quote draft proposal estimate',
+      action: function () {
+        var btn = document.getElementById('dashNewQuoteBtn') || document.getElementById('newQuoteBtn');
+        if (btn) btn.click();
+      }
+    },
+    {
+      id: 'action-new-invoice',
+      label: 'New Invoice',
+      category: 'Actions',
+      icon: ICONS.plus,
+      shortcut: 'I',
+      keywords: 'create invoice bill payment request',
+      action: function () {
+        var btn = document.getElementById('dashNewInvoiceBtn') || document.getElementById('newInvoiceBtn');
+        if (btn) btn.click();
+      }
+    },
+    {
+      id: 'action-new-client',
+      label: 'New Client',
+      category: 'Actions',
+      icon: ICONS.plus,
+      shortcut: 'C',
+      keywords: 'create client customer contact person add',
+      action: function () {
+        var btn = document.getElementById('addClientBtn');
+        if (btn) btn.click();
+      }
+    },
+    {
+      id: 'action-new-project',
+      label: 'New Project',
+      category: 'Actions',
+      icon: ICONS.plus,
+      shortcut: '',
+      keywords: 'create project client job task',
+      action: function () {
+        window.QuoteCraftUtils.goToPage('projects');
+        var btn = document.getElementById('addProjectBtn');
+        if (btn) btn.click();
+      }
+    },
+    {
+      id: 'action-new-expense',
+      label: 'New Expense',
+      category: 'Actions',
+      icon: ICONS.plus,
+      shortcut: '',
+      keywords: 'log record expense receipt cost spend',
+      action: function () {
+        window.QuoteCraftUtils.goToPage('expenses');
+        var btn = document.getElementById('addExpenseBtn');
+        if (btn) btn.click();
+      }
+    },
+    {
+      id: 'action-start-timer',
+      label: 'Start Live Timer',
+      category: 'Actions',
+      icon: ICONS.play,
+      shortcut: '',
+      keywords: 'time clock tracker stopwatch record hours work',
+      action: function () {
+        if (window.QuoteCraftTimer && window.QuoteCraftTimer.openStart) {
+          window.QuoteCraftTimer.openStart();
+        } else {
+          window.QuoteCraftUtils.goToPage('time-entries');
+        }
+      }
+    },
+    {
+      id: 'action-toggle-theme',
+      label: 'Toggle Dark / Light Theme',
+      category: 'Actions',
+      icon: ICONS.theme,
+      shortcut: '',
+      keywords: 'dark mode light theme appearance color switch',
+      action: function () {
+        if (window.QuoteCraftTheme) {
+          var current = window.QuoteCraftTheme.getMode();
+          var next = current === 'light' ? 'dark' : 'light';
+          window.QuoteCraftTheme.setMode(next);
+          if (window.QuoteCraftUtils && window.QuoteCraftUtils.showToast) {
+            window.QuoteCraftUtils.showToast('Theme set to ' + next);
+          }
+        }
+      }
+    },
+    {
+      id: 'action-focus-search',
+      label: 'Search Current View',
+      category: 'Actions',
+      icon: ICONS.search,
+      shortcut: '/',
+      keywords: 'find filter query lookup',
+      action: function () {
+        var evt = new KeyboardEvent('keydown', { key: '/', bubbles: true });
+        document.dispatchEvent(evt);
+      }
+    },
+
+    // --- Navigation ---
+    {
+      id: 'nav-dashboard',
+      label: 'Go to Dashboard',
+      category: 'Navigation',
+      icon: ICONS.dashboard,
+      shortcut: '',
+      keywords: 'home stats overview kpi',
+      action: function () { window.QuoteCraftUtils.goToPage('dashboard'); }
+    },
+    {
+      id: 'nav-clients',
+      label: 'Go to Clients',
+      category: 'Navigation',
+      icon: ICONS.clients,
+      shortcut: '',
+      keywords: 'customers contacts people address',
+      action: function () { window.QuoteCraftUtils.goToPage('clients'); }
+    },
+    {
+      id: 'nav-projects',
+      label: 'Go to Projects',
+      category: 'Navigation',
+      icon: ICONS.projects,
+      shortcut: '',
+      keywords: 'jobs assignments tasks clients',
+      action: function () { window.QuoteCraftUtils.goToPage('projects'); }
+    },
+    {
+      id: 'nav-time-entries',
+      label: 'Go to Time Entries',
+      category: 'Navigation',
+      icon: ICONS.timer,
+      shortcut: '',
+      keywords: 'hours timesheet logs timer tracked',
+      action: function () { window.QuoteCraftUtils.goToPage('time-entries'); }
+    },
+    {
+      id: 'nav-quotes',
+      label: 'Go to Quotes',
+      category: 'Navigation',
+      icon: ICONS.quotes,
+      shortcut: '',
+      keywords: 'proposals estimates bids drafts',
+      action: function () { window.QuoteCraftUtils.goToPage('quotes'); }
+    },
+    {
+      id: 'nav-invoices',
+      label: 'Go to Invoices',
+      category: 'Navigation',
+      icon: ICONS.invoices,
+      shortcut: '',
+      keywords: 'bills unpaid overdue payments credit notes',
+      action: function () { window.QuoteCraftUtils.goToPage('invoices'); }
+    },
+    {
+      id: 'nav-payments',
+      label: 'Go to Payments',
+      category: 'Navigation',
+      icon: ICONS.payments,
+      shortcut: '',
+      keywords: 'received transactions paid history money',
+      action: function () { window.QuoteCraftUtils.goToPage('payments'); }
+    },
+    {
+      id: 'nav-items',
+      label: 'Go to Line Item Library',
+      category: 'Navigation',
+      icon: ICONS.items,
+      shortcut: '',
+      keywords: 'products services catalog catalog rates inventory',
+      action: function () { window.QuoteCraftUtils.goToPage('items'); }
+    },
+    {
+      id: 'nav-expenses',
+      label: 'Go to Expenses',
+      category: 'Navigation',
+      icon: ICONS.expenses,
+      shortcut: '',
+      keywords: 'receipts spending costs deductions',
+      action: function () { window.QuoteCraftUtils.goToPage('expenses'); }
+    },
+    {
+      id: 'nav-revenue-report',
+      label: 'Go to Revenue Report',
+      category: 'Navigation',
+      icon: ICONS.revenue,
+      shortcut: '',
+      keywords: 'analytics charts sales quarterly monthly earnings',
+      action: function () { window.QuoteCraftUtils.goToPage('revenue-report'); }
+    },
+    {
+      id: 'nav-client-profitability',
+      label: 'Go to Client Profitability',
+      category: 'Navigation',
+      icon: ICONS.profitability,
+      shortcut: '',
+      keywords: 'margin profit top clients performance roi',
+      action: function () { window.QuoteCraftUtils.goToPage('client-profitability'); }
+    },
+    {
+      id: 'nav-profit-loss',
+      label: 'Go to Profit & Loss',
+      category: 'Navigation',
+      icon: ICONS.profitloss,
+      shortcut: '',
+      keywords: 'p&l balance sheet income net tax statement',
+      action: function () { window.QuoteCraftUtils.goToPage('profit-loss'); }
+    },
+    {
+      id: 'nav-client-statements',
+      label: 'Go to Client Statements',
+      category: 'Navigation',
+      icon: ICONS.statements,
+      shortcut: '',
+      keywords: 'statements account statement history client pdf',
+      action: function () { window.QuoteCraftUtils.goToPage('client-statements'); }
+    },
+    {
+      id: 'nav-settings',
+      label: 'Go to Company Profile / Settings',
+      category: 'Navigation',
+      icon: ICONS.settings,
+      shortcut: '',
+      keywords: 'company business logo address currency app lock preferences',
+      action: function () { window.QuoteCraftUtils.goToPage('settings'); }
+    },
+    {
+      id: 'nav-email-settings',
+      label: 'Go to Email Configuration',
+      category: 'Navigation',
+      icon: ICONS.email,
+      shortcut: '',
+      keywords: 'smtp mail email sender templates',
+      action: function () { window.QuoteCraftUtils.goToPage('email-settings'); }
+    },
+    {
+      id: 'nav-audit-log',
+      label: 'Go to Audit Log',
+      category: 'Navigation',
+      icon: ICONS.audit,
+      shortcut: '',
+      keywords: 'activity history security changes events log',
+      action: function () { window.QuoteCraftUtils.goToPage('audit-log'); }
+    },
+
+    // --- Help ---
+    {
+      id: 'help-shortcuts',
+      label: 'Keyboard Shortcuts Reference',
+      category: 'Help',
+      icon: ICONS.help,
+      shortcut: '?',
+      keywords: 'keys hotkeys help cheat sheet documentation',
+      action: function () {
+        window.QuoteCraftUtils.goToPage('settings');
+        var card = document.getElementById('shortcutsCard');
+        if (card) {
+          card.classList.add('shortcuts-highlight');
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(function () { card.classList.remove('shortcuts-highlight'); }, 2600);
+        }
+      }
+    }
+  ];
+
+  var overlay = null;
+  var input = null;
+  var resultsContainer = null;
+  var currentFiltered = [];
+  var selectedIndex = 0;
+
+  function initElements() {
+    overlay = document.getElementById('commandPalette');
+    if (!overlay) return false;
+    input = document.getElementById('cmdPaletteInput');
+    resultsContainer = document.getElementById('cmdPaletteResults');
+    var escBtn = document.getElementById('cmdPaletteEsc');
+
+    if (escBtn) {
+      escBtn.addEventListener('click', closePalette);
+    }
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        closePalette();
+      }
+    });
+
+    if (input) {
+      input.addEventListener('input', function () {
+        filterAndRender(input.value);
+      });
+
+      input.addEventListener('keydown', handleKeydown);
+    }
+
+    return true;
+  }
+
+  function scoreCommand(cmd, query) {
+    var q = query.toLowerCase().trim();
+    if (!q) return 100;
+
+    var labelLower = cmd.label.toLowerCase();
+    var catLower = cmd.category.toLowerCase();
+    var kwLower = (cmd.keywords || '').toLowerCase();
+
+    // Exact label prefix match is highest score
+    if (labelLower.startsWith(q)) return 1000 - (labelLower.length - q.length);
+
+    // Label words startsWith
+    var words = labelLower.split(/\s+/);
+    for (var i = 0; i < words.length; i++) {
+      if (words[i].startsWith(q)) return 800 - i * 10;
+    }
+
+    // Label substring
+    var idx = labelLower.indexOf(q);
+    if (idx !== -1) return 500 - idx;
+
+    // Shortcut exact match
+    if (cmd.shortcut && cmd.shortcut.toLowerCase() === q) return 700;
+
+    // Keywords match
+    if (kwLower.indexOf(q) !== -1) return 300;
+
+    // Category match
+    if (catLower.indexOf(q) !== -1) return 200;
+
+    return -1;
+  }
+
+  function filterAndRender(query) {
+    query = (query || '').trim();
+    selectedIndex = 0;
+
+    if (!query) {
+      currentFiltered = COMMANDS.slice();
+    } else {
+      var scored = [];
+      for (var i = 0; i < COMMANDS.length; i++) {
+        var score = scoreCommand(COMMANDS[i], query);
+        if (score > 0) {
+          scored.push({ cmd: COMMANDS[i], score: score });
+        }
+      }
+      scored.sort(function (a, b) {
+        return b.score - a.score;
+      });
+      currentFiltered = scored.map(function (s) { return s.cmd; });
+    }
+
+    renderResults(query);
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function highlightMatch(text, query) {
+    if (!query) return escapeHtml(text);
+    var lower = text.toLowerCase();
+    var qLower = query.toLowerCase();
+    var idx = lower.indexOf(qLower);
+    if (idx === -1) return escapeHtml(text);
+
+    var before = text.substring(0, idx);
+    var match = text.substring(idx, idx + query.length);
+    var after = text.substring(idx + query.length);
+
+    return escapeHtml(before) + '<span class="cmd-item-match">' + escapeHtml(match) + '</span>' + escapeHtml(after);
+  }
+
+  function renderResults(query) {
+    if (!resultsContainer) return;
+    resultsContainer.innerHTML = '';
+
+    if (currentFiltered.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'cmd-empty-results';
+      empty.innerHTML =
+        '<svg class="cmd-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+        '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>' +
+        '</svg>' +
+        '<div>No matching commands or pages</div>';
+      resultsContainer.appendChild(empty);
+      return;
+    }
+
+    var lastCategory = null;
+    var globalIdx = 0;
+
+    currentFiltered.forEach(function (cmd, idx) {
+      // Group header when not searching with a specific query, or grouping results
+      if (!query && cmd.category !== lastCategory) {
+        lastCategory = cmd.category;
+        var groupTitle = document.createElement('div');
+        groupTitle.className = 'cmd-group-title';
+        groupTitle.textContent = cmd.category;
+        resultsContainer.appendChild(groupTitle);
+      }
+
+      var item = document.createElement('div');
+      item.className = 'cmd-item' + (idx === selectedIndex ? ' active' : '');
+      item.setAttribute('data-index', String(idx));
+
+      var iconHtml = cmd.icon || '';
+      var labelHtml = highlightMatch(cmd.label, query);
+      var shortcutHtml = cmd.shortcut
+        ? '<kbd class="cmd-item-shortcut">' + escapeHtml(cmd.shortcut) + '</kbd>'
+        : '';
+
+      item.innerHTML =
+        iconHtml +
+        '<span class="cmd-item-label">' + labelHtml + '</span>' +
+        shortcutHtml;
+
+      item.addEventListener('mouseenter', function () {
+        selectedIndex = idx;
+        updateActiveItem();
+      });
+
+      item.addEventListener('click', function () {
+        executeCommand(cmd);
+      });
+
+      resultsContainer.appendChild(item);
+    });
+
+    scrollActiveIntoView();
+  }
+
+  function updateActiveItem() {
+    if (!resultsContainer) return;
+    var items = resultsContainer.querySelectorAll('.cmd-item');
+    items.forEach(function (el, idx) {
+      el.classList.toggle('active', idx === selectedIndex);
+    });
+  }
+
+  function scrollActiveIntoView() {
+    if (!resultsContainer) return;
+    var activeEl = resultsContainer.querySelector('.cmd-item.active');
+    if (activeEl) {
+      activeEl.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function executeCommand(cmd) {
+    closePalette();
+    try {
+      if (cmd && typeof cmd.action === 'function') {
+        cmd.action();
+      }
+    } catch (err) {
+      console.error('Command Palette execution error:', err);
+    }
+  }
+
+  function handleKeydown(e) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (currentFiltered.length > 0) {
+        selectedIndex = (selectedIndex + 1) % currentFiltered.length;
+        updateActiveItem();
+        scrollActiveIntoView();
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (currentFiltered.length > 0) {
+        selectedIndex = (selectedIndex - 1 + currentFiltered.length) % currentFiltered.length;
+        updateActiveItem();
+        scrollActiveIntoView();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (currentFiltered[selectedIndex]) {
+        executeCommand(currentFiltered[selectedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closePalette();
+    }
+  }
+
+  function openPalette() {
+    if (!overlay && !initElements()) return;
+    overlay.classList.remove('hidden');
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+    filterAndRender('');
+  }
+
+  function closePalette() {
+    if (!overlay) return;
+    overlay.classList.add('hidden');
+    if (input) {
+      input.blur();
+    }
+  }
+
+  function togglePalette() {
+    if (overlay && !overlay.classList.contains('hidden')) {
+      closePalette();
+    } else {
+      openPalette();
+    }
+  }
+
+  // Global listener for opening event
+  window.addEventListener('qc-open-command-palette', function () {
+    openPalette();
+  });
+
+  // Global API
+  window.QuoteCraftCommandPalette = {
+    open: openPalette,
+    close: closePalette,
+    toggle: togglePalette
+  };
+
+  // Initial check when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initElements);
+  } else {
+    initElements();
+  }
+})();

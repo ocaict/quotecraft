@@ -1,55 +1,106 @@
-/* Live timer — floating always-visible indicator + related bits. */
+/* Live timer — floating always-visible glassmorphism indicator + related bits. */
 
 .live-timer-indicator {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: 24px;
+  bottom: 24px;
   z-index: 2000;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 10px 8px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(210, 153, 34, 0.5);
-  background: var(--surface, #1b1e24);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  gap: 14px;
+  padding: 8px 12px 8px 16px;
+  border-radius: 40px;
+  border: 1px solid rgba(227, 179, 65, 0.4);
+  background: rgba(22, 27, 34, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
   font-size: 13px;
   color: var(--text, #e6e6eb);
+  animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.live-timer-indicator:hover {
+  box-shadow: 0 20px 40px -4px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(227, 179, 65, 0.5);
+}
+
+:root[data-theme="light"] .live-timer-indicator {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(186, 131, 5, 0.35);
+  color: var(--text, #1f2328);
+  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--border);
+}
+
+:root[data-theme="light"] .live-timer-indicator:hover {
+  box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(186, 131, 5, 0.5);
 }
 
 .live-timer-indicator.hidden {
-  display: none;
+  display: none !important;
 }
 
 .live-timer-main {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 6px;
+  transition: opacity 0.15s ease;
+}
+
+.live-timer-main:hover {
+  opacity: 0.85;
 }
 
 .live-timer-icon {
   font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.live-timer-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3fb950;
+  box-shadow: 0 0 8px rgba(63, 185, 80, 0.8);
+  animation: navPulse 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+:root[data-theme="light"] .live-timer-pulse-dot {
+  background: #1a7f37;
+  box-shadow: 0 0 8px rgba(26, 127, 55, 0.8);
 }
 
 .live-timer-info {
   display: flex;
   flex-direction: column;
   line-height: 1.25;
-  max-width: 220px;
+  max-width: 240px;
 }
 
 .live-timer-elapsed {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  color: #d29922;
+  font-size: 14.5px;
+  color: #e3b341;
+  letter-spacing: -0.01em;
+}
+
+:root[data-theme="light"] .live-timer-elapsed {
+  color: #9a6700;
 }
 
 .live-timer-client {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-muted, #8b949e);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .live-timer-actions {
@@ -59,8 +110,26 @@
 }
 
 .live-timer-actions .btn-small {
-  padding: 4px 10px;
+  padding: 5px 12px;
   font-size: 12px;
+  font-weight: 600;
+  border-radius: 20px;
+}
+
+.live-timer-actions .btn-ghost {
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.live-timer-actions .btn-ghost:hover {
+  color: #f85149;
+  background: rgba(248, 81, 73, 0.12);
 }
 
 .timer-status-text {

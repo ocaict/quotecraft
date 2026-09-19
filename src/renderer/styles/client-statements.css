@@ -84,18 +84,38 @@
 
 /* ─── Placeholder ─────────────────────────────────────────── */
 .cs-placeholder {
-  padding: 72px 20px;
+  padding: 64px 24px;
   text-align: center;
   color: var(--text-muted);
   background: var(--bg-card);
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-lg);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
 .cs-placeholder-icon {
-  font-size: 42px;
-  margin-bottom: 12px;
-  opacity: 0.6;
+  font-size: 32px;
+  width: 60px;
+  height: 60px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(88, 166, 255, 0.12) 0%, rgba(22, 24, 34, 0.6) 100%);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="light"] .cs-placeholder-icon {
+  background: radial-gradient(circle, rgba(9, 105, 218, 0.08) 0%, rgba(238, 241, 244, 0.7) 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 .cs-placeholder.hidden {
