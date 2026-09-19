@@ -1951,6 +1951,37 @@
     loadLibraryItems();
   });
 
+  // ---------- Cross-page helpers ----------
+
+  // Opens a brand-new quote with the given client pre-selected and, when a
+  // project_id is supplied, that project pre-selected too. Used by the
+  // Project Overview "+ New Quote" quick action.
+  async function waitForClientOption(clientId) {
+    for (let i = 0; i < 50; i++) {
+      if (Array.from(clientSelect.options).some((o) => String(o.value) === String(clientId))) return true;
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    return false;
+  }
+
+  window.QuoteCraftQuotes = window.QuoteCraftQuotes || {};
+  window.QuoteCraftQuotes.openNewQuoteForProject = async function (clientId, projectId) {
+    openNewQuote();
+    const targetClientId = Number(clientId);
+    if (!(targetClientId > 0)) {
+      toast('Could not pre-fill client for the new quote.', 'error');
+      return;
+    }
+    const ready = await waitForClientOption(targetClientId);
+    if (!ready) {
+      toast('Could not pre-fill client for the new quote.', 'error');
+      return;
+    }
+    clientSelect.value = String(targetClientId);
+    clearFieldError('client_id');
+    await populateProjectsForClient(targetClientId, projectId ? Number(projectId) : null);
+  };
+
   document.addEventListener('pagechange', (e) => {
     if (e.detail === 'quotes') {
       loadLibraryItems();

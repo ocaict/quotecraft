@@ -20,9 +20,12 @@ const {
   archiveProject,
   deleteProject,
   countProjectHistory,
+  getProjectOverview,
   createQuote,
+  getQuote,
   setQuoteStatus,
   convertQuoteToInvoice,
+  addPayment,
 } = require('../src/main/database');
 
 async function runTests() {
@@ -79,7 +82,15 @@ async function runTests() {
   assert.strictEqual(acmeOnly.length, 1, 'Client A → 1 project');
   const globexOnly = listProjects({ clientId: clientB.id });
   assert.strictEqual(globexOnly.length, 0, 'Client B → 0 projects');
-  console.log('✓ listProjects client filter');
+  console.log('✓ listProjects client filter (clientId key)');
+
+  // Renderer callers send the snake_case `client_id` key — must filter too.
+  const acmeOnlySnake = listProjects({ client_id: clientA.id });
+  assert.strictEqual(acmeOnlySnake.length, 1, 'client_id key → Client A still 1 project');
+  const globexOnlySnake = listProjects({ client_id: clientB.id });
+  assert.strictEqual(globexOnlySnake.length, 0, 'client_id key → Client B still 0 projects');
+  assert.deepStrictEqual(acmeOnly.map(p => p.id), acmeOnlySnake.map(p => p.id), 'Both keys return the same rows');
+  console.log('✓ listProjects client filter (client_id / renderer key)');
 
   // ---------- 7. Status filter ----------
   const activeOnly = listProjects({ status: 'active' });
@@ -222,6 +233,109 @@ async function runTests() {
   assert.strictEqual(crossRes.ok, false, 'Cross-client project override should be rejected');
   assert.ok(crossRes.errors && crossRes.errors.project_id, 'Should report a project_id error');
   console.log('✓ Cross-client project rejected');
+
+  // 14e. Legacy documents: quote/invoice created with NO project at all
+  // (exactly how a pre-project quote/invoice row looks) must stay project-less
+  // and keep working — no error, no forced project.
+  const noProjQuote = createQuote(
+    {
+      client_id: clientA.id,
+      date_created: '2026-02-01',
+      valid_until: '2026-03-01',
+      status: 'draft',
+      currency: 'USD',
+      tax_rate: 0,
+      terms: 'Net 30',
+      discount_type: 'none',
+      discount_value: 0,
+    },
+    [{ description: 'Legacy service', quantity: 1, unit_price: 100, tax_rate: 0, discount_type: 'none', discount_value: 0 }]
+  );
+  assert.strictEqual(noProjQuote.ok, true, 'No-project quote creation must succeed');
+  assert.strictEqual(noProjQuote.quote.project_id, null, 'Quote project_id should stay null');
+  const loadedNoProjQuote = getQuote(noProjQuote.quote.id);
+  assert.strictEqual(loadedNoProjQuote.project, null, 'getQuote should surface project as null');
+  setQuoteStatus(noProjQuote.quote.id, 'accepted');
+  const noProjInv = convertQuoteToInvoice(noProjQuote.quote.id, {});
+  assert.strictEqual(noProjInv.ok, true, 'No-project quote should convert normally');
+  assert.strictEqual(noProjInv.invoice.project_id, null, 'Converted invoice should stay project-less');
+  console.log('✓ Legacy (no-project) quote/invoice still work end-to-end');
+
+  // ---------- 15. getProjectOverview stats over a mix of documents ----------
+  const ovProjRes = addProject({ client_id: clientA.id, name: 'Overview Mix Project', status: 'active', start_date: '2026-03-01' });
+  assert.strictEqual(ovProjRes.ok, true, 'Overview project should be created');
+  const ovProjId = ovProjRes.project.id;
+
+  function makeQuoteWithTotal(total) {
+    const r = createQuote(
+      {
+        client_id: clientA.id,
+        project_id: ovProjId,
+        date_created: '2026-03-01',
+        valid_until: '2026-03-31',
+        status: 'draft',
+        currency: 'USD',
+        tax_rate: 0,
+        terms: 'Net 30',
+        discount_type: 'none',
+        discount_value: 0,
+        subtotal: total,
+        discount_amount: 0,
+        tax_amount: 0,
+        total: total,
+      },
+      [{ description: 'Service', quantity: 1, unit_price: total, tax_rate: 0, discount_type: 'none', discount_value: 0 }]
+    );
+    assert.strictEqual(r.ok, true, 'Quote creation should succeed');
+    return r.quote;
+  }
+
+  // One draft quote kept as-is; three accepted quotes that become invoices.
+  makeQuoteWithTotal(500); // stays draft => counts toward totalQuoted only
+  const q1 = makeQuoteWithTotal(1000);
+  const q2 = makeQuoteWithTotal(2000);
+  const q3 = makeQuoteWithTotal(300);
+
+  const acc1 = setQuoteStatus(q1.id, 'accepted');
+  const acc2 = setQuoteStatus(q2.id, 'accepted');
+  const acc3 = setQuoteStatus(q3.id, 'accepted');
+  assert.strictEqual(acc1.ok && acc2.ok && acc3.ok, true, 'Quotes should be accepted');
+
+  // I1: $1000, partially paid ($400) → balance $600.
+  const conv1 = convertQuoteToInvoice(q1.id, { status: 'sent' });
+  assert.strictEqual(conv1.ok, true, 'q1 should convert');
+  const i1 = conv1.invoice.id;
+  const pay1 = addPayment(i1, { amount: 400, payment_method: 'Bank Transfer', reference_number: 'OV-1' });
+  assert.strictEqual(pay1.ok, true, 'Payment on I1 should record');
+
+  // I2: $2000, no payments → fully outstanding.
+  const conv2 = convertQuoteToInvoice(q2.id, { status: 'sent' });
+  assert.strictEqual(conv2.ok, true, 'q2 should convert');
+
+  // I3: $300, fully paid → balance $0.
+  const conv3 = convertQuoteToInvoice(q3.id, { status: 'sent' });
+  assert.strictEqual(conv3.ok, true, 'q3 should convert');
+  const i3 = conv3.invoice.id;
+  const pay3 = addPayment(i3, { amount: 300, payment_method: 'Bank Transfer', reference_number: 'OV-3' });
+  assert.strictEqual(pay3.ok, true, 'Payment on I3 should record');
+
+  const ov = getProjectOverview(ovProjId);
+  assert.ok(ov && ov.project, 'Overview should load a project');
+  assert.strictEqual(ov.stats.quoteCount, 4, '4 quotes linked');
+  assert.strictEqual(ov.stats.invoiceCount, 3, '3 invoices linked');
+  assert.strictEqual(ov.stats.totalQuoted, 3800, 'totalQuoted = 500+1000+2000+300');
+  assert.strictEqual(ov.stats.totalInvoiced, 3300, 'totalInvoiced = 1000+2000+300');
+  assert.strictEqual(ov.stats.totalPaid, 700, 'totalPaid = 400+300');
+  assert.strictEqual(ov.stats.outstandingBalance, 2600, 'outstanding = 600+2000');
+
+  assert.strictEqual(ov.quotes.length, 4, 'all 4 quotes in overview rows');
+  assert.ok(ov.quotes.some((q) => q.status === 'draft'), 'draft quote present in rows');
+  assert.strictEqual(ov.invoices.length, 3, 'all 3 invoices in overview rows');
+  const invById = {};
+  ov.invoices.forEach((inv) => { invById[inv.id] = inv; });
+  assert.strictEqual(invById[i1].balance_due, 600, 'I1 balance is 600 after partial payment');
+  assert.strictEqual(invById[i3].balance_due, 0, 'I3 balance is 0 after full payment');
+  console.log('✓ getProjectOverview stats: quoted 3800, invoiced 3300, paid 700, outstanding 2600');
 
   console.log('✓ Projects CRUD, filters, archive, and delete-block all pass');
   console.log('');

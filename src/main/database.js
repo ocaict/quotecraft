@@ -77,6 +77,7 @@ function createTables() {
       default_currency TEXT NOT NULL DEFAULT 'USD',
       reporting_currency TEXT NOT NULL DEFAULT 'USD',
       default_tax_rate REAL NOT NULL DEFAULT 0,
+      default_hourly_rate REAL DEFAULT NULL,
       invoice_prefix  TEXT NOT NULL DEFAULT 'INV-',
       invoice_start_number INTEGER NOT NULL DEFAULT 1,
       quote_prefix    TEXT NOT NULL DEFAULT 'Q-',
@@ -104,6 +105,7 @@ function createTables() {
       country         TEXT DEFAULT '',
       notes           TEXT DEFAULT '',
       tags            TEXT DEFAULT '',
+      default_hourly_rate REAL DEFAULT NULL,
       created_at      TEXT NOT NULL,
       updated_at      TEXT NOT NULL
     );
@@ -317,6 +319,25 @@ function createTables() {
       updated_at      TEXT NOT NULL
     );
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS time_entries (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL REFERENCES clients(id),
+      project_id   INTEGER DEFAULT NULL REFERENCES projects(id),
+      date         TEXT NOT NULL,
+      description  TEXT NOT NULL,
+      hours        REAL NOT NULL CHECK (hours > 0),
+      hourly_rate  REAL NOT NULL DEFAULT 0 CHECK (hourly_rate >= 0),
+      billed       INTEGER NOT NULL DEFAULT 0,
+      created_at   TEXT NOT NULL,
+      updated_at   TEXT NOT NULL
+    );
+  `);
+
+  db.run(`CREATE INDEX IF NOT EXISTS idx_time_entries_client_id ON time_entries(client_id);`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_time_entries_project_id ON time_entries(project_id);`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_time_entries_date ON time_entries(date);`);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS app_lock (
@@ -848,6 +869,46 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 25,
+    up: () => {
+      // Time tracking: billable hours logged against a client, optionally a project.
+      db.run(`
+        CREATE TABLE IF NOT EXISTS time_entries (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          client_id    INTEGER NOT NULL REFERENCES clients(id),
+          project_id   INTEGER DEFAULT NULL REFERENCES projects(id),
+          date         TEXT NOT NULL,
+          description  TEXT NOT NULL,
+          hours        REAL NOT NULL CHECK (hours > 0),
+          hourly_rate  REAL NOT NULL DEFAULT 0 CHECK (hourly_rate >= 0),
+          billed       INTEGER NOT NULL DEFAULT 0,
+          created_at   TEXT NOT NULL,
+          updated_at   TEXT NOT NULL
+        );
+      `);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_time_entries_client_id ON time_entries(client_id);`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_time_entries_project_id ON time_entries(project_id);`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_time_entries_date ON time_entries(date);`);
+
+      // Hourly-rate defaults. None exist today — add all three so time entries
+      // can fall back project → client → company default hourly rate.
+      const projectCols = new Set(db.exec(`PRAGMA table_info(projects)`)[0].values.map((v) => v[1]));
+      if (!projectCols.has('hourly_rate')) {
+        db.run(`ALTER TABLE projects ADD COLUMN hourly_rate REAL DEFAULT NULL`);
+      }
+
+      const clientCols = new Set(db.exec(`PRAGMA table_info(clients)`)[0].values.map((v) => v[1]));
+      if (!clientCols.has('default_hourly_rate')) {
+        db.run(`ALTER TABLE clients ADD COLUMN default_hourly_rate REAL DEFAULT NULL`);
+      }
+
+      const companyCols = new Set(db.exec(`PRAGMA table_info(company_profile)`)[0].values.map((v) => v[1]));
+      if (!companyCols.has('default_hourly_rate')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN default_hourly_rate REAL DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -915,6 +976,10 @@ function saveCompanyProfile(profile) {
     default_currency: defCurrency,
     reporting_currency: profile.reporting_currency || (existing && existing.reporting_currency) || defCurrency,
     default_tax_rate: Number(profile.default_tax_rate || 0),
+    default_hourly_rate:
+      profile.default_hourly_rate === undefined || profile.default_hourly_rate === null || profile.default_hourly_rate === ''
+        ? (existing && existing.default_hourly_rate != null ? existing.default_hourly_rate : null)
+        : normalizeNullableRate(profile.default_hourly_rate),
     invoice_prefix: profile.invoice_prefix || 'INV-',
     invoice_start_number: Number(profile.invoice_start_number || 1),
     quote_prefix: profile.quote_prefix || 'Q-',
@@ -934,7 +999,7 @@ function saveCompanyProfile(profile) {
         business_name = ?, logo_path = ?, address_line1 = ?, address_line2 = ?,
         city = ?, state = ?, postal_code = ?, country = ?, phone = ?, email = ?,
         website = ?, tax_id = ?, default_currency = ?, reporting_currency = ?, default_tax_rate = ?,
-        invoice_prefix = ?, invoice_start_number = ?, quote_prefix = ?,
+        default_hourly_rate = ?, invoice_prefix = ?, invoice_start_number = ?, quote_prefix = ?,
         quote_start_number = ?, default_terms = ?, payment_details = ?,
         credit_note_prefix = ?, credit_note_start_number = ?, default_quote_acceptance_instructions = ?, updated_at = ?
        WHERE id = 1`,
@@ -942,7 +1007,7 @@ function saveCompanyProfile(profile) {
         fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
         fields.website, fields.tax_id, fields.default_currency, fields.reporting_currency, fields.default_tax_rate,
-        fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
+        fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions, now,
       ]
@@ -952,15 +1017,15 @@ function saveCompanyProfile(profile) {
       `INSERT INTO company_profile (
         id, business_name, logo_path, address_line1, address_line2, city, state,
         postal_code, country, phone, email, website, tax_id, default_currency,
-        reporting_currency, default_tax_rate, invoice_prefix, invoice_start_number, quote_prefix,
+        reporting_currency, default_tax_rate, default_hourly_rate, invoice_prefix, invoice_start_number, quote_prefix,
         quote_start_number, default_terms, payment_details,
         credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         1, fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
         fields.website, fields.tax_id, fields.default_currency, fields.reporting_currency, fields.default_tax_rate,
-        fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
+        fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions, now, now,
       ]
@@ -1495,13 +1560,21 @@ function normalizeTags(tags) {
     .join(', ');
 }
 
+// Nullable money-like value (hourly rates): blank -> null, else rounded number.
+function normalizeNullableRate(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  if (isNaN(n) || n < 0) return null;
+  return Math.round(n * 100) / 100;
+}
+
 function addClient(client) {
   const now = new Date().toISOString();
   db.run(
     `INSERT INTO clients (
       name, email, phone, company_name, address_line1, address_line2, city,
-      state, postal_code, country, notes, tags, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      state, postal_code, country, notes, tags, default_hourly_rate, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       String(client.name || '').trim(),
       String(client.email || '').trim(),
@@ -1515,6 +1588,7 @@ function addClient(client) {
       String(client.country || '').trim(),
       String(client.notes || ''),
       normalizeTags(client.tags),
+      normalizeNullableRate(client.default_hourly_rate),
       now,
       now,
     ]
@@ -1552,6 +1626,7 @@ function clientParams(client, now) {
     String(client.country || '').trim(),
     String(client.notes || ''),
     normalizeTags(client.tags),
+    normalizeNullableRate(client.default_hourly_rate),
   ];
 }
 
@@ -1562,7 +1637,7 @@ function updateClient(id, client) {
     `UPDATE clients SET
        name = ?, email = ?, phone = ?, company_name = ?, address_line1 = ?,
        address_line2 = ?, city = ?, state = ?, postal_code = ?, country = ?,
-       notes = ?, tags = ?, updated_at = ?
+       notes = ?, tags = ?, default_hourly_rate = ?, updated_at = ?
      WHERE id = ?`,
     [...p, now, id]
   );
@@ -1755,9 +1830,14 @@ function listProjects(opts) {
   const where = [];
   const params = [];
 
-  if (o.clientId) {
+  // Renderer callers pass snake_case field names (client_id); keep clientId
+  // as a fallback for older test/API usage.
+  const clientFilter = o.client_id !== undefined && o.client_id !== null && o.client_id !== ''
+    ? o.client_id
+    : (o.clientId !== undefined && o.clientId !== null && o.clientId !== '' ? o.clientId : null);
+  if (clientFilter !== null) {
     where.push('p.client_id = ?');
-    params.push(o.clientId);
+    params.push(clientFilter);
   }
   if (o.status) {
     where.push('p.status = ?');
@@ -1806,8 +1886,8 @@ function addProject(project) {
 
   const now = new Date().toISOString();
   db.run(
-    `INSERT INTO projects (client_id, name, description, status, start_date, end_date, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO projects (client_id, name, description, status, start_date, end_date, hourly_rate, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       project.client_id,
       String(project.name || '').trim(),
@@ -1815,6 +1895,7 @@ function addProject(project) {
       String(project.status || '').trim() || 'active',
       String(project.start_date || '').trim(),
       project.end_date ? String(project.end_date).trim() : null,
+      normalizeNullableRate(project.hourly_rate),
       now,
       now,
     ]
@@ -1848,7 +1929,7 @@ function updateProject(id, project) {
   db.run(
     `UPDATE projects SET
        client_id = ?, name = ?, description = ?, status = ?,
-       start_date = ?, end_date = ?, updated_at = ?
+       start_date = ?, end_date = ?, hourly_rate = ?, updated_at = ?
      WHERE id = ?`,
     [
       project.client_id,
@@ -1857,6 +1938,7 @@ function updateProject(id, project) {
       String(project.status || '').trim() || existing.status,
       String(project.start_date || '').trim(),
       project.end_date ? String(project.end_date).trim() : null,
+      normalizeNullableRate(project.hourly_rate),
       now,
       id,
     ]
@@ -1928,6 +2010,14 @@ function validateProjectInput(project) {
   }
   if (project.status && !PROJECT_STATUSES.includes(String(project.status).trim())) {
     errors.status = 'Invalid project status.';
+  }
+  if (project.hourly_rate !== undefined && project.hourly_rate !== null && project.hourly_rate !== '') {
+    const rate = Number(project.hourly_rate);
+    if (isNaN(rate) || rate < 0) {
+      errors.hourly_rate = 'Hourly rate must be a number greater than or equal to zero.';
+    } else if (hasMoreThanTwoDecimals(project.hourly_rate)) {
+      errors.hourly_rate = 'Hourly rate may only have up to 2 decimal places.';
+    }
   }
   return errors;
 }
@@ -2045,6 +2135,51 @@ function getClientOverview(clientId) {
       creditNoteCount: creditNotes.length,
     },
     notes,
+  };
+}
+
+// Overview of a single project: its linked quotes + invoices and scoped KPI totals.
+// Totals are converted to the reporting currency via each document's exchange_rate,
+// matching the client overview convention. Read-only.
+function getProjectOverview(projectId) {
+  const project = getProject(projectId);
+  if (!project) return null;
+
+  const client = project.client_id ? getClient(project.client_id) : null;
+
+  const quotesRes = db.exec(
+    `SELECT * FROM quotes WHERE project_id = ? ORDER BY date_created DESC, id DESC`,
+    [projectId]
+  );
+  const quotes = rowsToArray(quotesRes);
+
+  const invoicesRes = db.exec(
+    `SELECT * FROM invoices WHERE project_id = ? ORDER BY date_created DESC, id DESC`,
+    [projectId]
+  );
+  const invoices = rowsToArray(invoicesRes).map((inv) => {
+    refreshInvoiceBalance(inv);
+    return inv;
+  });
+
+  const totalQuoted = quotes.reduce((sum, q) => sum + ((Number(q.total) || 0) * (Number(q.exchange_rate) || 1.0)), 0);
+  const totalInvoiced = invoices.reduce((sum, inv) => sum + ((Number(inv.total) || 0) * (Number(inv.exchange_rate) || 1.0)), 0);
+  const totalPaid = invoices.reduce((sum, inv) => sum + (((Number(inv.amount_paid) || 0) - (Number(inv.amount_credited) || 0)) * (Number(inv.exchange_rate) || 1.0)), 0);
+  const outstandingBalance = Math.max(0, Math.round(invoices.reduce((sum, inv) => sum + ((Number(inv.balance_due) || 0) * (Number(inv.exchange_rate) || 1.0)), 0) * 100) / 100);
+
+  return {
+    project,
+    client,
+    quotes,
+    invoices,
+    stats: {
+      totalQuoted: Math.round(totalQuoted * 100) / 100,
+      totalInvoiced: Math.round(totalInvoiced * 100) / 100,
+      totalPaid: Math.round(totalPaid * 100) / 100,
+      outstandingBalance,
+      quoteCount: quotes.length,
+      invoiceCount: invoices.length,
+    },
   };
 }
 
@@ -2284,6 +2419,293 @@ function getExpensesSummary(filter = {}) {
     byCategory,
     expenses,
   };
+}
+
+
+// ---------- Time Entries (billable hours) ----------
+
+const TIME_ENTRY_LOCKED_MESSAGE =
+  'This time entry is Billed. Once a time entry is included on an invoice it becomes a ' +
+  'historical record and can no longer be edited or deleted.';
+
+// Resolve the hourly-rate default with precedence: project → client → company.
+// Returns { hourly_rate, source } where source is 'project' | 'client' | 'company' | null.
+function resolveTimeEntryRate(clientId, projectId) {
+  if (projectId) {
+    const project = getProject(projectId);
+    if (project && project.hourly_rate != null) {
+      return { hourly_rate: Math.round(Number(project.hourly_rate) * 100) / 100, source: 'project' };
+    }
+  }
+  if (clientId) {
+    const client = getClient(clientId);
+    if (client && client.default_hourly_rate != null) {
+      return { hourly_rate: Math.round(Number(client.default_hourly_rate) * 100) / 100, source: 'client' };
+    }
+  }
+  const profile = getCompanyProfile();
+  if (profile && profile.default_hourly_rate != null) {
+    return { hourly_rate: Math.round(Number(profile.default_hourly_rate) * 100) / 100, source: 'company' };
+  }
+  return { hourly_rate: null, source: null };
+}
+
+function validateTimeEntryInput(input) {
+  const errors = {};
+
+  if (!input.client_id) {
+    errors.client_id = 'Please select a client.';
+  }
+
+  if (input.project_id !== undefined && input.project_id !== null && String(input.project_id).trim() !== '') {
+    checkProjectBelongsToClient(input, errors);
+  }
+
+  const date = String(input.date || '').trim();
+  if (!date || !isValidDateString(date)) {
+    errors.date = 'A valid entry date (YYYY-MM-DD) is required.';
+  }
+
+  if (!String(input.description || '').trim()) {
+    errors.description = 'A description of the work done is required.';
+  }
+
+  const hours = Number(input.hours);
+  if (!(hours > 0)) {
+    errors.hours = 'Hours must be greater than zero.';
+  } else if (hasMoreThanTwoDecimals(input.hours)) {
+    errors.hours = 'Hours may only have up to 2 decimal places.';
+  }
+
+  let hourlyRate = null;
+  if (input.hourly_rate !== undefined && input.hourly_rate !== null && String(input.hourly_rate).trim() !== '') {
+    const rate = Number(input.hourly_rate);
+    if (isNaN(rate) || rate < 0) {
+      errors.hourly_rate = 'Hourly rate must be a number greater than or equal to zero.';
+    } else if (hasMoreThanTwoDecimals(input.hourly_rate)) {
+      errors.hourly_rate = 'Hourly rate may only have up to 2 decimal places.';
+    } else {
+      hourlyRate = Math.round(rate * 100) / 100;
+    }
+  }
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+    data: {
+      client_id: Number(input.client_id),
+      project_id:
+        input.project_id !== undefined && input.project_id !== null && String(input.project_id).trim() !== '' && Number(input.project_id) > 0
+          ? Number(input.project_id)
+          : null,
+      date,
+      description: String(input.description || '').trim(),
+      hours: Math.round(hours * 100) / 100,
+      hourly_rate: hourlyRate,
+    },
+  };
+}
+
+function decorateTimeEntry(entry) {
+  const client = entry.client_id ? getClient(entry.client_id) : null;
+  entry.client_name = client ? client.name : '';
+  entry.client_company = client ? client.company_name : '';
+  const project = entry.project_id ? getProject(entry.project_id) : null;
+  entry.project_name = project ? project.name : '';
+  entry.billed = Number(entry.billed) ? 1 : 0;
+  entry.amount = Math.round((Number(entry.hours) || 0) * (Number(entry.hourly_rate) || 0) * 100) / 100;
+  return entry;
+}
+
+function getTimeEntry(id) {
+  const entry = rowToObject(db.exec('SELECT * FROM time_entries WHERE id = ?', [id]));
+  if (!entry) return null;
+  return decorateTimeEntry(entry);
+}
+
+function createTimeEntry(input) {
+  const validation = validateTimeEntryInput(input);
+  if (!validation.valid) {
+    return { ok: false, errors: validation.errors };
+  }
+
+  const { client_id, project_id, date, description, hours, hourly_rate } = validation.data;
+  const rate = hourly_rate !== null ? hourly_rate : (resolveTimeEntryRate(client_id, project_id).hourly_rate || 0);
+  const now = new Date().toISOString();
+
+  try {
+    db.run(
+      `INSERT INTO time_entries (client_id, project_id, date, description, hours, hourly_rate, billed, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      [client_id, project_id, date, description, hours, rate, now, now]
+    );
+    const idRes = db.exec('SELECT last_insert_rowid() AS id');
+    const newId = idRes[0].values[0][0];
+    saveToDisk();
+    const created = getTimeEntry(newId);
+    addAuditEntry({
+      entityType: 'time_entry',
+      entityRef: (created && created.description) || 'Time Entry #' + newId,
+      action: 'created',
+      description: 'Logged ' + (created ? Number(created.hours).toFixed(2) : '0.00') + 'h for "' + ((created && created.description) || '') + '"',
+    });
+    return { ok: true, entry: created };
+  } catch (err) {
+    return { ok: false, errors: { general: `Failed to create time entry: ${err.message}` } };
+  }
+}
+
+function updateTimeEntry(id, input) {
+  const existing = getTimeEntry(id);
+  if (!existing) {
+    return { ok: false, errors: { general: 'Time entry not found.' } };
+  }
+  if (existing.billed) {
+    return { ok: false, locked: true, errors: { general: TIME_ENTRY_LOCKED_MESSAGE } };
+  }
+
+  const validation = validateTimeEntryInput(input);
+  if (!validation.valid) {
+    return { ok: false, errors: validation.errors };
+  }
+
+  const { client_id, project_id, date, description, hours, hourly_rate } = validation.data;
+  // On edit keep the snapshot stored on the entry unless the form supplies a new rate.
+  const rate = hourly_rate !== null ? hourly_rate : (Number(existing.hourly_rate) || 0);
+  const now = new Date().toISOString();
+
+  try {
+    db.run(
+      `UPDATE time_entries SET
+         client_id = ?, project_id = ?, date = ?, description = ?, hours = ?, hourly_rate = ?, updated_at = ?
+       WHERE id = ?`,
+      [client_id, project_id, date, description, hours, rate, now, id]
+    );
+    saveToDisk();
+    const updated = getTimeEntry(id);
+    addAuditEntry({
+      entityType: 'time_entry',
+      entityRef: (updated && updated.description) || 'Time Entry #' + id,
+      action: 'updated',
+      description: 'Updated time entry "' + ((updated && updated.description) || '') + '"',
+    });
+    return { ok: true, entry: updated };
+  } catch (err) {
+    return { ok: false, errors: { general: `Failed to update time entry: ${err.message}` } };
+  }
+}
+
+function deleteTimeEntry(id) {
+  const existing = getTimeEntry(id);
+  if (!existing) {
+    return { ok: false, errors: { general: 'Time entry not found.' } };
+  }
+  if (existing.billed) {
+    return { ok: false, locked: true, errors: { general: TIME_ENTRY_LOCKED_MESSAGE } };
+  }
+
+  try {
+    db.run('DELETE FROM time_entries WHERE id = ?', [id]);
+    saveToDisk();
+    addAuditEntry({
+      entityType: 'time_entry',
+      entityRef: existing.description || 'Time Entry #' + id,
+      action: 'deleted',
+      description: 'Deleted time entry "' + (existing.description || '') + '"',
+    });
+    return { ok: true, deleted: true };
+  } catch (err) {
+    return { ok: false, errors: { general: `Failed to delete time entry: ${err.message}` } };
+  }
+}
+
+function listTimeEntries(filter = {}) {
+  const { client_id, project_id, date_from, date_to, billed, search } = filter;
+  const conditions = [];
+  const params = [];
+
+  if (client_id) {
+    conditions.push('client_id = ?');
+    params.push(Number(client_id));
+  }
+
+  if (project_id) {
+    conditions.push('project_id = ?');
+    params.push(Number(project_id));
+  }
+
+  if (date_from && String(date_from).trim()) {
+    conditions.push('date >= ?');
+    params.push(String(date_from).trim());
+  }
+
+  if (date_to && String(date_to).trim()) {
+    conditions.push('date <= ?');
+    params.push(String(date_to).trim());
+  }
+
+  if (billed === 'billed') {
+    conditions.push('billed = 1');
+  } else if (billed === 'unbilled') {
+    conditions.push('billed = 0');
+  }
+
+  if (search && String(search).trim()) {
+    conditions.push('description LIKE ?');
+    params.push(`%${String(search).trim()}%`);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const rows = rowsToArray(db.exec(`SELECT * FROM time_entries ${whereClause} ORDER BY date DESC, id DESC`, params));
+  return rows.map(decorateTimeEntry);
+}
+
+function getTimeEntriesSummary(filter = {}) {
+  const entries = listTimeEntries(filter);
+  const profile = getCompanyProfile();
+  const baseCurrency = (profile && (profile.reporting_currency || profile.default_currency)) || 'USD';
+
+  let totalHours = 0;
+  let totalAmount = 0;
+  let billedHours = 0;
+  let unbilledHours = 0;
+
+  for (const e of entries) {
+    const h = Number(e.hours) || 0;
+    totalHours += h;
+    totalAmount += Number(e.amount) || 0;
+    if (e.billed) billedHours += h;
+    else unbilledHours += h;
+  }
+
+  return {
+    count: entries.length,
+    totalHours: Math.round(totalHours * 100) / 100,
+    totalAmount: Math.round(totalAmount * 100) / 100,
+    billedHours: Math.round(billedHours * 100) / 100,
+    unbilledHours: Math.round(unbilledHours * 100) / 100,
+    baseCurrency,
+  };
+}
+
+// Marks time entries as Billed. Called by the future include-on-invoice flow
+// (Prompt 63); not exposed in the manual-entry UI — a Billed entry is immutable.
+function markTimeEntriesBilled(ids) {
+  const clean = (Array.isArray(ids) ? ids : [ids])
+    .map((id) => Number(id))
+    .filter((id) => id > 0);
+  if (clean.length === 0) {
+    return { ok: false, errors: { general: 'No time entries selected.' } };
+  }
+
+  const placeholders = clean.map(() => '?').join(', ');
+  db.run(
+    `UPDATE time_entries SET billed = 1, updated_at = ? WHERE id IN (${placeholders})`,
+    [new Date().toISOString(), ...clean]
+  );
+  const count = db.getRowsModified();
+  saveToDisk();
+  return { ok: true, count };
 }
 
 
@@ -5921,6 +6343,7 @@ module.exports = {
   updateClientNote,
   deleteClientNote,
   getClientOverview,
+  getProjectOverview,
   PROJECT_STATUSES,
   listProjects,
   getProject,
@@ -5976,6 +6399,14 @@ module.exports = {
   getExpense,
   listExpenses,
   getExpensesSummary,
+  resolveTimeEntryRate,
+  getTimeEntry,
+  createTimeEntry,
+  updateTimeEntry,
+  deleteTimeEntry,
+  listTimeEntries,
+  getTimeEntriesSummary,
+  markTimeEntriesBilled,
   PAYMENT_METHODS,
   getEmailSettings,
   getEmailSettingsInternal,

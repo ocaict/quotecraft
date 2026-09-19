@@ -67,6 +67,7 @@ const {
   updateClientNote,
   deleteClientNote,
   getClientOverview,
+  getProjectOverview,
   PROJECT_STATUSES,
   listProjects,
   getProject,
@@ -85,6 +86,14 @@ const {
   getExpense,
   listExpenses,
   getExpensesSummary,
+  resolveTimeEntryRate,
+  getTimeEntry,
+  createTimeEntry,
+  updateTimeEntry,
+  deleteTimeEntry,
+  listTimeEntries,
+  getTimeEntriesSummary,
+  markTimeEntriesBilled,
   getEmailSettings,
   getEmailSettingsInternal,
   saveEmailSettings,
@@ -505,6 +514,18 @@ function registerIpcHandlers() {
       return { ok: true, project };
     } catch (err) {
       return { ok: false, errors: { general: `Failed to load project: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('projects:overview', async (event, id) => {
+    try {
+      const overview = getProjectOverview(id);
+      if (!overview) {
+        return { ok: false, errors: { general: 'Project not found.' } };
+      }
+      return { ok: true, overview };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to load project overview: ${err.message}` } };
     }
   });
 
@@ -1071,6 +1092,65 @@ function registerIpcHandlers() {
 
   ipcMain.handle('expenses:categories', async () => {
     return { ok: true, categories: EXPENSE_CATEGORIES };
+  });
+
+  // ---------- Time Entries ----------
+  ipcMain.handle('timeEntries:list', async (event, filter) => {
+    try {
+      const entries = listTimeEntries(filter);
+      return { ok: true, entries };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to list time entries: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('timeEntries:get', async (event, id) => {
+    try {
+      const entry = getTimeEntry(id);
+      if (!entry) return { ok: false, errors: { general: 'Time entry not found.' } };
+      return { ok: true, entry };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to get time entry: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('timeEntries:create', async (event, data) => {
+    return createTimeEntry(data);
+  });
+
+  ipcMain.handle('timeEntries:update', async (event, id, data) => {
+    return updateTimeEntry(id, data);
+  });
+
+  ipcMain.handle('timeEntries:delete', async (event, id) => {
+    return deleteTimeEntry(id);
+  });
+
+  ipcMain.handle('timeEntries:summary', async (event, filter) => {
+    try {
+      const summary = getTimeEntriesSummary(filter);
+      return { ok: true, summary };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to get time entries summary: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('timeEntries:resolveRate', async (event, clientId, projectId) => {
+    try {
+      const resolved = resolveTimeEntryRate(clientId, projectId);
+      return { ok: true, hourly_rate: resolved.hourly_rate, source: resolved.source };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to resolve hourly rate: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('timeEntries:markBilled', async (event, ids) => {
+    try {
+      const result = markTimeEntriesBilled(ids);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to mark time entries billed: ${err.message}` } };
+    }
   });
 
   ipcMain.handle('creditNotes:issue', async (event, invoiceId, data) => {

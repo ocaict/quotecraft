@@ -1169,6 +1169,7 @@
       country: form.elements['country'].value,
       tags: form.elements['tags'] ? form.elements['tags'].value : '',
       notes: form.elements['notes'].value,
+      default_hourly_rate: form.elements['default_hourly_rate'] ? form.elements['default_hourly_rate'].value : '',
       contacts: collectContactsFromRows(),
     };
   }
@@ -1187,6 +1188,9 @@
     form.elements['country'].value = client.country || '';
     if (form.elements['tags']) form.elements['tags'].value = client.tags || '';
     form.elements['notes'].value = client.notes || '';
+    if (form.elements['default_hourly_rate']) {
+      form.elements['default_hourly_rate'].value = client.default_hourly_rate != null ? client.default_hourly_rate : '';
+    }
   }
 
   function openAddModal() {

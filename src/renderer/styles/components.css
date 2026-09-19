@@ -304,6 +304,17 @@
   color: #58a6ff;
 }
 
+.badge.status-on_hold {
+  background: rgba(210, 153, 34, 0.18);
+  color: #d29922;
+}
+
+.badge.status-archived {
+  background: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+  opacity: 0.8;
+}
+
 .badge.badge-deposit {
   background: rgba(210, 153, 34, 0.18);
   color: #d29922;
@@ -455,5 +466,19 @@
 .contact-row .btn-remove-contact:hover {
   color: var(--danger);
   background: rgba(255,80,80,0.08);
+}
+
+/* ---------- Project overview/list subview switching ---------- */
+.project-subview {
+  display: none;
+}
+
+.project-subview.active {
+  display: block;
+}
+
+.overview-title-row .badge.status-active {
+  background: rgba(63, 185, 80, 0.18);
+  color: #3fb950;
 }
 

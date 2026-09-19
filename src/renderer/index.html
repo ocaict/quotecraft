@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="styles/dashboard.css">
   <link rel="stylesheet" href="styles/payments.css">
   <link rel="stylesheet" href="styles/expenses.css">
+  <link rel="stylesheet" href="styles/time-entries.css">
   <link rel="stylesheet" href="styles/profit-loss.css">
   <link rel="stylesheet" href="styles/email-settings.css">
   <link rel="stylesheet" href="styles/revenue-report.css">
@@ -40,6 +41,7 @@
       <a href="#" data-page="invoices">Invoices</a>
       <a href="#" data-page="payments">Payments</a>
       <a href="#" data-page="expenses">Expenses</a>
+      <a href="#" data-page="time-entries">Time Entries</a>
       <a href="#" data-page="profit-loss">Profit &amp; Loss</a>
       <a href="#" data-page="settings">Settings</a>
       <a href="#" data-page="email-settings">Email Settings</a>
@@ -365,37 +367,156 @@
     </section>
 
     <section id="page-projects" class="page">
-      <div class="page-header projects-header">
-        <div>
-          <h1>Projects</h1>
-          <p class="subtitle">Group quotes, invoices, and payments under client jobs. Each project belongs to one client.</p>
+      <div id="projectListView" class="project-subview active">
+        <div class="page-header projects-header">
+          <div>
+            <h1>Projects</h1>
+            <p class="subtitle">Group quotes, invoices, and payments under client jobs. Each project belongs to one client.</p>
+          </div>
+          <button type="button" id="addProjectBtn" class="btn btn-primary">+ New Project</button>
         </div>
-        <button type="button" id="addProjectBtn" class="btn btn-primary">+ New Project</button>
+
+        <div class="projects-toolbar">
+          <input type="text" id="projectSearch" class="search-input" placeholder="Search projects, jobs, descriptions…">
+          <div class="sort-control">
+            <label for="projectClientFilter">Client</label>
+            <select id="projectClientFilter">
+              <option value="">All clients</option>
+            </select>
+          </div>
+          <div class="sort-control">
+            <label for="projectStatusFilter">Status</label>
+            <select id="projectStatusFilter">
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="on_hold">On hold</option>
+              <option value="completed">Completed</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card projects-table-card">
+          <div id="projectList" class="projects-list">
+            <p class="placeholder">Loading projects…</p>
+          </div>
+        </div>
       </div>
 
-      <div class="projects-toolbar">
-        <input type="text" id="projectSearch" class="search-input" placeholder="Search projects, jobs, descriptions…">
-        <div class="sort-control">
-          <label for="projectClientFilter">Client</label>
-          <select id="projectClientFilter">
-            <option value="">All clients</option>
-          </select>
+      <div id="projectOverviewView" class="project-subview">
+        <div class="page-header projects-header">
+          <div>
+            <div class="overview-title-row">
+              <h1 id="projOverviewTitle">Project Overview</h1>
+              <span id="projOverviewStatusBadge" class="badge">—</span>
+            </div>
+            <p id="projOverviewSubtitle" class="subtitle">—</p>
+          </div>
+          <div class="detail-actions">
+            <button type="button" id="projOverviewNewQuoteBtn" class="btn btn-primary">+ New Quote</button>
+            <button type="button" id="projOverviewNewInvoiceBtn" class="btn btn-secondary">New Invoice</button>
+            <button type="button" id="projOverviewEditBtn" class="btn btn-secondary">Edit Project</button>
+            <button type="button" id="projOverviewBackBtn" class="btn btn-secondary">Back to projects</button>
+          </div>
         </div>
-        <div class="sort-control">
-          <label for="projectStatusFilter">Status</label>
-          <select id="projectStatusFilter">
-            <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="on_hold">On hold</option>
-            <option value="completed">Completed</option>
-            <option value="archived">Archived</option>
-          </select>
-        </div>
-      </div>
 
-      <div class="card projects-table-card">
-        <div id="projectList" class="projects-list">
-          <p class="placeholder">Loading projects…</p>
+        <!-- Financial KPI Summary Cards -->
+        <div class="client-kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">Total Quoted</span>
+            <span id="projTotalQuoted" class="kpi-value">0.00</span>
+            <span class="kpi-subtext">All quotes in this project</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Total Invoiced</span>
+            <span id="projTotalInvoiced" class="kpi-value">0.00</span>
+            <span class="kpi-subtext">All invoices in this project</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Total Paid</span>
+            <span id="projTotalPaid" class="kpi-value text-success">0.00</span>
+            <span class="kpi-subtext">Received payments</span>
+          </div>
+          <div class="kpi-card kpi-highlight">
+            <span class="kpi-label">Outstanding Balance</span>
+            <span id="projOutstandingBalance" class="kpi-value">0.00</span>
+            <span class="kpi-subtext">Currently owed</span>
+          </div>
+        </div>
+
+        <!-- Project Details Card -->
+        <div class="card">
+          <h2>Project Details</h2>
+          <div class="detail-meta">
+            <div class="detail-field">
+              <span class="detail-label">Client</span>
+              <span id="projOverviewClient" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Status</span>
+              <span id="projOverviewStatusText" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Start date</span>
+              <span id="projOverviewStart" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">End date</span>
+              <span id="projOverviewEnd" class="detail-value">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-label">Description</span>
+              <span id="projOverviewDesc" class="detail-value">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quote History Card -->
+        <div class="card">
+          <div class="section-card-header">
+            <h2>Quote History</h2>
+            <span id="projOverviewQuoteCount" class="badge">0 quotes</span>
+          </div>
+          <div id="projOverviewQuotesWrap" class="items-table-wrap">
+            <table class="data-table" id="projOverviewQuotesTable">
+              <thead>
+                <tr>
+                  <th>Quote #</th>
+                  <th>Date</th>
+                  <th>Valid until</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th class="th-actions">Action</th>
+                </tr>
+              </thead>
+              <tbody id="projOverviewQuotesBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Invoice History Card -->
+        <div class="card">
+          <div class="section-card-header">
+            <h2>Invoice History</h2>
+            <span id="projOverviewInvoiceCount" class="badge">0 invoices</span>
+          </div>
+          <div id="projOverviewInvoicesWrap" class="items-table-wrap">
+            <table class="data-table" id="projOverviewInvoicesTable">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Date</th>
+                  <th>Due date</th>
+                  <th>Total</th>
+                  <th>Paid</th>
+                  <th>Balance</th>
+                  <th>Status</th>
+                  <th class="th-actions">Action</th>
+                </tr>
+              </thead>
+              <tbody id="projOverviewInvoicesBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
@@ -1242,6 +1363,98 @@
       </div>
     </section>
 
+    <section id="page-time-entries" class="page">
+      <div class="page-header">
+        <div>
+          <h1>Time Entries</h1>
+          <p class="subtitle">Log billable hours against clients or projects and bill them on invoices later.</p>
+        </div>
+        <div class="detail-actions">
+          <button type="button" id="newTimeEntryBtn" class="btn btn-primary">+ New Time Entry</button>
+        </div>
+      </div>
+
+      <div class="expenses-toolbar">
+        <div class="filter-group">
+          <label for="timeFilterClient">Client</label>
+          <select id="timeFilterClient"><option value="">All clients</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="timeFilterProject">Project</label>
+          <select id="timeFilterProject"><option value="">All projects</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="timeFilterStart">From Date</label>
+          <input type="date" id="timeFilterStart">
+        </div>
+        <div class="filter-group">
+          <label for="timeFilterEnd">To Date</label>
+          <input type="date" id="timeFilterEnd">
+        </div>
+        <div class="filter-group">
+          <label for="timeFilterBilled">Billed Status</label>
+          <select id="timeFilterBilled">
+            <option value="">All</option>
+            <option value="unbilled">Unbilled</option>
+            <option value="billed">Billed</option>
+          </select>
+        </div>
+        <div class="filter-group search-wrapper">
+          <label for="timeSearch">Search</label>
+          <input type="text" id="timeSearch" placeholder="Search work description…">
+        </div>
+        <div class="toolbar-actions">
+          <button type="button" id="timeResetBtn" class="btn btn-ghost">Reset Filters</button>
+        </div>
+      </div>
+
+      <div class="client-kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Total Hours</span>
+          <span id="timeTotalHours" class="kpi-value">0.00</span>
+          <span id="timeEntriesCount" class="kpi-subtext">0 entries</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Unbilled Hours</span>
+          <span id="timeUnbilledHours" class="kpi-value">0.00</span>
+          <span class="kpi-subtext">Ready to be invoiced</span>
+        </div>
+        <div class="kpi-card kpi-highlight">
+          <span class="kpi-label">Billable Amount</span>
+          <span id="timeTotalAmount" class="kpi-value">0.00</span>
+          <span class="kpi-subtext">Hours × rate</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Billed Hours</span>
+          <span id="timeBilledHours" class="kpi-value">0.00</span>
+          <span class="kpi-subtext">Already on invoices</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="items-table-wrap">
+          <table class="data-table" id="timeEntriesTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Client</th>
+                <th>Project</th>
+                <th>Description</th>
+                <th>Hours</th>
+                <th>Rate</th>
+                <th>Amount</th>
+                <th>Billed</th>
+                <th class="th-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="timeEntriesBody">
+              <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px;">Loading time entries…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section id="page-profit-loss" class="page">
       <div class="page-header pl-header-row">
         <div>
@@ -1537,6 +1750,12 @@
               <label for="default_tax_rate">Default tax rate (%)</label>
               <input type="number" id="default_tax_rate" name="default_tax_rate" min="0" max="100" step="0.01" value="0">
               <span class="field-error" data-error-for="default_tax_rate"></span>
+            </div>
+            <div class="field">
+              <label for="default_hourly_rate">Default hourly rate (optional)</label>
+              <input type="number" id="default_hourly_rate" name="default_hourly_rate" min="0" step="0.01" placeholder="e.g. 75.00">
+              <span class="hint">Used for time entries when neither project nor client has a rate set.</span>
+              <span class="field-error" data-error-for="default_hourly_rate"></span>
             </div>
           </div>
 
@@ -2029,6 +2248,12 @@
             <label for="clientPhone">Phone</label>
             <input type="tel" id="clientPhone" name="phone" autocomplete="off">
           </div>
+          <div class="field">
+            <label for="clientDefaultHourlyRate">Default hourly rate (optional)</label>
+            <input type="number" id="clientDefaultHourlyRate" name="default_hourly_rate" min="0" step="0.01" placeholder="e.g. 80.00">
+            <span class="hint">Default billing rate for time entries when a project has no rate set.</span>
+            <span class="field-error" data-error-for="default_hourly_rate"></span>
+          </div>
         </div>
 
         <div class="field field-span-2">
@@ -2205,6 +2430,13 @@
         </div>
 
         <div class="field">
+          <label for="projectHourlyRate">Hourly rate (optional)</label>
+          <input type="number" id="projectHourlyRate" name="hourly_rate" min="0" step="0.01" placeholder="e.g. 85.00">
+          <span class="hint">Used as the default billing rate when logging time entries against this project.</span>
+          <span class="field-error" data-error-for="hourly_rate"></span>
+        </div>
+
+        <div class="field">
           <label for="projectDescription">Description (optional)</label>
           <textarea id="projectDescription" name="description" rows="3" placeholder="Scope, objectives, jobs behind this project…"></textarea>
         </div>
@@ -2212,6 +2444,74 @@
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" id="projectCancelBtn">Cancel</button>
           <button type="submit" class="btn btn-primary" id="projectSubmitBtn">Save project</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="timeEntryModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="timeEntryModalTitle">New Time Entry</h2>
+        <button type="button" class="modal-close" id="timeEntryModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="timeEntryForm" class="modal-form" novalidate>
+        <input type="hidden" id="timeEntryEditId" value="">
+        <div id="timeEntryLockBanner" class="lock-banner hidden">
+          🔒 This time entry is <strong>Billed</strong>. Once a time entry is included on an invoice it becomes
+          a historical record and can no longer be edited or deleted.
+        </div>
+
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="timeEntryClient">Client</label>
+            <select id="timeEntryClient" name="client_id">
+              <option value="">Select a client…</option>
+            </select>
+            <span class="field-error" data-error-for="client_id"></span>
+          </div>
+          <div class="field">
+            <label for="timeEntryProject">Project (optional)</label>
+            <select id="timeEntryProject" name="project_id">
+              <option value="">No project (client only)</option>
+            </select>
+            <span class="field-error" data-error-for="project_id"></span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="timeEntryDate">Date</label>
+            <input type="date" id="timeEntryDate" name="date" required>
+            <span class="field-error" data-error-for="date"></span>
+          </div>
+          <div class="field field-required">
+            <label for="timeEntryHours">Hours Worked</label>
+            <input type="number" id="timeEntryHours" name="hours" min="0" step="0.25" required placeholder="e.g. 1.5">
+            <span class="field-error" data-error-for="hours"></span>
+          </div>
+          <div class="field field-required">
+            <label for="timeEntryRate">Hourly Rate</label>
+            <input type="number" id="timeEntryRate" name="hourly_rate" min="0" step="0.01" placeholder="auto">
+            <span class="hint" id="timeEntryRateHint">Leave blank to use project → client → company default.</span>
+            <span class="field-error" data-error-for="hourly_rate"></span>
+          </div>
+        </div>
+
+        <div class="field field-required">
+          <label for="timeEntryDescription">Description of work done</label>
+          <textarea id="timeEntryDescription" name="description" rows="3" placeholder="e.g. Wireframe design review and client call"></textarea>
+          <span class="field-error" data-error-for="description"></span>
+        </div>
+
+        <div class="field">
+          <label>Amount Preview</label>
+          <p id="timeEntryAmountPreview" class="payment-balance">—</p>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="timeEntryCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="timeEntrySubmitBtn">Save Time Entry</button>
         </div>
       </form>
     </div>
@@ -3064,6 +3364,7 @@
   <script src="js/dashboard.js"></script>
   <script src="js/payments.js"></script>
   <script src="js/expenses.js"></script>
+  <script src="js/time-entries.js"></script>
   <script src="js/profit-loss.js"></script>
   <script src="js/email-settings.js"></script>
   <script src="js/revenue-report.js"></script>
