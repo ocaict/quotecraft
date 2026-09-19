@@ -13,6 +13,7 @@
 
   // ---------- Element refs ----------
   var newEntryBtn = document.getElementById('newTimeEntryBtn');
+  var startTimerBtn = document.getElementById('startTimerBtn');
   var resetBtn = document.getElementById('timeResetBtn');
 
   var filterClient = document.getElementById('timeFilterClient');
@@ -469,6 +470,12 @@
 
   // ---------- Wiring ----------
   if (newEntryBtn) newEntryBtn.addEventListener('click', function () { openEntryModal(null); });
+  if (startTimerBtn && window.QuoteCraftTimer) {
+    startTimerBtn.addEventListener('click', function () { window.QuoteCraftTimer.openStart(); });
+  }
+  window.addEventListener('qc-timer-stopped', function () {
+    loadEntries();
+  });
   if (resetBtn) resetBtn.addEventListener('click', resetFilters);
 
   filterClient.addEventListener('change', function () {

@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="styles/payments.css">
   <link rel="stylesheet" href="styles/expenses.css">
   <link rel="stylesheet" href="styles/time-entries.css">
+  <link rel="stylesheet" href="styles/timer.css">
   <link rel="stylesheet" href="styles/profit-loss.css">
   <link rel="stylesheet" href="styles/email-settings.css">
   <link rel="stylesheet" href="styles/revenue-report.css">
@@ -1370,6 +1371,7 @@
           <p class="subtitle">Log billable hours against clients or projects and bill them on invoices later.</p>
         </div>
         <div class="detail-actions">
+          <button type="button" id="startTimerBtn" class="btn btn-secondary">▶ Start Timer</button>
           <button type="button" id="newTimeEntryBtn" class="btn btn-primary">+ New Time Entry</button>
         </div>
       </div>
@@ -1772,6 +1774,35 @@
               <label for="default_quote_acceptance_instructions">Default Quote Acceptance Instructions</label>
               <input type="text" id="default_quote_acceptance_instructions" name="default_quote_acceptance_instructions" placeholder="To accept this quote, please reply to confirm via email or phone.">
               <span class="hint">Printed on all shareable quote PDFs and HTML exports instructing clients how to confirm offline.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Time Tracking</h2>
+          <p class="subtitle">How a stopped timer becomes a billed-hour entry.</p>
+          <div class="form-row">
+            <div class="field">
+              <label for="timerRounding">Round stopped timers to the nearest</label>
+              <select id="timerRounding">
+                <option value="0">Exact (no rounding)</option>
+                <option value="1">1 minute</option>
+                <option value="5">5 minutes</option>
+                <option value="6" selected>6 minutes (0.1 hour)</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+              </select>
+              <span class="hint">Stopping a timer logs elapsed time rounded to this increment. If the timer ran less than half the increment, stopping is refused so no 0-hour entry is created.</span>
+            </div>
+            <div class="field">
+              <label for="timerRoundingStatus">Status</label>
+              <span id="timerRoundingStatus" class="timer-status-text">6-minute rounding.</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <button type="button" id="timerRoundingSaveBtn" class="btn btn-primary">Save timer settings</button>
             </div>
           </div>
         </div>
@@ -2194,6 +2225,20 @@
     </section>
   </main>
 
+  <div id="liveTimerIndicator" class="live-timer-indicator hidden">
+    <div class="live-timer-main">
+      <span class="live-timer-icon">⏱</span>
+      <div class="live-timer-info">
+        <span class="live-timer-elapsed">0:00:00</span>
+        <span class="live-timer-client" id="liveTimerClient">—</span>
+      </div>
+    </div>
+    <div class="live-timer-actions">
+      <button type="button" id="liveTimerStopBtn" class="btn btn-primary btn-small">Stop &amp; Log</button>
+      <button type="button" id="liveTimerDiscardBtn" class="btn btn-ghost btn-small" title="Discard timer without logging">✕</button>
+    </div>
+  </div>
+
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
   <div id="busyOverlay" class="busy-overlay hidden" aria-live="polite">
@@ -2444,6 +2489,45 @@
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" id="projectCancelBtn">Cancel</button>
           <button type="submit" class="btn btn-primary" id="projectSubmitBtn">Save project</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="startTimerModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Start Timer</h2>
+        <button type="button" class="modal-close" id="startTimerModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="startTimerForm" class="modal-form" novalidate>
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="timerClient">Client</label>
+            <select id="timerClient">
+              <option value="">Select a client…</option>
+            </select>
+            <span class="field-error" data-error-for="client_id"></span>
+          </div>
+          <div class="field">
+            <label for="timerProject">Project (optional)</label>
+            <select id="timerProject">
+              <option value="">No project (client only)</option>
+            </select>
+            <span class="field-error" data-error-for="project_id"></span>
+          </div>
+        </div>
+        <div class="field field-required">
+          <label for="timerDescription">What are you working on?</label>
+          <textarea id="timerDescription" rows="3" placeholder="e.g. Wireframe design and client call"></textarea>
+          <span class="field-error" data-error-for="description"></span>
+        </div>
+        <div class="field">
+          <span class="hint">Stopping the timer logs an <strong>Unbilled</strong> time entry. Elapsed time rounds to your Time Tracking increment (default 6 minutes).</span>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="startTimerCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="startTimerSubmitBtn">Start Timer</button>
         </div>
       </form>
     </div>
@@ -3364,6 +3448,7 @@
   <script src="js/dashboard.js"></script>
   <script src="js/payments.js"></script>
   <script src="js/expenses.js"></script>
+  <script src="js/timer.js"></script>
   <script src="js/time-entries.js"></script>
   <script src="js/profit-loss.js"></script>
   <script src="js/email-settings.js"></script>

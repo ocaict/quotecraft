@@ -1,0 +1,73 @@
+/* Live timer — floating always-visible indicator + related bits. */
+
+.live-timer-indicator {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(210, 153, 34, 0.5);
+  background: var(--surface, #1b1e24);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+  color: var(--text, #e6e6eb);
+}
+
+.live-timer-indicator.hidden {
+  display: none;
+}
+
+.live-timer-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-timer-icon {
+  font-size: 16px;
+}
+
+.live-timer-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  max-width: 220px;
+}
+
+.live-timer-elapsed {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #d29922;
+}
+
+.live-timer-client {
+  font-size: 11px;
+  color: var(--text-muted, #8b949e);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-timer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.live-timer-actions .btn-small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.timer-status-text {
+  display: inline-block;
+  padding: 7px 12px;
+  border-radius: 6px;
+  background: var(--border, rgba(120, 120, 130, 0.15));
+  color: var(--text-muted, #8b949e);
+  font-size: 13px;
+}

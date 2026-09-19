@@ -115,6 +115,12 @@ const {
   disableAppLock,
   getAutoBackupSettings,
   saveAutoBackupSettings,
+  getTimerSettings,
+  saveTimerSettings,
+  getLiveTimer,
+  startLiveTimer,
+  stopLiveTimer,
+  discardLiveTimer,
   addAuditEntry,
   getAuditLogEntries,
 } = require('./database');
@@ -1364,6 +1370,61 @@ function registerIpcHandlers() {
       return { ok: true, entries: getAuditLogEntries(filter || {}) };
     } catch (err) {
       return { ok: false, error: err.message };
+    }
+  });
+
+  // ---------- Live Timer ----------
+  ipcMain.handle('timer:getSettings', async () => {
+    try {
+      return { ok: true, settings: getTimerSettings() };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('timer:saveSettings', async (event, settings) => {
+    try {
+      const res = saveTimerSettings(settings || {});
+      return res.ok ? { ok: true, settings: res.settings } : { ok: false, error: res.error };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('timer:get', async () => {
+    try {
+      return { ok: true, timer: getLiveTimer() };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('timer:start', async (event, data) => {
+    try {
+      const res = startLiveTimer(data || {});
+      if (res.ok) return { ok: true, timer: res.timer };
+      return { ok: false, running: !!res.running, errors: res.errors || {} };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to start timer: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('timer:stop', async () => {
+    try {
+      const res = stopLiveTimer();
+      if (res.ok) return { ok: true, entry: res.entry, elapsed_ms: res.elapsed_ms, hours: res.hours };
+      return { ok: false, tooShort: !!res.tooShort, locked: !!res.locked, errors: res.errors || {} };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to stop timer: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('timer:discard', async () => {
+    try {
+      const res = discardLiveTimer();
+      return res.ok ? { ok: true, discarded: true } : { ok: false, errors: res.errors || {} };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to discard timer: ${err.message}` } };
     }
   });
 

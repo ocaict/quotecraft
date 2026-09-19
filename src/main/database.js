@@ -373,6 +373,25 @@ function createTables() {
     );
   `);
   db.run(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log_entries(created_at DESC);`);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS live_timer (
+      id           INTEGER PRIMARY KEY CHECK (id = 1),
+      client_id    INTEGER NOT NULL REFERENCES clients(id),
+      project_id   INTEGER DEFAULT NULL REFERENCES projects(id),
+      description  TEXT NOT NULL,
+      started_at   TEXT NOT NULL,
+      created_at   TEXT NOT NULL
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS timer_settings (
+      id                INTEGER PRIMARY KEY CHECK (id = 1),
+      rounding_minutes  INTEGER NOT NULL DEFAULT 6,
+      updated_at        TEXT NOT NULL
+    );
+  `);
 }
 
 const MIGRATIONS = [
@@ -907,6 +926,34 @@ const MIGRATIONS = [
       if (!companyCols.has('default_hourly_rate')) {
         db.run(`ALTER TABLE company_profile ADD COLUMN default_hourly_rate REAL DEFAULT NULL`);
       }
+    },
+  },
+  {
+    version: 26,
+    up: () => {
+      // Live timer: a single, persisted "currently running" state so a running
+      // timer survives an app close and is recovered on next launch. Elapsed
+      // is always derived from started_at, never from an in-memory counter.
+      db.run(`
+        CREATE TABLE IF NOT EXISTS live_timer (
+          id           INTEGER PRIMARY KEY CHECK (id = 1),
+          client_id    INTEGER NOT NULL REFERENCES clients(id),
+          project_id   INTEGER DEFAULT NULL REFERENCES projects(id),
+          description  TEXT NOT NULL,
+          started_at   TEXT NOT NULL,
+          created_at   TEXT NOT NULL
+        );
+      `);
+
+      // Timer rounding increment (minutes) used when a stopped timer becomes
+      // a time entry. Single-row, mirroring auto_backup_settings.
+      db.run(`
+        CREATE TABLE IF NOT EXISTS timer_settings (
+          id                INTEGER PRIMARY KEY CHECK (id = 1),
+          rounding_minutes  INTEGER NOT NULL DEFAULT 6,
+          updated_at        TEXT NOT NULL
+        );
+      `);
     },
   },
 ];
@@ -2706,6 +2753,202 @@ function markTimeEntriesBilled(ids) {
   const count = db.getRowsModified();
   saveToDisk();
   return { ok: true, count };
+}
+
+// ---------- Live Timer ----------
+// One timer at a time, persisted in live_timer (single row, id = 1). Elapsed is
+// always recomputed from started_at so a close/crash mid-timer is recovered on
+// the next launch instead of losing the time.
+
+function getTimerSettings() {
+  const res = db.exec('SELECT rounding_minutes FROM timer_settings WHERE id = 1');
+  if (!res.length || res[0].values.length === 0) {
+    return { roundingMinutes: 6 };
+  }
+  const stored = res[0].values[0][0];
+  const n = stored === null || stored === undefined ? null : parseInt(stored, 10);
+  if (n === null || Number.isNaN(n)) {
+    return { roundingMinutes: 6 };
+  }
+  return { roundingMinutes: Math.max(0, Math.min(60, n)) };
+}
+
+function saveTimerSettings({ roundingMinutes } = {}) {
+  const value = parseInt(roundingMinutes, 10);
+  if (Number.isNaN(value) || value < 0 || value > 60) {
+    return { ok: false, error: 'Rounding must be between 0 and 60 minutes.' };
+  }
+  const now = new Date().toISOString();
+  const existingRes = db.exec('SELECT * FROM timer_settings WHERE id = 1');
+  if (existingRes.length && existingRes[0].values.length > 0) {
+    db.run(`UPDATE timer_settings SET rounding_minutes = ?, updated_at = ? WHERE id = 1`, [value, now]);
+  } else {
+    db.run(`INSERT INTO timer_settings (id, rounding_minutes, updated_at) VALUES (1, ?, ?)`, [value, now]);
+  }
+  saveToDisk();
+  return { ok: true, settings: getTimerSettings() };
+}
+
+function getLiveTimer() {
+  const res = db.exec('SELECT * FROM live_timer WHERE id = 1');
+  if (!res.length || res[0].values.length === 0) {
+    return null;
+  }
+  const cols = res[0].columns;
+  const row = {};
+  cols.forEach((c, i) => { row[c] = res[0].values[0][i]; });
+
+  const startedAt = row.started_at;
+  const elapsedMs = Math.max(0, Date.now() - Date.parse(startedAt));
+  const client = row.client_id ? getClient(row.client_id) : null;
+  const project = row.project_id ? getProject(row.project_id) : null;
+  return {
+    client_id: row.client_id,
+    project_id: row.project_id || null,
+    description: row.description,
+    started_at: startedAt,
+    elapsed_ms: elapsedMs,
+    client_name: client ? client.name : '',
+    client_company: client ? client.company_name : '',
+    project_name: project ? project.name : '',
+  };
+}
+
+function hasRunningTimer() {
+  return !!getLiveTimer();
+}
+
+function roundElapsedHours(elapsedMs, roundingMinutes) {
+  const rawHours = elapsedMs / 3600000;
+  if (!roundingMinutes || roundingMinutes <= 0) {
+    return Math.round(rawHours * 100) / 100;
+  }
+  const incrementHours = roundingMinutes / 60;
+  const increments = Math.round(rawHours / incrementHours);
+  return Math.round(increments * incrementHours * 100) / 100;
+}
+
+function startLiveTimer(input) {
+  const errors = {};
+  if (!input || !input.client_id) {
+    errors.client_id = 'Please select a client.';
+  }
+  if (!String(input.description || '').trim()) {
+    errors.description = 'A description of the work you are starting is required.';
+  }
+  if (input.project_id !== undefined && input.project_id !== null && String(input.project_id).trim() !== '') {
+    checkProjectBelongsToClient(input, errors);
+  }
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  if (hasRunningTimer()) {
+    return { ok: false, running: true, errors: { general: 'A timer is already running. Stop it before starting a new one.' } };
+  }
+
+  const now = new Date().toISOString();
+  try {
+    db.run(
+      `INSERT INTO live_timer (id, client_id, project_id, description, started_at, created_at)
+       VALUES (1, ?, ?, ?, ?, ?)`,
+      [
+        Number(input.client_id),
+        input.project_id !== undefined && input.project_id !== null && String(input.project_id).trim() !== '' ? Number(input.project_id) : null,
+        String(input.description).trim(),
+        now,
+        now,
+      ]
+    );
+    saveToDisk();
+    return { ok: true, timer: getLiveTimer() };
+  } catch (err) {
+    return { ok: false, errors: { general: `Failed to start timer: ${err.message}` } };
+  }
+}
+
+function stopLiveTimer() {
+  const timer = getLiveTimer();
+  if (!timer) {
+    return { ok: false, errors: { general: 'No timer is currently running.' } };
+  }
+
+  const { roundingMinutes } = getTimerSettings();
+  const hours = roundElapsedHours(timer.elapsed_ms, roundingMinutes);
+  if (!(hours > 0)) {
+    const thresholdMin = roundingMinutes > 0 ? Math.ceil(roundingMinutes / 2) : 1;
+    return {
+      ok: false,
+      tooShort: true,
+      errors: {
+        general: `The timer ran ${formatElapsedLabel(timer.elapsed_ms)} — less than the ${thresholdMin}-minute rounding threshold. Let it run a little longer, or lower the rounding increment in Settings → Time Tracking.`,
+      },
+    };
+  }
+
+  const entryDate = new Date(Date.parse(timer.started_at));
+  const y = entryDate.getFullYear();
+  const m = String(entryDate.getMonth() + 1).padStart(2, '0');
+  const d = String(entryDate.getDate()).padStart(2, '0');
+  const date = y + '-' + m + '-' + d;
+
+  const createRes = createTimeEntry({
+    client_id: timer.client_id,
+    project_id: timer.project_id || '',
+    date,
+    description: timer.description,
+    hours,
+    hourly_rate: '',
+  });
+  if (!createRes.ok) {
+    return { ok: false, errors: createRes.errors || { general: 'Could not create the time entry.' } };
+  }
+
+  try {
+    db.run('DELETE FROM live_timer WHERE id = 1');
+    saveToDisk();
+  } catch (err) {
+    return { ok: false, errors: { general: `Time entry was created but the timer could not be cleared: ${err.message}` } };
+  }
+
+  return {
+    ok: true,
+    entry: createRes.entry,
+    elapsed_ms: timer.elapsed_ms,
+    hours,
+  };
+}
+
+function discardLiveTimer() {
+  const timer = getLiveTimer();
+  if (!timer) {
+    return { ok: false, errors: { general: 'No timer is currently running.' } };
+  }
+  try {
+    db.run('DELETE FROM live_timer WHERE id = 1');
+    saveToDisk();
+    addAuditEntry({
+      entityType: 'timer',
+      entityRef: timer.description || 'Timer',
+      action: 'discarded',
+      description: 'Discarded running timer started ' + new Date(Date.parse(timer.started_at)).toLocaleString() + ' without logging time.',
+    });
+    return { ok: true, discarded: true };
+  } catch (err) {
+    return { ok: false, errors: { general: `Failed to discard timer: ${err.message}` } };
+  }
+}
+
+function formatElapsedLabel(elapsedMs) {
+  const totalSeconds = Math.floor(elapsedMs / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const parts = [];
+  if (h > 0) parts.push(h + 'h');
+  if (m > 0 || h > 0) parts.push(m + 'm');
+  parts.push(s + 's');
+  return parts.join(' ');
 }
 
 
@@ -6407,6 +6650,12 @@ module.exports = {
   listTimeEntries,
   getTimeEntriesSummary,
   markTimeEntriesBilled,
+  getTimerSettings,
+  saveTimerSettings,
+  getLiveTimer,
+  startLiveTimer,
+  stopLiveTimer,
+  discardLiveTimer,
   PAYMENT_METHODS,
   getEmailSettings,
   getEmailSettingsInternal,

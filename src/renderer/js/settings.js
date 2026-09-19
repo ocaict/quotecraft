@@ -631,4 +631,53 @@
 
   abLoad();
   loadSettings();
+
+  // ---------- Time Tracking (live timer rounding) ----------
+  const timerRounding = document.getElementById('timerRounding');
+  const timerRoundingStatus = document.getElementById('timerRoundingStatus');
+  const timerRoundingSaveBtn = document.getElementById('timerRoundingSaveBtn');
+
+  function timerLabel(minutes) {
+    if (!minutes) return 'Exact (no rounding).';
+    if (minutes === 6) return minutes + '-minute rounding (0.1 hour).';
+    return minutes + '-minute rounding.';
+  }
+
+  async function timerLoad() {
+    if (!timerRounding) return;
+    try {
+      const res = await window.electronAPI.getTimerSettings();
+      if (res.ok && res.settings) {
+        timerRounding.value = String(res.settings.roundingMinutes);
+        if (timerRoundingStatus) timerRoundingStatus.textContent = timerLabel(res.settings.roundingMinutes);
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  if (timerRounding && timerRoundingSaveBtn) {
+    timerRounding.addEventListener('change', () => {
+      if (timerRoundingStatus) {
+        timerRoundingStatus.textContent = timerLabel(parseInt(timerRounding.value, 10) || 0);
+      }
+    });
+
+    timerRoundingSaveBtn.addEventListener('click', async () => {
+      const value = parseInt(timerRounding.value, 10) || 0;
+      try {
+        const res = await window.electronAPI.saveTimerSettings({ roundingMinutes: value });
+        if (res.ok) {
+          if (timerRoundingStatus) timerRoundingStatus.textContent = timerLabel(value);
+          window.QuoteCraftUtils.showToast('Timer settings saved.', 'success');
+        } else {
+          window.QuoteCraftUtils.showToast((res.error) || 'Could not save timer settings.', 'error');
+        }
+      } catch (e) {
+        window.QuoteCraftUtils.showToast('Could not save timer settings: ' + e.message, 'error');
+      }
+    });
+  }
+
+  timerLoad();
 })();
