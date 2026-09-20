@@ -181,3 +181,222 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+
+/* ==========================================================================
+   Phase 5: Dashboard Analytics Intelligence
+   ========================================================================== */
+
+/* ── Stat card layout tweaks ── */
+.stat-card-sparkline {
+  position: relative;
+  padding-bottom: 40px; /* room for sparkline */
+}
+
+.stat-value-trend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── MoM Trend Badge ── */
+.kpi-trend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+
+.kpi-trend-badge.hidden {
+  display: none;
+}
+
+.kpi-trend-badge.trend-up {
+  background: rgba(63, 185, 80, 0.15);
+  color: #3fb950;
+}
+
+.kpi-trend-badge.trend-down {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+}
+
+.kpi-trend-badge.trend-neutral {
+  background: var(--border-strong);
+  color: var(--text-muted);
+}
+
+:root[data-theme="light"] .kpi-trend-badge.trend-up {
+  background: rgba(31, 136, 61, 0.1);
+  color: #1a7f37;
+}
+
+:root[data-theme="light"] .kpi-trend-badge.trend-down {
+  background: rgba(207, 34, 46, 0.1);
+  color: #cf222e;
+}
+
+/* ── SVG Sparkline ── */
+.kpi-sparkline {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  width: 80px;
+  height: 28px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.kpi-sparkline .spark-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kpi-sparkline .spark-area {
+  opacity: 0.12;
+}
+
+.kpi-sparkline.spark-paid .spark-line {
+  stroke: #3fb950;
+}
+
+.kpi-sparkline.spark-paid .spark-area {
+  fill: #3fb950;
+}
+
+/* ── Collection Ratio Bar ── */
+.collection-ratio-wrap {
+  margin-top: 8px;
+}
+
+.collection-ratio-wrap.hidden {
+  display: none;
+}
+
+.collection-ratio-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.collection-ratio-pct {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.collection-ratio-track {
+  height: 5px;
+  background: var(--border-strong);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.collection-ratio-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #3fb950);
+  border-radius: 999px;
+  transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  min-width: 0;
+}
+
+/* ── Activity Timeline ── */
+.activity-list {
+  position: relative;
+}
+
+/* Timeline vertical guide line */
+.activity-list::before {
+  content: '';
+  position: absolute;
+  left: 27px;
+  top: 20px;
+  bottom: 20px;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+
+.activity-item {
+  position: relative;
+}
+
+/* Timeline dot */
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--border-strong);
+  border: 2px solid var(--bg-elevated);
+  z-index: 1;
+}
+
+.activity-dot.dot-quote {
+  background: #58a6ff;
+}
+
+.activity-dot.dot-invoice {
+  background: #3fb950;
+}
+
+.activity-dot.dot-payment {
+  background: #f0883e;
+}
+
+/* Payment activity pill */
+.activity-kind.payment {
+  background: rgba(240, 136, 62, 0.15);
+  color: #f0883e;
+}
+
+:root[data-theme="light"] .activity-kind.payment {
+  background: rgba(212, 95, 10, 0.1);
+  color: #c44c00;
+}
+
+/* Relative time label */
+.activity-rel-time {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-left: auto;
+  padding-left: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Activity footer link */
+.activity-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 4px 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.activity-view-all {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+
+.activity-view-all:hover {
+  text-decoration: underline;
+}

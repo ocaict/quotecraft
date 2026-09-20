@@ -179,7 +179,16 @@
         <div class="card stat-card">
           <span class="stat-label">Outstanding balance</span>
           <span id="statOutstanding" class="stat-value">—</span>
-          <span class="stat-sub">Across unpaid & partially paid invoices</span>
+          <span class="stat-sub">Across unpaid &amp; partially paid invoices</span>
+          <div id="collectionRatioWrap" class="collection-ratio-wrap hidden">
+            <div class="collection-ratio-label">
+              <span id="collectionRatioText">Collected — / —</span>
+              <span id="collectionRatioPct" class="collection-ratio-pct">—%</span>
+            </div>
+            <div class="collection-ratio-track">
+              <div id="collectionRatioBar" class="collection-ratio-bar" style="width:0%"></div>
+            </div>
+          </div>
         </div>
 
         <div class="card stat-card stat-card-link" id="overdueCard" role="button" tabindex="0">
@@ -191,10 +200,14 @@
           <span class="stat-sub">View overdue invoices &rarr;</span>
         </div>
 
-        <div class="card stat-card">
+        <div class="card stat-card stat-card-sparkline">
           <span class="stat-label">Invoiced this month</span>
-          <span id="statInvoicedMonth" class="stat-value">—</span>
+          <div class="stat-value-trend-row">
+            <span id="statInvoicedMonth" class="stat-value">—</span>
+            <span id="trendInvoicedMonth" class="kpi-trend-badge hidden"></span>
+          </div>
           <span class="stat-sub">Total of invoices created this month</span>
+          <svg id="sparkInvoiced" class="kpi-sparkline" viewBox="0 0 80 28" preserveAspectRatio="none" aria-hidden="true"></svg>
         </div>
 
         <div class="card stat-card">
@@ -203,10 +216,14 @@
           <span class="stat-sub">Total of invoices created this year</span>
         </div>
 
-        <div class="card stat-card">
+        <div class="card stat-card stat-card-sparkline">
           <span class="stat-label">Paid this month</span>
-          <span id="statPaidMonth" class="stat-value">—</span>
+          <div class="stat-value-trend-row">
+            <span id="statPaidMonth" class="stat-value">—</span>
+            <span id="trendPaidMonth" class="kpi-trend-badge hidden"></span>
+          </div>
           <span class="stat-sub">Payments received this month</span>
+          <svg id="sparkPaid" class="kpi-sparkline" viewBox="0 0 80 28" preserveAspectRatio="none" aria-hidden="true"></svg>
         </div>
 
         <div class="card stat-card">
