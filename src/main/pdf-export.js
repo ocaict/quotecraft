@@ -1432,7 +1432,156 @@ function renderClientStatementPdf(statement, profile, opts) {
   return ctx.done;
 }
 
-// ---------- Shareable Standalone HTML Quote ----------
+// ---------- Payments Reconciliation PDF ----------
+
+function drawPaymentsTable(ctx, payments, currency) {
+  const { doc, W } = ctx;
+  const dateW = 60;
+  const invW = 75;
+  const methodW = 80;
+  const refW = 75;
+  const amtW = 80;
+  const clientW = W - dateW - invW - methodW - refW - amtW;
+
+  const dateX = MARGIN;
+  const invX = dateX + dateW;
+  const clientX = invX + invW;
+  const methodX = clientX + clientW;
+  const refX = methodX + methodW;
+  const amtX = refX + refW;
+
+  const rowPadY = 5.5;
+  const headerH = 22;
+
+  function drawTableHeader(yPos) {
+    doc.rect(MARGIN, yPos, W, headerH).fill(COLORS.headerFill);
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(COLORS.muted);
+    doc.text('DATE', dateX + 6, yPos + 8, { width: dateW - 8, lineGap: 0 });
+    doc.text('INVOICE #', invX, yPos + 8, { width: invW - 6, lineGap: 0 });
+    doc.text('CLIENT', clientX, yPos + 8, { width: clientW - 6, lineGap: 0 });
+    doc.text('METHOD', methodX, yPos + 8, { width: methodW - 6, lineGap: 0 });
+    doc.text('REFERENCE', refX, yPos + 8, { width: refW - 6, lineGap: 0 });
+    doc.text('AMOUNT', amtX, yPos + 8, { width: amtW - 6, align: 'right', lineGap: 0 });
+    doc.moveTo(MARGIN, yPos + headerH).lineTo(MARGIN + W, yPos + headerH).strokeColor(COLORS.line).lineWidth(1).stroke();
+  }
+
+  function ensureSpace(needed) {
+    if (ctx.y + needed > ctx.pageBottom) {
+      doc.addPage();
+      ctx.y = doc.y;
+      drawTableHeader(ctx.y);
+      ctx.y += headerH;
+    }
+  }
+
+  drawTableHeader(ctx.y);
+  ctx.y += headerH;
+
+  if (!payments || !payments.length) {
+    doc.font('Helvetica-Oblique').fontSize(9.5).fillColor(COLORS.muted).text('No payment records found for this period.', MARGIN + 6, ctx.y + 7, { width: W - 12 });
+    ctx.y += 30;
+    return;
+  }
+
+  payments.forEach((p, idx) => {
+    const clientName = String(p.client_name || p.client_company || 'Client');
+    doc.font('Helvetica').fontSize(8.5);
+    const clientH = doc.heightOfString(clientName, { width: clientW - 8 }) + rowPadY * 2;
+    const rowH = Math.max(20, Math.ceil(clientH));
+
+    ensureSpace(rowH + 2);
+    if (idx % 2 === 1) {
+      doc.rect(MARGIN, ctx.y, W, rowH).fill(COLORS.altFill);
+    }
+
+    const textY = ctx.y + rowPadY;
+
+    doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted);
+    doc.text(formatDate(p.payment_date), dateX + 6, textY + 0.5, { width: dateW - 8, lineGap: 0 });
+
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLORS.ink);
+    doc.text(String(p.invoice_number || '\u2014'), invX, textY + 0.5, { width: invW - 6, lineGap: 0 });
+
+    doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.ink);
+    doc.text(clientName, clientX, textY + 0.5, { width: clientW - 8, lineGap: 0 });
+
+    doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted);
+    doc.text(String(p.payment_method || 'Unspecified'), methodX, textY + 0.5, { width: methodW - 6, lineGap: 0 });
+
+    doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted);
+    doc.text(String(p.reference_number || '\u2014'), refX, textY + 0.5, { width: refW - 6, lineGap: 0 });
+
+    const pAmt = Number(p.amount) || 0;
+    const pCur = p.currency || currency;
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.ink);
+    doc.text(money(pAmt, pCur), amtX, textY + 0.5, { width: amtW - 6, align: 'right', lineGap: 0 });
+
+    ctx.y += rowH;
+    doc.moveTo(MARGIN, ctx.y).lineTo(MARGIN + W, ctx.y).strokeColor(COLORS.line).lineWidth(0.75).stroke();
+    ctx.y += 1;
+  });
+
+  ctx.y += 16;
+}
+
+function renderPaymentsPdf(report, profile, opts) {
+  const currency = (report && report.baseCurrency) || (profile && (profile.reporting_currency || profile.default_currency)) || 'USD';
+  const businessName = (profile && profile.business_name) || 'QuoteCraft';
+  const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
+  const generatedOn = new Date().toISOString().slice(0, 10);
+
+  const ctx = createDocument({
+    title: 'Payments Reconciliation Report',
+    author: businessName,
+    subject: 'Payments Reconciliation',
+    theme,
+  });
+  const { doc } = ctx;
+
+  const filter = (report && report.filter) || {};
+  let periodStr = 'All time';
+  if (filter.startDate && filter.endDate) {
+    periodStr = `${formatDate(filter.startDate)} to ${formatDate(filter.endDate)}`;
+  } else if (filter.startDate) {
+    periodStr = `From ${formatDate(filter.startDate)}`;
+  } else if (filter.endDate) {
+    periodStr = `Until ${formatDate(filter.endDate)}`;
+  }
+
+  drawHeaderBrand(ctx, {
+    profile,
+    businessName,
+    rightLabel: 'PAYMENTS RECONCILIATION',
+    rightNumber: '',
+    metaRows: [
+      ['Period', periodStr],
+      ['Generated', formatDate(generatedOn)],
+      ['Method filter', filter.paymentMethod && filter.paymentMethod !== 'all' ? filter.paymentMethod : 'All methods'],
+    ],
+  });
+  drawDivider(ctx);
+
+  const methodRows = (report && report.byMethod ? report.byMethod : []).map((m) => [
+    `${m.method} (${m.count})`,
+    `${money(m.totalAmount, currency)} (${m.percentage}%)`,
+  ]);
+
+  drawTotals(ctx, {
+    rows: methodRows,
+    grandLabel: 'TOTAL RECEIVED',
+    grandValue: money((report && report.totalReceived) || 0, currency),
+    extra: [['Total transactions', String((report && report.count) || 0)]],
+  });
+
+  drawPaymentsTable(ctx, (report && report.payments) || [], currency);
+
+  drawFooter(ctx, `Payments report generated by ${businessName}`);
+
+  doc.end();
+  return ctx.done;
+}
+
+// ---------- Shareable Standalone HTML Quote & Invoice ----------
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -1915,13 +2064,454 @@ function renderQuoteHtml(quote, client, profile) {
 </html>`;
 }
 
+function renderInvoiceHtml(invoice, client, profile) {
+  const currency = invoice.currency || (profile && profile.default_currency) || 'USD';
+  const businessName = (profile && profile.business_name) || 'QuoteCraft';
+  const status = effectiveInvoiceStatus(invoice);
+
+  let docLabel = 'INVOICE';
+  if (invoice.invoice_type === 'deposit') {
+    docLabel = 'DEPOSIT INVOICE';
+  } else if (invoice.invoice_type === 'final') {
+    docLabel = 'FINAL INVOICE';
+  }
+
+  const companyLines = buildCompanyLines(profile);
+  const clientLines = buildClientLines(client);
+
+  const totalRows = [['Subtotal', money(invoice.subtotal, currency)]];
+  if (Number(invoice.discount_amount) > 0) {
+    totalRows.push(['Discount', `\u2212${money(invoice.discount_amount, currency)}`]);
+  }
+  const taxRows = buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency);
+  taxRows.forEach((r) => totalRows.push(r));
+
+  const paid = Number(invoice.amount_paid) || 0;
+  const credited = Number(invoice.amount_credited) || 0;
+  const balance = Number(invoice.balance_due) || 0;
+  const netPaid = Math.max(0, Math.round((paid - credited) * 100) / 100);
+
+  const extraRows = [];
+  if (paid > 0.0001) {
+    extraRows.push(['Amount Paid', money(paid, currency)]);
+    if (credited > 0.0001) {
+      extraRows.push(['Credited', `\u2212${money(credited, currency)}`]);
+      extraRows.push(['Net Paid', money(netPaid, currency)]);
+    }
+    extraRows.push(['Balance Due', money(Math.max(balance, 0), currency), true]);
+  } else if (balance > 0.0001) {
+    extraRows.push(['Balance Due', money(balance, currency), true]);
+  } else if (credited > 0.0001) {
+    extraRows.push(['Credited', `\u2212${money(credited, currency)}`]);
+    extraRows.push(['Net Paid', money(netPaid, currency)]);
+  }
+
+  const lineItemsHtml = (invoice.line_items || []).map((item) => {
+    let discText = '—';
+    if (item.discount_type === 'percent' && Number(item.discount_value) > 0) {
+      discText = `${item.discount_value}% (${money(item.discount_amount, currency)})`;
+    } else if (item.discount_type === 'amount' && Number(item.discount_value) > 0) {
+      discText = money(item.discount_amount, currency);
+    }
+    const taxText = Number(item.tax_rate) > 0 ? `${item.tax_rate}%` : '0% (Exempt)';
+    return `
+      <tr>
+        <td class="col-desc">${escapeHtml(item.description)}</td>
+        <td class="col-qty">${normalizeQty(item.quantity)}</td>
+        <td class="col-price">${money(item.unit_price, currency)}</td>
+        <td class="col-disc">${escapeHtml(discText)}</td>
+        <td class="col-tax">${escapeHtml(taxText)}</td>
+        <td class="col-total">${money(item.amount, currency)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const totalsHtml = totalRows.map(([label, val]) => `
+    <div class="totals-row">
+      <span class="label">${escapeHtml(label)}</span>
+      <span class="value">${escapeHtml(val)}</span>
+    </div>
+  `).join('');
+
+  const extraTotalsHtml = extraRows.map(([label, val, isHighlight]) => `
+    <div class="totals-row ${isHighlight ? 'grand highlight' : ''}">
+      <span class="label">${escapeHtml(label)}</span>
+      <span class="value">${escapeHtml(val)}</span>
+    </div>
+  `).join('');
+
+  let statusBannerHtml = '';
+  if (status === 'paid') {
+    statusBannerHtml = `
+      <div class="payment-status-card paid">
+        <div class="status-badge-pill paid">&#10003; Paid in Full</div>
+        <p class="status-message">This invoice has been settled in full. Thank you for your payment!</p>
+      </div>
+    `;
+  } else if (status === 'overdue') {
+    statusBannerHtml = `
+      <div class="payment-status-card overdue">
+        <div class="status-badge-pill overdue">&#9888; Payment Overdue</div>
+        <p class="status-message">This invoice was due on <strong>${escapeHtml(formatDate(invoice.date_due))}</strong>. Please remit the outstanding balance of <strong>${escapeHtml(money(balance, currency))}</strong> at your earliest convenience.</p>
+      </div>
+    `;
+  } else if (status === 'partially_paid') {
+    statusBannerHtml = `
+      <div class="payment-status-card partial">
+        <div class="status-badge-pill partial">&#9203; Partially Paid</div>
+        <p class="status-message">Received <strong>${escapeHtml(money(paid, currency))}</strong>. Remaining balance due: <strong>${escapeHtml(money(balance, currency))}</strong> by <strong>${escapeHtml(formatDate(invoice.date_due))}</strong>.</p>
+      </div>
+    `;
+  } else {
+    statusBannerHtml = `
+      <div class="payment-status-card due">
+        <div class="status-badge-pill due">&#128197; Payment Due</div>
+        <p class="status-message">Payment of <strong>${escapeHtml(money(invoice.total, currency))}</strong> is due on or before <strong>${escapeHtml(formatDate(invoice.date_due))}</strong>.</p>
+      </div>
+    `;
+  }
+
+  const paymentDetails = (profile && profile.payment_details) || '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice ${escapeHtml(invoice.invoice_number)} - ${escapeHtml(businessName)}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #F8FAFC;
+      color: #1E293B;
+      line-height: 1.5;
+      padding: 32px 16px;
+    }
+    .invoice-container {
+      max-width: 860px;
+      margin: 0 auto;
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+      padding: 40px;
+    }
+    .invoice-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #F1F5F9;
+      padding-bottom: 28px;
+      margin-bottom: 28px;
+    }
+    .company-info h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-bottom: 6px;
+    }
+    .company-details, .client-details {
+      font-size: 13.5px;
+      color: #64748B;
+      line-height: 1.6;
+    }
+    .doc-meta {
+      text-align: right;
+    }
+    .doc-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: #EFF6FF;
+      color: #2563EB;
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .doc-badge.deposit { background: #FAF5FF; color: #7E22CE; }
+    .doc-badge.final { background: #F0FDF4; color: #15803D; }
+    .doc-number {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-bottom: 6px;
+    }
+    .meta-table {
+      margin-left: auto;
+      font-size: 13.5px;
+    }
+    .meta-table td {
+      padding: 2px 4px;
+    }
+    .meta-table td:first-child {
+      color: #64748B;
+      text-align: right;
+      padding-right: 8px;
+    }
+    .meta-table td:last-child {
+      font-weight: 600;
+      color: #1E293B;
+    }
+    .parties-section {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      gap: 24px;
+    }
+    .client-card {
+      flex: 1;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94A3B8;
+      margin-bottom: 6px;
+    }
+    .client-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-bottom: 4px;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-size: 13.5px;
+    }
+    .items-table th {
+      background: #F8FAFC;
+      color: #475569;
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 12px;
+      border-top: 1px solid #E2E8F0;
+      border-bottom: 1px solid #CBD5E1;
+    }
+    .items-table td {
+      padding: 12px;
+      border-bottom: 1px solid #F1F5F9;
+    }
+    .items-table tr:nth-child(even) { background-color: #FAFAFA; }
+    .col-qty, .col-price, .col-disc, .col-tax, .col-total { text-align: right; }
+    .items-table th.col-qty, .items-table th.col-price, .items-table th.col-disc, .items-table th.col-tax, .items-table th.col-total { text-align: right; }
+    .col-desc { font-weight: 500; }
+    .totals-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 32px;
+    }
+    .totals-box {
+      width: 320px;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 14px 18px;
+    }
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13.5px;
+      padding: 4px 0;
+      color: #475569;
+    }
+    .totals-row.grand {
+      border-top: 2px solid #E2E8F0;
+      margin-top: 8px;
+      padding-top: 8px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .totals-row.highlight {
+      color: #2563EB;
+      border-top: 1px dashed #CBD5E1;
+      margin-top: 6px;
+      padding-top: 6px;
+    }
+    .payment-status-card {
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+    }
+    .payment-status-card.paid { background: #F0FDF4; border: 1px solid #86EFAC; color: #166534; }
+    .payment-status-card.overdue { background: #FEF2F2; border: 1px solid #FCA5A5; color: #991B1B; }
+    .payment-status-card.partial { background: #FFFBEB; border: 1px solid #FCD34D; color: #92400E; }
+    .payment-status-card.due { background: #EFF6FF; border: 1px solid #BFDBFE; color: #1E40AF; }
+    .status-badge-pill {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 3px 8px;
+      border-radius: 999px;
+      margin-bottom: 6px;
+    }
+    .status-badge-pill.paid { background: #DCFCE7; color: #15803D; }
+    .status-badge-pill.overdue { background: #FEE2E2; color: #B91C1C; }
+    .status-badge-pill.partial { background: #FEF3C7; color: #D97706; }
+    .status-badge-pill.due { background: #DBEAFE; color: #2563EB; }
+    .status-message { font-size: 13.5px; line-height: 1.5; }
+    .payment-instructions {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+    }
+    .payment-instructions h4 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748B;
+      margin-bottom: 8px;
+    }
+    .payment-instructions p {
+      font-size: 13.5px;
+      color: #334155;
+      white-space: pre-wrap;
+    }
+    .notes-terms {
+      margin-bottom: 32px;
+      padding: 16px;
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+    }
+    .notes-terms h4 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748B;
+      margin-bottom: 6px;
+    }
+    .notes-terms p {
+      font-size: 13.5px;
+      color: #334155;
+      white-space: pre-wrap;
+    }
+    .footer-note {
+      text-align: center;
+      font-size: 12px;
+      color: #94A3B8;
+      margin-top: 32px;
+      border-top: 1px solid #E2E8F0;
+      padding-top: 16px;
+    }
+    @media print {
+      body { background: #FFF; padding: 0; }
+      .invoice-container { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+      .payment-status-card { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-container">
+    <div class="invoice-header">
+      <div class="company-info">
+        <h1>${escapeHtml(businessName)}</h1>
+        <div class="company-details">
+          ${companyLines.map(l => `<div>${escapeHtml(l)}</div>`).join('')}
+          ${profile && profile.phone ? `<div>Tel: ${escapeHtml(profile.phone)}</div>` : ''}
+          ${profile && profile.email ? `<div>Email: ${escapeHtml(profile.email)}</div>` : ''}
+          ${profile && profile.tax_id ? `<div>Tax ID: ${escapeHtml(profile.tax_id)}</div>` : ''}
+        </div>
+      </div>
+      <div class="doc-meta">
+        <div class="doc-badge ${invoice.invoice_type || ''}">${escapeHtml(docLabel)}</div>
+        <div class="doc-number">${escapeHtml(invoice.invoice_number)}</div>
+        <table class="meta-table">
+          <tr><td>Invoice Date:</td><td>${escapeHtml(formatDate(invoice.date_created))}</td></tr>
+          <tr><td>Due Date:</td><td>${escapeHtml(formatDate(invoice.date_due))}</td></tr>
+          <tr><td>Status:</td><td>${escapeHtml(INVOICE_STATUS_LABELS[status] || status)}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    ${statusBannerHtml}
+
+    <div class="parties-section">
+      <div class="client-card">
+        <div class="card-label">Billed To</div>
+        <div class="client-name">${escapeHtml(client ? client.name : 'Client')}</div>
+        ${client && client.company_name ? `<div>${escapeHtml(client.company_name)}</div>` : ''}
+        ${invoice.contact ? `<div>Attn: ${escapeHtml(invoice.contact.name)}${invoice.contact.role ? ` (${escapeHtml(invoice.contact.role)})` : ''}</div>` : ''}
+        <div class="client-details">
+          ${clientLines.map(l => `<div>${escapeHtml(l)}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th class="col-desc">Description</th>
+          <th class="col-qty">Qty</th>
+          <th class="col-price">Unit Price</th>
+          <th class="col-disc">Discount</th>
+          <th class="col-tax">Tax</th>
+          <th class="col-total">Line Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lineItemsHtml}
+      </tbody>
+    </table>
+
+    <div class="totals-wrapper">
+      <div class="totals-box">
+        ${totalsHtml}
+        <div class="totals-row grand">
+          <span class="label">Total</span>
+          <span class="value">${money(invoice.total, currency)}</span>
+        </div>
+        ${extraTotalsHtml}
+      </div>
+    </div>
+
+    ${paymentDetails ? `
+      <div class="payment-instructions">
+        <h4>Payment Instructions / Bank Details</h4>
+        <p>${escapeHtml(paymentDetails)}</p>
+      </div>
+    ` : ''}
+
+    ${invoice.notes || invoice.terms ? `
+      <div class="notes-terms">
+        <h4>Notes &amp; Payment Terms</h4>
+        <p>${escapeHtml([invoice.notes, invoice.terms].filter(Boolean).join('\n\n'))}</p>
+      </div>
+    ` : ''}
+
+    <div class="footer-note">
+      Prepared by ${escapeHtml(businessName)} &bull; Generated locally with QuoteCraft
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 module.exports = {
   THEMES,
   renderQuotePdf,
   renderInvoicePdf,
   renderCreditNotePdf,
   renderClientStatementPdf,
+  renderPaymentsPdf,
   renderQuoteHtml,
+  renderInvoiceHtml,
   renderQuotePrintHtml,
   renderInvoicePrintHtml,
 };

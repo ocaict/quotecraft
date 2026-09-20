@@ -87,6 +87,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getInvoicePayments: (id) => ipcRenderer.invoke('invoices:payments', id),
   getPaymentMethods: () => ipcRenderer.invoke('invoices:methods'),
   getPaymentsReport: (filters) => ipcRenderer.invoke('reports:payments', filters),
+  exportShareableInvoiceHtml: (invoiceId) => ipcRenderer.invoke('invoices:exportShareableHtml', invoiceId),
+  exportPaymentsPdf: (filter) => ipcRenderer.invoke('payments:exportPdf', filter),
   getProfitLossReport: (filter) => ipcRenderer.invoke('reports:profitLoss', filter),
   listExpenses: (filter) => ipcRenderer.invoke('expenses:list', filter),
   getUnbilledExpenses: (clientId, projectId) => ipcRenderer.invoke('expenses:getUnbilled', clientId, projectId),

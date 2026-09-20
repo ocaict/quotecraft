@@ -13,6 +13,7 @@
   const searchInput = document.getElementById('paymentsSearch');
   const resetBtn = document.getElementById('paymentsResetBtn');
   const exportCsvBtn = document.getElementById('paymentsExportCsvBtn');
+  const exportPdfBtn = document.getElementById('paymentsExportPdfBtn');
 
   const totalReceivedEl = document.getElementById('paymentsTotalReceived');
   const periodLabelEl = document.getElementById('paymentsPeriodLabel');
@@ -322,7 +323,27 @@
     loadReport();
   });
 
+  async function exportPdf() {
+    if (!currentReport) return;
+    window.QuoteCraftUtils.showBusy('Exporting Payments Reconciliation PDF\u2026');
+    try {
+      const filter = getFilterPayload();
+      const res = await window.electronAPI.exportPaymentsPdf(filter);
+      if (res.ok && res.cancelled) return;
+      if (res.ok) {
+        window.QuoteCraftUtils.showToast('Payments report PDF saved to ' + res.savedPath, 'success');
+      } else {
+        window.QuoteCraftUtils.showToast(res.errors && res.errors.general ? res.errors.general : 'Could not export Payments report PDF.', 'error');
+      }
+    } catch (err) {
+      window.QuoteCraftUtils.showToast('Could not export PDF: ' + err.message, 'error');
+    } finally {
+      window.QuoteCraftUtils.hideBusy();
+    }
+  }
+
   exportCsvBtn.addEventListener('click', exportCsv);
+  if (exportPdfBtn) exportPdfBtn.addEventListener('click', exportPdf);
 
   if (invoicesViewPaymentsBtn) {
     invoicesViewPaymentsBtn.addEventListener('click', () => {

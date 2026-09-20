@@ -17,6 +17,7 @@
 
   const invoiceBackBtn = document.getElementById('invoiceBackBtn');
   const invoiceExportBtn = document.getElementById('invoiceExportBtn');
+  const invoiceShareHtmlBtn = document.getElementById('invoiceShareHtmlBtn');
   const invoicePrintBtn = document.getElementById('invoicePrintBtn');
   const invoiceSendEmailBtn = document.getElementById('invoiceSendEmailBtn');
   const invoiceRecurringBtn = document.getElementById('invoiceRecurringBtn');
@@ -1663,6 +1664,28 @@
       invoiceExportBtn.disabled = false;
     }
   });
+
+  if (invoiceShareHtmlBtn) {
+    invoiceShareHtmlBtn.addEventListener('click', async () => {
+      if (!currentInvoiceId) return;
+      invoiceShareHtmlBtn.disabled = true;
+      window.QuoteCraftUtils.showBusy('Exporting shareable HTML invoice\u2026');
+      try {
+        const res = await window.electronAPI.exportShareableInvoiceHtml(currentInvoiceId);
+        if (res.ok && res.cancelled) return;
+        if (res.ok) {
+          toast('Shareable HTML invoice saved to ' + res.savedPath, 'success');
+        } else {
+          toast(res.errors && res.errors.general ? res.errors.general : 'Could not export HTML invoice.', 'error');
+        }
+      } catch (e) {
+        toast('Could not export HTML invoice: ' + e.message, 'error');
+      } finally {
+        window.QuoteCraftUtils.hideBusy();
+        invoiceShareHtmlBtn.disabled = false;
+      }
+    });
+  }
 
   if (invoicePrintBtn) {
     invoicePrintBtn.addEventListener('click', async () => {

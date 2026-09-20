@@ -6,7 +6,9 @@ const {
   renderInvoicePdf,
   renderCreditNotePdf,
   renderClientStatementPdf,
+  renderPaymentsPdf,
   renderQuoteHtml,
+  renderInvoiceHtml,
   renderQuotePrintHtml,
   renderInvoicePrintHtml,
 } = require('./pdf-export');
@@ -1129,6 +1131,32 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('invoices:exportShareableHtml', async (event, invoiceId) => {
+    try {
+      const invoice = getInvoice(invoiceId);
+      if (!invoice) {
+        return { ok: false, errors: { general: 'Invoice not found.' } };
+      }
+      const client = getClient(invoice.client_id);
+      const profile = getCompanyProfile();
+      const html = renderInvoiceHtml(invoice, client, profile);
+
+      const safeNumber = String(invoice.invoice_number || 'invoice').replace(/[^\w-]+/g, '_');
+      const result = await dialog.showSaveDialog({
+        title: 'Export Shareable Invoice (HTML)',
+        defaultPath: `Invoice_${safeNumber}.html`,
+        filters: [{ name: 'HTML Document', extensions: ['html', 'htm'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { ok: true, cancelled: true };
+      }
+      fs.writeFileSync(result.filePath, html, 'utf-8');
+      return { ok: true, savedPath: result.filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not export HTML: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('invoices:print', async (event, invoiceId) => {
     try {
       const invoice = getInvoice(invoiceId);
@@ -1229,6 +1257,28 @@ function registerIpcHandlers() {
       return { ok: true, report };
     } catch (err) {
       return { ok: false, errors: { general: `Failed to generate payments report: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('payments:exportPdf', async (event, filter) => {
+    try {
+      const report = getPaymentsReport(filter || {});
+      const profile = getCompanyProfile();
+      const buffer = await renderPaymentsPdf(report, profile);
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const result = await dialog.showSaveDialog({
+        title: 'Save Payments Reconciliation PDF',
+        defaultPath: `Payments_Report_${todayStr}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { ok: true, cancelled: true };
+      }
+      fs.writeFileSync(result.filePath, buffer);
+      return { ok: true, savedPath: result.filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not export PDF: ${err.message}` } };
     }
   });
 
