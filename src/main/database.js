@@ -85,6 +85,7 @@ function createTables() {
       default_terms   TEXT DEFAULT '',
       payment_details TEXT DEFAULT '',
       default_quote_acceptance_instructions TEXT DEFAULT 'To accept this quote, please reply to confirm via email or phone.',
+      pdf_theme       TEXT NOT NULL DEFAULT 'classic',
       created_at      TEXT NOT NULL,
       updated_at      TEXT NOT NULL
     );
@@ -1093,6 +1094,15 @@ const MIGRATIONS = [
       db.run('CREATE INDEX IF NOT EXISTS idx_quotes_project_id ON quotes(project_id)');
     },
   },
+  {
+    version: 32,
+    up: () => {
+      const cols = new Set(db.exec(`PRAGMA table_info(company_profile)`)[0].values.map((v) => v[1]));
+      if (!cols.has('pdf_theme')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN pdf_theme TEXT NOT NULL DEFAULT 'classic'`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -1137,6 +1147,7 @@ function getCompanyProfile() {
   if (!profile.reporting_currency) {
     profile.reporting_currency = profile.default_currency || 'USD';
   }
+  profile.pdf_theme = profile.pdf_theme || 'classic';
   return profile;
 }
 
@@ -1175,6 +1186,7 @@ function saveCompanyProfile(profile) {
     default_quote_acceptance_instructions: profile.default_quote_acceptance_instructions !== undefined
       ? profile.default_quote_acceptance_instructions
       : (existing && existing.default_quote_acceptance_instructions) || 'To accept this quote, please reply to confirm via email or phone.',
+    pdf_theme: profile.pdf_theme !== undefined ? profile.pdf_theme : (existing && existing.pdf_theme) || 'classic',
   };
 
   if (existing) {
@@ -1185,7 +1197,8 @@ function saveCompanyProfile(profile) {
         website = ?, tax_id = ?, default_currency = ?, reporting_currency = ?, default_tax_rate = ?,
         default_hourly_rate = ?, invoice_prefix = ?, invoice_start_number = ?, quote_prefix = ?,
         quote_start_number = ?, default_terms = ?, payment_details = ?,
-        credit_note_prefix = ?, credit_note_start_number = ?, default_quote_acceptance_instructions = ?, updated_at = ?
+        credit_note_prefix = ?, credit_note_start_number = ?, default_quote_acceptance_instructions = ?,
+        pdf_theme = ?, updated_at = ?
        WHERE id = 1`,
       [
         fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
@@ -1193,7 +1206,8 @@ function saveCompanyProfile(profile) {
         fields.website, fields.tax_id, fields.default_currency, fields.reporting_currency, fields.default_tax_rate,
         fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
-        fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions, now,
+        fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
+        fields.pdf_theme, now,
       ]
     );
   } else {
@@ -1203,15 +1217,16 @@ function saveCompanyProfile(profile) {
         postal_code, country, phone, email, website, tax_id, default_currency,
         reporting_currency, default_tax_rate, default_hourly_rate, invoice_prefix, invoice_start_number, quote_prefix,
         quote_start_number, default_terms, payment_details,
-        credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, pdf_theme, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         1, fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
         fields.website, fields.tax_id, fields.default_currency, fields.reporting_currency, fields.default_tax_rate,
         fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
-        fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions, now, now,
+        fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
+        fields.pdf_theme, now, now,
       ]
     );
   }

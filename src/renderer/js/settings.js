@@ -105,6 +105,7 @@
       credit_note_start_number: 1,
       default_currency: 'USD',
       reporting_currency: 'USD',
+      pdf_theme: 'classic',
     };
     const data = Object.assign({}, defaults, profile || {});
     if (!data.reporting_currency) {
@@ -117,6 +118,7 @@
         el.name &&
         el.name !== 'logo_path' &&
         el.name !== 'themeMode' &&
+        el.name !== 'pdf_theme' &&
         el.type !== 'radio' &&
         !isRadioGroup(el)
       ) {
@@ -129,6 +131,10 @@
         el.checked = el.value === activeMode;
       });
     }
+    const pdfThemeInputs = document.querySelectorAll('input[name="pdf_theme"]');
+    pdfThemeInputs.forEach((el) => {
+      el.checked = el.value === (data.pdf_theme || 'classic');
+    });
     window.prepareCurrencySelect(currencySelect, data.default_currency || 'USD');
     if (reportingCurrencySelect) {
       window.prepareCurrencySelect(reportingCurrencySelect, data.reporting_currency || data.default_currency || 'USD');
@@ -161,16 +167,21 @@
     const data = {};
     for (const key of Object.keys(form.elements)) {
       const el = form.elements[key];
-      // Skip radio inputs (e.g. themeMode) — they are app preferences, not company profile database fields.
+      // Skip radio inputs (e.g. themeMode, pdf_theme) — handled separately
       if (
         el &&
         el.name &&
         el.name !== 'themeMode' &&
+        el.name !== 'pdf_theme' &&
         el.type !== 'radio' &&
         !isRadioGroup(el)
       ) {
         data[el.name] = el.value;
       }
+    }
+    const selectedPdfTheme = document.querySelector('input[name="pdf_theme"]:checked');
+    if (selectedPdfTheme) {
+      data.pdf_theme = selectedPdfTheme.value;
     }
     data.default_tax_rate = data.default_tax_rate === '' ? '' : Number(data.default_tax_rate);
     data.invoice_start_number = data.invoice_start_number === '' ? '' : Number(data.invoice_start_number);

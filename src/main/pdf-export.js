@@ -7,16 +7,64 @@ const PAGE_SIZE = 'A4';
 const MARGIN = 48;
 const FOOTER_ZONE = 46;
 
-const COLORS = {
-  ink: '#1F2937',
-  muted: '#6B7280',
-  line: '#E5E7EB',
-  headerFill: '#F3F4F6',
-  altFill: '#FAFAFA',
-  grandFill: '#F9FAFB',
-  paid: '#166534',
-  overdue: '#B91C1C',
+const THEMES = {
+  classic: {
+    ink: '#1F2937',
+    muted: '#6B7280',
+    line: '#E5E7EB',
+    headerFill: '#F3F4F6',
+    altFill: '#FAFAFA',
+    grandFill: '#F9FAFB',
+    paid: '#166534',
+    overdue: '#B91C1C',
+    primary: '#1F2937',
+  },
+  modern: {
+    ink: '#0F172A',
+    muted: '#64748B',
+    line: '#E2E8F0',
+    headerFill: '#EEF2FF',
+    altFill: '#F8FAFC',
+    grandFill: '#F1F5F9',
+    paid: '#15803D',
+    overdue: '#BE123C',
+    primary: '#4F46E5',
+  },
+  minimal: {
+    ink: '#111827',
+    muted: '#9CA3AF',
+    line: '#E5E7EB',
+    headerFill: '#FFFFFF',
+    altFill: '#FFFFFF',
+    grandFill: '#FAFAFA',
+    paid: '#166534',
+    overdue: '#DC2626',
+    primary: '#111827',
+  },
+  dark: {
+    ink: '#1F2937',
+    muted: '#4B5563',
+    line: '#374151',
+    headerFill: '#111827',
+    headerText: '#FFFFFF',
+    altFill: '#F3F4F6',
+    grandFill: '#E5E7EB',
+    paid: '#16A34A',
+    overdue: '#EF4444',
+    primary: '#6366F1',
+  },
 };
+
+let activeThemeColors = THEMES.classic;
+const COLORS = new Proxy(THEMES.classic, {
+  get(target, prop) {
+    return (activeThemeColors && activeThemeColors[prop]) !== undefined ? activeThemeColors[prop] : target[prop];
+  },
+});
+
+function getThemeColors(themeName) {
+  return THEMES[themeName] || THEMES.classic;
+}
 
 const QUOTE_STATUS_LABELS = {
   draft: 'Draft',
@@ -123,7 +171,7 @@ function buildClientLines(client) {
 
 // ---------- Shared layout engine ----------
 
-function createDocument({ title, author, subject }) {
+function createDocument({ title, author, subject, theme }) {
   const doc = new PDFDocument({
     size: PAGE_SIZE,
     margin: MARGIN,
@@ -140,6 +188,10 @@ function createDocument({ title, author, subject }) {
 
   const pageW = doc.page.width;
   const W = pageW - MARGIN * 2;
+  const themeKey = theme && THEMES[theme] ? theme : 'classic';
+  const colors = getThemeColors(themeKey);
+  activeThemeColors = colors;
+
   return {
     doc,
     done,
@@ -148,6 +200,8 @@ function createDocument({ title, author, subject }) {
     rightW: 210,
     pageBottom: doc.page.height - MARGIN - FOOTER_ZONE,
     y: doc.y,
+    theme: themeKey,
+    colors,
   };
 }
 
@@ -187,7 +241,7 @@ function drawHeaderBrand(ctx, opts) {
   }
 
   doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.muted).text(rightLabel.toUpperCase(), rightX, doc.y, { width: rightW, align: 'right' });
-  doc.font('Helvetica-Bold').fontSize(20).fillColor(COLORS.ink).text(rightNumber, rightX, doc.y + 2, { width: rightW, align: 'right' });
+  doc.font('Helvetica-Bold').fontSize(20).fillColor(COLORS.primary || COLORS.ink).text(rightNumber, rightX, doc.y + 2, { width: rightW, align: 'right' });
 
   let my = doc.y + 14;
   for (const [label, value] of metaRows) {
@@ -261,7 +315,7 @@ function drawItemsTable(ctx, items, currency) {
 
   function drawTableHeader(yPos) {
     doc.rect(MARGIN, yPos, W, headerH).fill(COLORS.headerFill);
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.muted);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.headerText || COLORS.muted);
     doc.text('DESCRIPTION', MARGIN + 6, yPos + 7.5, { width: descW - 12, lineGap: 0 });
     doc.text('QTY', qtyX, yPos + 7.5, { width: qtyW - 8, align: 'right', lineGap: 0 });
     doc.text('UNIT PRICE', priceX, yPos + 7.5, { width: priceW - 8, align: 'right', lineGap: 0 });
@@ -412,7 +466,7 @@ function drawTotals(ctx, opts) {
 
   const grandH = 34;
   doc.rect(totalsX, ctx.y, totalsW, grandH).fill(COLORS.grandFill);
-  doc.moveTo(totalsX, ctx.y).lineTo(totalsX + totalsW, ctx.y).strokeColor(COLORS.ink).lineWidth(1.5).stroke();
+  doc.moveTo(totalsX, ctx.y).lineTo(totalsX + totalsW, ctx.y).strokeColor(COLORS.primary || COLORS.ink).lineWidth(1.5).stroke();
   doc.font('Helvetica-Bold').fontSize(11).fillColor(grandColor);
   doc.text(grandLabel, totalsX + 10, ctx.y + 11, { width: labelW, lineGap: 0 });
   doc.text(grandValue, totalsX + labelW - 10, ctx.y + 11, { width: valueW + 10, align: 'right', lineGap: 0 });
@@ -575,11 +629,13 @@ function drawQuoteAcceptanceSection(ctx, quote, client, profile) {
 function renderQuotePdf(quote, client, profile, opts) {
   const currency = quote.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
+  const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
 
   const ctx = createDocument({
     title: `Quote ${quote.quote_number}`,
     author: businessName,
     subject: 'Quotation',
+    theme,
   });
   const { doc } = ctx;
 
@@ -630,6 +686,7 @@ function renderInvoicePdf(invoice, client, profile, opts) {
   const currency = invoice.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const status = effectiveInvoiceStatus(invoice);
+  const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
 
   let docLabel = 'INVOICE';
   let grandLabel = 'TOTAL DUE';
@@ -645,6 +702,7 @@ function renderInvoicePdf(invoice, client, profile, opts) {
     title: `${docLabel} ${invoice.invoice_number}`,
     author: businessName,
     subject: docLabel,
+    theme,
   });
   const { doc } = ctx;
 
@@ -1127,14 +1185,16 @@ function renderInvoicePrintHtml(invoice, client, profile) {
 
 // ---------- Credit Note PDF ----------
 
-function renderCreditNotePdf(creditNote, invoice, client, profile) {
+function renderCreditNotePdf(creditNote, invoice, client, profile, opts) {
   const currency = (invoice && invoice.currency) || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
+  const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
 
   const ctx = createDocument({
     title: `Credit Note ${creditNote.credit_note_number}`,
     author: businessName,
     subject: 'Credit Note',
+    theme,
   });
   const { doc, W } = ctx;
 
@@ -1303,17 +1363,19 @@ function drawStatementTable(ctx, rows, currency) {
   ctx.y += 20;
 }
 
-function renderClientStatementPdf(statement, profile) {
+function renderClientStatementPdf(statement, profile, opts) {
   const currency = statement.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const client = statement.client || {};
   const overdue = statement.overdue || {};
   const generatedOn = new Date().toISOString().slice(0, 10);
+  const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
 
   const ctx = createDocument({
     title: `Statement of Account - ${client.name || 'Client'}`,
     author: businessName,
     subject: 'Statement of Account',
+    theme,
   });
   const { doc } = ctx;
 
@@ -1854,6 +1916,7 @@ function renderQuoteHtml(quote, client, profile) {
 }
 
 module.exports = {
+  THEMES,
   renderQuotePdf,
   renderInvoicePdf,
   renderCreditNotePdf,
