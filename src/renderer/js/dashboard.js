@@ -611,7 +611,8 @@
 
   dashNewInvoiceBtn.addEventListener('click', () => {
     window.QuoteCraftUtils.goToPage('invoices');
-    window.QuoteCraftUtils.showToast('Invoices are created by converting an accepted quote.', 'success');
+    const btn = document.getElementById('newInvoiceBtn');
+    if (btn) btn.click();
   });
 
   if (dashExpensesMonthCard) {

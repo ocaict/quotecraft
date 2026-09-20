@@ -39,6 +39,7 @@ const {
   createInvoiceFromExpenses,
   unbillExpensesForInvoice,
   duplicateInvoice,
+  createInvoice,
   updateInvoice,
   getInvoice,
   getInvoiceByQuote,
@@ -1094,6 +1095,15 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       return { ok: false, errors: { general: `Failed to duplicate invoice: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('invoices:create', async (event, data, lineItems) => {
+    try {
+      const result = createInvoice(data, lineItems);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to create invoice: ${err.message}` } };
     }
   });
 

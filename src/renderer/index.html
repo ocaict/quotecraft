@@ -978,6 +978,11 @@
               <textarea id="quoteTerms" name="terms" rows="4" placeholder="e.g. Payment due within 14 days"></textarea>
               <span class="hint">Pre-filled from your default payment terms in Settings. You can edit per quote.</span>
             </div>
+            <div class="field field-span-2">
+              <label for="quoteInternalNotes">Internal notes</label>
+              <textarea id="quoteInternalNotes" name="internal_notes" rows="3" placeholder="Private notes only for you…"></textarea>
+              <span class="hint">Only visible to you. Never included in PDFs, emails, or the client-facing view.</span>
+            </div>
           </div>
 
           <div class="form-actions">
@@ -1134,6 +1139,11 @@
           <p id="detailTerms" class="detail-terms">—</p>
         </div>
 
+        <div class="card" id="quoteInternalNotesCard">
+          <h2>Internal notes</h2>
+          <p id="detailInternalNotes" class="detail-terms">—</p>
+        </div>
+
         <div class="card" id="quoteEmailActivityCard">
           <h2>Email Activity</h2>
           <div id="quoteEmailActivityList" class="email-activity-list">
@@ -1154,11 +1164,12 @@
         <div class="page-header">
           <div>
             <h1>Invoices</h1>
-            <p class="subtitle">Invoices created from accepted quotes. Record payments and track balances.</p>
+            <p class="subtitle">Invoice clients with custom line items, or convert accepted quotes.</p>
           </div>
           <div class="detail-actions">
             <button type="button" id="invoicesExportCsvBtn" class="btn btn-secondary">Export CSV</button>
             <button type="button" id="invoicesViewPaymentsBtn" class="btn btn-secondary">Payments Report</button>
+            <button type="button" id="newInvoiceBtn" class="btn btn-primary">+ New Invoice</button>
           </div>
         </div>
 
@@ -4345,6 +4356,7 @@
 
   <script src="js/currencies.js"></script>
   <script src="js/utils.js"></script>
+  <script src="js/drafts.js"></script>
   <script src="js/attachments.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/clients.js"></script>

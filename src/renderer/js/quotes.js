@@ -17,6 +17,7 @@
   const addLineItemBtn = document.getElementById('addLineItemBtn');
   const quoteLibrarySelect = document.getElementById('quoteLibrarySelect');
   const termsArea = document.getElementById('quoteTerms');
+  const internalNotesArea = document.getElementById('quoteInternalNotes');
   const saveQuoteBtn = document.getElementById('saveQuoteBtn');
 
   const discountTypeSelect = document.getElementById('discountType');
@@ -836,8 +837,125 @@
     }
   }
 
+  // ---------- Draft autosave (index.html js/drafts.js) ----------
+  let draftPrompting = false;
+  let quoteAutosave;
+
+  function quoteDraftKey() {
+    return editingQuoteId ? 'quote-edit-' + editingQuoteId : 'quote-new';
+  }
+
+  function captureQuoteDraft() {
+    const rows = Array.from(itemsBody.querySelectorAll('tr.item-row')).map((tr) => ({
+      description: tr.querySelector('input[name="item_description"]').value,
+      quantity: tr.querySelector('input[name="item_quantity"]').value,
+      unit_price: tr.querySelector('input[name="item_unit_price"]').value,
+      discount_type: tr.querySelector('select[name="item_discount_type"]').value,
+      discount_value: tr.querySelector('input[name="item_discount_value"]').value,
+      tax_rate: tr.querySelector('input[name="item_tax_rate"]').value,
+    }));
+    const taxLines = [];
+    if (quoteTaxLinesEnabled && quoteTaxLinesEnabled.checked && quoteTaxLinesList) {
+      quoteTaxLinesList.querySelectorAll('.tax-line-row').forEach((row) => {
+        taxLines.push({
+          name: row.querySelector('.tax-line-name').value,
+          rate: row.querySelector('.tax-line-rate').value,
+        });
+      });
+    }
+    return {
+      savedAt: Date.now(),
+      editingQuoteId,
+      client_id: clientSelect.value,
+      contact_id: quoteContactSelect ? quoteContactSelect.value : '',
+      project_id: quoteProjectSelect ? quoteProjectSelect.value : '',
+      date_created: form.elements['date_created'] ? form.elements['date_created'].value : '',
+      valid_until: form.elements['valid_until'] ? form.elements['valid_until'].value : '',
+      terms: termsArea ? termsArea.value : '',
+      internal_notes: internalNotesArea ? internalNotesArea.value : '',
+      discount_type: discountTypeSelect.value,
+      discount_value: discountValueInput.value,
+      tax_rate: taxRateInput.value,
+      tax_lines_enabled: quoteTaxLinesEnabled ? quoteTaxLinesEnabled.checked : false,
+      tax_lines: taxLines,
+      currency: quoteCurrencySelect ? quoteCurrencySelect.value : currencyCode,
+      exchange_rate: quoteExchangeRateInput ? quoteExchangeRateInput.value : '1',
+      line_items: rows,
+    };
+  }
+
+  async function applyQuoteDraft(d) {
+    if (!d) return;
+    if (clientSelect && d.client_id) {
+      clientSelect.value = String(d.client_id);
+      await populateContactsForClient(clientSelect.value, d.contact_id ? Number(d.contact_id) : null);
+      populateProjectsForClient(clientSelect.value, d.project_id ? Number(d.project_id) : null);
+    }
+    if (form.elements['date_created']) form.elements['date_created'].value = d.date_created || '';
+    if (form.elements['valid_until']) form.elements['valid_until'].value = d.valid_until || '';
+    if (termsArea) termsArea.value = d.terms || '';
+    if (internalNotesArea) internalNotesArea.value = d.internal_notes || '';
+    discountTypeSelect.value = d.discount_type || 'none';
+    discountValueInput.value = d.discount_value || '';
+    taxRateInput.value = d.tax_rate || '';
+
+    if (d.currency && quoteCurrencySelect) {
+      currencyCode = d.currency;
+      populateCurrencySelect(d.currency);
+    }
+    if (quoteExchangeRateInput) quoteExchangeRateInput.value = d.exchange_rate || '1';
+    updateExchangeRateVisibility();
+
+    itemsBody.innerHTML = '';
+    (d.line_items || []).forEach((item) => {
+      itemsBody.appendChild(createLineItemRow({
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount_type: item.discount_type || 'none',
+        discount_value: item.discount_value,
+        tax_rate: item.tax_rate !== undefined && item.tax_rate !== '' ? item.tax_rate : null,
+      }));
+    });
+    if (!itemsBody.children.length) addEmptyRow();
+
+    if (d.tax_lines_enabled && quoteTaxLinesEnabled) {
+      quoteTaxLinesEnabled.checked = true;
+      if (quoteTaxLinesSection) quoteTaxLinesSection.classList.remove('hidden');
+      if (quoteTaxLinesList) quoteTaxLinesList.innerHTML = '';
+      (d.tax_lines || []).forEach((l) => addQuoteTaxLineRow(l.name, l.rate));
+    } else {
+      if (quoteTaxLinesEnabled) quoteTaxLinesEnabled.checked = false;
+      if (quoteTaxLinesSection) quoteTaxLinesSection.classList.add('hidden');
+      if (quoteTaxLinesList) quoteTaxLinesList.innerHTML = '';
+    }
+
+    updateDiscountControls();
+    recalcTotals();
+  }
+
+  async function maybePromptQuoteRestore() {
+    if (typeof window.QuoteCraftDrafts === 'undefined') return;
+    if (draftPrompting) return;
+    const key = quoteDraftKey();
+    const draft = window.QuoteCraftDrafts.load(key);
+    if (!draft) return;
+    draftPrompting = true;
+    try {
+      const ok = await window.QuoteCraftDrafts.promptRestore({ label: 'quote', draft, key });
+      if (ok) {
+        quoteAutosave.clearPending();
+        await applyQuoteDraft(draft);
+        toast('Restored your unsaved changes.', 'success');
+      }
+    } finally {
+      draftPrompting = false;
+    }
+  }
+
   // ---------- Form (new / edit) ----------
   function resetForm() {
+    if (quoteAutosave) quoteAutosave.clearPending();
     editingQuoteId = null;
     quoteIdInput.value = '';
     form.reset();
@@ -853,6 +971,7 @@
     if (quoteTaxLinesSection) quoteTaxLinesSection.classList.add('hidden');
     if (quoteTaxLinesList) quoteTaxLinesList.innerHTML = '';
     termsArea.value = '';
+    if (internalNotesArea) internalNotesArea.value = '';
     itemsBody.innerHTML = '';
     currencyCode = defaultCurrencyCode;
     populateCurrencySelect(defaultCurrencyCode);
@@ -862,12 +981,13 @@
     formTitle.textContent = 'New Quote';
   }
 
-  function openNewQuote() {
+  async function openNewQuote() {
     resetForm();
     loadClients();
-    prefillFromSettings();
+    await prefillFromSettings();
     addEmptyRow();
     showFormView();
+    await maybePromptQuoteRestore();
   }
 
   async function loadQuoteIntoForm(quote) {
@@ -896,6 +1016,7 @@
     discountValueInput.value = quote.discount_value || '';
     taxRateInput.value = quote.tax_rate || '';
     termsArea.value = quote.terms || '';
+    if (internalNotesArea) internalNotesArea.value = quote.internal_notes || '';
 
     // Set currency & exchange rate from saved quote
     if (quote.currency) {
@@ -943,6 +1064,7 @@
 
     updateDiscountControls();
     recalcTotals();
+    await maybePromptQuoteRestore();
     showFormView();
   }
 
@@ -1084,6 +1206,7 @@
         exchange_rate: quoteExchangeRateInput ? Number(quoteExchangeRateInput.value) || 1.0 : 1.0,
         notes: '',
         terms: termsArea.value,
+        internal_notes: internalNotesArea ? internalNotesArea.value : '',
       },
       lineItems,
     };
@@ -1099,6 +1222,9 @@
         : await window.electronAPI.updateQuote(editingQuoteId, data, lineItems);
 
       if (res.ok) {
+        if (typeof window.QuoteCraftDrafts !== 'undefined') {
+          window.QuoteCraftDrafts.clear(quoteDraftKey());
+        }
         if (res.isRevision) {
           toast(`Revision ${res.quote.quote_number} created as Draft.`, 'success');
         } else {
@@ -1618,6 +1744,10 @@
 
     document.getElementById('detailTotal').textContent = window.QuoteCraftUtils.formatCurrency(q.total, currency);
     document.getElementById('detailTerms').textContent = q.terms || '—';
+    const detailInternalNotes = document.getElementById('detailInternalNotes');
+    const internalNotesCard = document.getElementById('quoteInternalNotesCard');
+    if (detailInternalNotes) detailInternalNotes.textContent = q.internal_notes || '—';
+    if (internalNotesCard) internalNotesCard.classList.toggle('hidden', !(q.internal_notes || '').trim());
 
     // Version history banner & older revision alert
     const versionBanner = document.getElementById('quoteVersionBanner');
@@ -1915,6 +2045,14 @@
   }
 
   addLineItemBtn.addEventListener('click', addEmptyRow);
+
+  if (typeof window.QuoteCraftDrafts !== 'undefined') {
+    quoteAutosave = window.QuoteCraftDrafts.startAutosave(form, {
+      key: quoteDraftKey,
+      capture: captureQuoteDraft,
+      onSaved: () => toast('Draft saved', 'info'),
+    });
+  }
 
   clientSearch.addEventListener('input', () => {
     populateClientSelect(clientSearch.value);
@@ -2302,7 +2440,7 @@
 
   window.QuoteCraftQuotes = window.QuoteCraftQuotes || {};
   window.QuoteCraftQuotes.openNewQuoteForProject = async function (clientId, projectId) {
-    openNewQuote();
+    await openNewQuote();
     const targetClientId = Number(clientId);
     if (!(targetClientId > 0)) {
       toast('Could not pre-fill client for the new quote.', 'error');

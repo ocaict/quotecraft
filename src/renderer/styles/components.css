@@ -486,6 +486,12 @@
   color: #f85149;
 }
 
+.toast-info {
+  background: #15243d;
+  border-color: var(--secondary);
+  color: #58a6ff;
+}
+
 /* ---------- Status badges (single source of truth) ---------- */
 .badge {
   display: inline-flex;

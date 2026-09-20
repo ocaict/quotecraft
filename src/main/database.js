@@ -358,8 +358,17 @@ function createTables() {
       updated_at      TEXT NOT NULL
     );
   `);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_invoice_id ON expenses(invoice_id);`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_client_id ON expenses(client_id);`);
+  // Guard: invoice_id / client_id were added via migration v30 and may not
+  // exist yet on pre-v30 databases when createTables() runs before migrations.
+  {
+    const expCols = new Set(db.exec(`PRAGMA table_info(expenses)`)[0].values.map((v) => v[1]));
+    if (expCols.has('invoice_id')) {
+      db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_invoice_id ON expenses(invoice_id);`);
+    }
+    if (expCols.has('client_id')) {
+      db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_client_id ON expenses(client_id);`);
+    }
+  }
 
   db.run(`
     CREATE TABLE IF NOT EXISTS time_entries (
@@ -1138,6 +1147,15 @@ const MIGRATIONS = [
       const invCols = new Set(db.exec(`PRAGMA table_info(invoices)`)[0].values.map((v) => v[1]));
       if (!invCols.has('tax_lines')) {
         db.run(`ALTER TABLE invoices ADD COLUMN tax_lines TEXT DEFAULT NULL`);
+      }
+    },
+  },
+  {
+    version: 36,
+    up: () => {
+      const qCols = new Set(db.exec(`PRAGMA table_info(quotes)`)[0].values.map((v) => v[1]));
+      if (!qCols.has('internal_notes')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN internal_notes TEXT DEFAULT ''`);
       }
     },
   },
@@ -3678,6 +3696,7 @@ function duplicateQuote(id) {
     total: Number(source.total) || 0,
     notes: source.notes || '',
     terms: source.terms || '',
+    internal_notes: source.internal_notes || '',
   };
 
   const lineItems = (source.line_items || []).map((item) => ({
@@ -3711,9 +3730,7 @@ function createQuote(data, lineItems) {
   const quoteNumber = nextQuoteNumber();
   let createdQuoteId = null;
 
-  const taxLinesVal = data.tax_lines !== undefined && data.tax_lines !== null
-    ? (typeof data.tax_lines === 'string' ? data.tax_lines : JSON.stringify(data.tax_lines))
-    : null;
+  const totals = computeDocumentTotals(data, lineItems);
 
   db.run('BEGIN');
   try {
@@ -3721,8 +3738,8 @@ function createQuote(data, lineItems) {
       `INSERT INTO quotes (
         quote_number, quote_number_root, version, is_latest, client_id, contact_id, project_id, status, date_created, valid_until,
         subtotal, discount_amount, discount_type, discount_value, tax_rate, tax_lines,
-        tax_amount, total, currency, exchange_rate, notes, terms, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        tax_amount, total, currency, exchange_rate, notes, terms, internal_notes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         quoteNumber,
         quoteNumber,
@@ -3734,18 +3751,19 @@ function createQuote(data, lineItems) {
         'draft',
         data.date_created || new Date().toISOString().slice(0, 10),
         data.valid_until || null,
-        Number(data.subtotal) || 0,
-        Number(data.discount) || 0,
+        totals.subtotal,
+        totals.discount_amount,
         data.discount_type || 'none',
         Number(data.discount_value) || 0,
         Number(data.tax_rate) || 0,
-        taxLinesVal,
-        Number(data.tax) || 0,
-        Number(data.total) || 0,
+        totals.tax_lines ? JSON.stringify(totals.tax_lines) : null,
+        totals.tax_amount,
+        totals.total,
         currency,
         exchangeRate,
         data.notes || '',
         data.terms || '',
+        data.internal_notes || '',
         now,
         now,
       ]
@@ -3753,7 +3771,7 @@ function createQuote(data, lineItems) {
     const idRes = db.exec('SELECT last_insert_rowid() AS id');
     createdQuoteId = idRes[0].values[0][0];
 
-    lineItems.forEach((item, idx) => {
+    totals.lineItems.forEach((item, idx) => {
       db.run(
         `INSERT INTO quote_line_items (
           quote_id, description, quantity, unit_price,
@@ -3763,16 +3781,14 @@ function createQuote(data, lineItems) {
         [
           createdQuoteId,
           String(item.description).trim(),
-          Number(item.quantity),
-          Number(item.unit_price),
-          item.tax_rate !== undefined && item.tax_rate !== null && !isNaN(Number(item.tax_rate))
-            ? Number(item.tax_rate)
-            : (Number(data.tax_rate) || 0),
-          item.discount_type || 'none',
-          Number(item.discount_value) || 0,
-          Number(item.discount_amount) || 0,
+          item.quantity,
+          item.unit_price,
+          item.tax_rate,
+          item.discount_type,
+          item.discount_value,
+          item.discount_amount,
           0,
-          Number(item.amount) || 0,
+          item.amount,
           idx,
         ]
       );
@@ -3845,9 +3861,10 @@ function updateQuote(id, data, lineItems) {
     const nextVersion = (vRes.length && vRes[0].values.length > 0 ? Number(vRes[0].values[0][0]) : 1) + 1;
     const newQuoteNumber = `${root} v${nextVersion}`;
 
-    const taxLinesVal = data.tax_lines !== undefined
-      ? (data.tax_lines ? (typeof data.tax_lines === 'string' ? data.tax_lines : JSON.stringify(data.tax_lines)) : null)
-      : (existing ? (typeof existing.tax_lines === 'string' ? existing.tax_lines : (existing.tax_lines ? JSON.stringify(existing.tax_lines) : null)) : null);
+    const totals = computeDocumentTotals(
+      { ...data, tax_lines: data.tax_lines !== undefined ? data.tax_lines : existing.tax_lines },
+      lineItems
+    );
 
     db.run('BEGIN');
     try {
@@ -3857,8 +3874,8 @@ function updateQuote(id, data, lineItems) {
         `INSERT INTO quotes (
           quote_number, quote_number_root, version, is_latest, client_id, contact_id, project_id, status, date_created, valid_until,
           subtotal, discount_amount, discount_type, discount_value, tax_rate, tax_lines,
-          tax_amount, total, currency, exchange_rate, notes, terms, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          tax_amount, total, currency, exchange_rate, notes, terms, internal_notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newQuoteNumber,
           root,
@@ -3870,18 +3887,19 @@ function updateQuote(id, data, lineItems) {
           'draft',
           dateCreatedVal,
           validUntilVal,
-          Number(data.subtotal) || 0,
-          Number(data.discount) || 0,
+          totals.subtotal,
+          totals.discount_amount,
           data.discount_type || 'none',
           Number(data.discount_value) || 0,
           Number(data.tax_rate) || 0,
-          taxLinesVal,
-          Number(data.tax) || 0,
-          Number(data.total) || 0,
+          totals.tax_lines ? JSON.stringify(totals.tax_lines) : null,
+          totals.tax_amount,
+          totals.total,
           currency,
           exchangeRate,
           data.notes || '',
           data.terms || '',
+          data.internal_notes !== undefined ? data.internal_notes : (existing.internal_notes || ''),
           now,
           now,
         ]
@@ -3889,7 +3907,7 @@ function updateQuote(id, data, lineItems) {
       const idRes = db.exec('SELECT last_insert_rowid() AS id');
       const createdRevisionId = idRes[0].values[0][0];
 
-      lineItems.forEach((item, idx) => {
+      totals.lineItems.forEach((item, idx) => {
         db.run(
           `INSERT INTO quote_line_items (
             quote_id, description, quantity, unit_price,
@@ -3899,16 +3917,14 @@ function updateQuote(id, data, lineItems) {
           [
             createdRevisionId,
             String(item.description).trim(),
-            Number(item.quantity),
-            Number(item.unit_price),
-            item.tax_rate !== undefined && item.tax_rate !== null && !isNaN(Number(item.tax_rate))
-              ? Number(item.tax_rate)
-              : (Number(data.tax_rate) || 0),
-            item.discount_type || 'none',
-            Number(item.discount_value) || 0,
-            Number(item.discount_amount) || 0,
+            item.quantity,
+            item.unit_price,
+            item.tax_rate,
+            item.discount_type,
+            item.discount_value,
+            item.discount_amount,
             0,
-            Number(item.amount) || 0,
+            item.amount,
             idx,
           ]
         );
@@ -3923,9 +3939,10 @@ function updateQuote(id, data, lineItems) {
     }
   }
 
-  const taxLinesVal = data.tax_lines !== undefined
-    ? (data.tax_lines ? (typeof data.tax_lines === 'string' ? data.tax_lines : JSON.stringify(data.tax_lines)) : null)
-    : (existing ? (typeof existing.tax_lines === 'string' ? existing.tax_lines : (existing.tax_lines ? JSON.stringify(existing.tax_lines) : null)) : null);
+  const totals = computeDocumentTotals(
+    { ...data, tax_lines: data.tax_lines !== undefined ? data.tax_lines : existing.tax_lines },
+    lineItems
+  );
 
   // Draft in-place update
   db.run('BEGIN');
@@ -3935,7 +3952,7 @@ function updateQuote(id, data, lineItems) {
         client_id = ?, contact_id = ?, project_id = ?, date_created = ?, valid_until = ?,
         subtotal = ?, discount_amount = ?, discount_type = ?,
         discount_value = ?, tax_rate = ?, tax_lines = ?, tax_amount = ?, total = ?,
-        currency = ?, exchange_rate = ?, notes = ?, terms = ?, updated_at = ?
+        currency = ?, exchange_rate = ?, notes = ?, terms = ?, internal_notes = ?, updated_at = ?
        WHERE id = ?`,
       [
         data.client_id,
@@ -3943,25 +3960,26 @@ function updateQuote(id, data, lineItems) {
         data.project_id !== undefined ? (data.project_id || null) : existing.project_id,
         dateCreatedVal,
         validUntilVal,
-        Number(data.subtotal) || 0,
-        Number(data.discount) || 0,
+        totals.subtotal,
+        totals.discount_amount,
         data.discount_type || 'none',
         Number(data.discount_value) || 0,
         Number(data.tax_rate) || 0,
-        taxLinesVal,
-        Number(data.tax) || 0,
-        Number(data.total) || 0,
+        totals.tax_lines ? JSON.stringify(totals.tax_lines) : null,
+        totals.tax_amount,
+        totals.total,
         currency,
         exchangeRate,
         data.notes || '',
         data.terms || '',
+        data.internal_notes !== undefined ? data.internal_notes : (existing.internal_notes || ''),
         now,
         id,
       ]
     );
 
     db.run(`DELETE FROM quote_line_items WHERE quote_id = ?`, [id]);
-    lineItems.forEach((item, idx) => {
+    totals.lineItems.forEach((item, idx) => {
       db.run(
         `INSERT INTO quote_line_items (
           quote_id, description, quantity, unit_price,
@@ -3971,16 +3989,14 @@ function updateQuote(id, data, lineItems) {
         [
           id,
           String(item.description).trim(),
-          Number(item.quantity),
-          Number(item.unit_price),
-          item.tax_rate !== undefined && item.tax_rate !== null && !isNaN(Number(item.tax_rate))
-            ? Number(item.tax_rate)
-            : (Number(data.tax_rate) || 0),
-          item.discount_type || 'none',
-          Number(item.discount_value) || 0,
-          Number(item.discount_amount) || 0,
+          item.quantity,
+          item.unit_price,
+          item.tax_rate,
+          item.discount_type,
+          item.discount_value,
+          item.discount_amount,
           0,
-          Number(item.amount) || 0,
+          item.amount,
           idx,
         ]
       );
@@ -4265,6 +4281,135 @@ function countDecimals(value) {
 function hasMoreThanTwoDecimals(value) {
   if (value === undefined || value === null || value === '') return false;
   return countDecimals(value) > 2;
+}
+
+// ---------- Document totals (server-side, canonical) ----------
+// Mirrors the renderer's integer-cents arithmetic (quotes.js / invoices.js) so the
+// stored subtotal/discount/tax/total/line amounts are always recomputed here and
+// never trust values passed from the renderer.
+
+function toCents(value) {
+  if (value === '' || value === null || value === undefined || isNaN(Number(value))) return 0;
+  return Math.round(Number(value) * 100);
+}
+
+function computeLineRawCents(qty, price) {
+  return Math.round(toCents(qty) * toCents(price) / 100);
+}
+
+function computeLineDiscountCents(rawCents, discType, discValue) {
+  if (!discType || discType === 'none' || discValue === null || discValue === undefined || isNaN(Number(discValue)) || Number(discValue) <= 0) return 0;
+  let dc = discType === 'fixed' ? toCents(discValue) : Math.round(rawCents * Number(discValue) / 100);
+  if (dc > rawCents) dc = rawCents;
+  return dc;
+}
+
+function computeLineNetCents(qty, price, discType, discValue) {
+  const raw = computeLineRawCents(qty, price);
+  return raw - computeLineDiscountCents(raw, discType, discValue);
+}
+
+function parseStoredTaxLines(value) {
+  let lines = value;
+  if (typeof lines === 'string') {
+    try { lines = JSON.parse(lines); } catch (_) { lines = null; }
+  }
+  if (Array.isArray(lines) && lines.length > 0) return lines;
+  return null;
+}
+
+function lineItemTaxRate(item, defaultTaxRate) {
+  if (item.tax_rate !== undefined && item.tax_rate !== null && !isNaN(Number(item.tax_rate))) {
+    return Number(item.tax_rate);
+  }
+  return Number(defaultTaxRate) || 0;
+}
+
+// Recomputes a document's money from its line items using the renderer's algorithm.
+// Returns normalized lineItems (recomputed discount_amount/amount), subtotal,
+// discount_amount, tax_amount, tax_lines and total.
+function computeDocumentTotals(data, lineItems) {
+  const defaultTaxRate = Number(data.tax_rate) || 0;
+  const lines = (lineItems || []).map((item) => {
+    const qty = Number(item.quantity);
+    const price = Number(item.unit_price);
+    const dType = item.discount_type || 'none';
+    const dVal = Number(item.discount_value) || 0;
+    const rawCents = computeLineRawCents(qty, price);
+    const discCents = computeLineDiscountCents(rawCents, dType, dVal);
+    const netCents = rawCents - discCents;
+    const taxRate = lineItemTaxRate(item, defaultTaxRate);
+    return {
+      description: item.description,
+      quantity: qty,
+      unit_price: price,
+      tax_rate: taxRate,
+      discount_type: dType,
+      discount_value: dType === 'none' ? 0 : dVal,
+      discount_amount: discCents / 100,
+      amount: netCents / 100,
+      netCents,
+      rawCents,
+    };
+  });
+
+  const subtotalCents = lines.reduce((sum, l) => sum + l.netCents, 0);
+
+  const docType = data.discount_type || 'none';
+  const docVal = Number(data.discount_value) || 0;
+  let docDiscCents = 0;
+  if (docType !== 'none' && !isNaN(docVal) && docVal > 0) {
+    docDiscCents = docType === 'fixed' ? toCents(docVal) : Math.round(subtotalCents * docVal / 100);
+    if (docDiscCents > subtotalCents) docDiscCents = subtotalCents;
+  }
+
+  const ratio = subtotalCents > 0 ? (subtotalCents - docDiscCents) / subtotalCents : 1;
+  const multiTax = parseStoredTaxLines(data.tax_lines);
+  let totalTaxCents = 0;
+  let taxLines = null;
+
+  if (multiTax) {
+    const taxableBasisCents = Math.max(0, subtotalCents - docDiscCents);
+    taxLines = multiTax.map((t) => {
+      const name = String(t.name || t.label || 'Tax');
+      const rate = Number(t.rate) || 0;
+      const taxCents = rate > 0 ? Math.round(taxableBasisCents * rate / 100) : 0;
+      totalTaxCents += taxCents;
+      return { name, label: name, rate, amount: taxCents / 100 };
+    });
+  } else {
+    const brackets = new Map();
+    for (const l of lines) {
+      const rate = l.tax_rate;
+      if (!brackets.has(rate)) brackets.set(rate, 0);
+      brackets.set(rate, brackets.get(rate) + l.netCents);
+    }
+    for (const [rate, bNet] of brackets.entries()) {
+      const taxableBasisCents = Math.round(bNet * ratio);
+      const taxCents = rate > 0 ? Math.round(taxableBasisCents * rate / 100) : 0;
+      totalTaxCents += taxCents;
+    }
+  }
+
+  const grandTotalCents = Math.max(0, subtotalCents - docDiscCents + totalTaxCents);
+
+  return {
+    subtotal: subtotalCents / 100,
+    discount_amount: docDiscCents / 100,
+    tax_amount: totalTaxCents / 100,
+    tax_lines: taxLines,
+    total: grandTotalCents / 100,
+    lineItems: lines.map((l) => ({
+      description: l.description,
+      quantity: l.quantity,
+      unit_price: l.unit_price,
+      tax_rate: l.tax_rate,
+      discount_type: l.discount_type,
+      discount_value: l.discount_value,
+      discount_amount: l.discount_amount,
+      amount: l.amount,
+    })),
+  };
 }
 
 function validateQuoteInput(data, lineItems) {
@@ -4566,13 +4711,13 @@ function updateInvoice(id, data, lineItems) {
     ? existing.date_due
     : (String(data.date_due) || null);
 
-  const total = Number(data.total) || 0;
+  const totals = computeDocumentTotals(
+    { ...data, tax_lines: data.tax_lines !== undefined ? data.tax_lines : existing.tax_lines },
+    lineItems
+  );
+  const total = totals.total;
   const credited = computeCreditedTotal(id);
   const balanceDue = Math.max(0, Math.round((total + credited) * 100) / 100);
-
-  const taxLinesVal = data.tax_lines !== undefined
-    ? (data.tax_lines ? (typeof data.tax_lines === 'string' ? data.tax_lines : JSON.stringify(data.tax_lines)) : null)
-    : (existing ? (typeof existing.tax_lines === 'string' ? existing.tax_lines : (existing.tax_lines ? JSON.stringify(existing.tax_lines) : null)) : null);
 
   db.run('BEGIN');
   try {
@@ -4589,13 +4734,13 @@ function updateInvoice(id, data, lineItems) {
         data.project_id !== undefined ? (data.project_id || null) : existing.project_id,
         dateCreatedVal,
         dateDueVal,
-        Number(data.subtotal) || 0,
-        Number(data.discount !== undefined ? data.discount : data.discount_amount) || 0,
+        totals.subtotal,
+        totals.discount_amount,
         data.discount_type || 'none',
         Number(data.discount_value) || 0,
         Number(data.tax_rate) || 0,
-        taxLinesVal,
-        Number(data.tax !== undefined ? data.tax : data.tax_amount) || 0,
+        totals.tax_lines ? JSON.stringify(totals.tax_lines) : null,
+        totals.tax_amount,
         total,
         balanceDue,
         currency,
@@ -4608,7 +4753,7 @@ function updateInvoice(id, data, lineItems) {
     );
 
     db.run(`DELETE FROM invoice_line_items WHERE invoice_id = ?`, [id]);
-    lineItems.forEach((item, idx) => {
+    totals.lineItems.forEach((item, idx) => {
       db.run(
         `INSERT INTO invoice_line_items (
           invoice_id, description, quantity, unit_price,
@@ -4618,16 +4763,14 @@ function updateInvoice(id, data, lineItems) {
         [
           id,
           String(item.description).trim(),
-          Number(item.quantity),
-          Number(item.unit_price),
-          item.tax_rate !== undefined && item.tax_rate !== null && !isNaN(Number(item.tax_rate))
-            ? Number(item.tax_rate)
-            : (Number(data.tax_rate) || 0),
-          item.discount_type || 'none',
-          Number(item.discount_value) || 0,
-          Number(item.discount_amount) || 0,
+          item.quantity,
+          item.unit_price,
+          item.tax_rate,
+          item.discount_type,
+          item.discount_value,
+          item.discount_amount,
           0,
-          Number(item.amount) || 0,
+          item.amount,
           idx,
         ]
       );
@@ -4648,6 +4791,130 @@ function updateInvoice(id, data, lineItems) {
     description: 'Updated invoice ' + (updatedInvoice.invoice_number || '') + ' to ' + (updatedInvoice.currency || '$') + ' ' + (Number(updatedInvoice.total) || 0).toFixed(2),
   });
   return { ok: true, invoice: updatedInvoice };
+}
+
+// Creates a standalone draft invoice from scratch (blank New Invoice flow).
+// Unlike createInvoiceFromTimeEntries/createInvoiceFromExpenses, this accepts
+// arbitrary line items and document-level settings from the invoice editor.
+function createInvoice(data, inputLineItems) {
+  const errors = validateInvoiceInput(data, inputLineItems);
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+  checkProjectBelongsToClient(data, errors);
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  const profile = getCompanyProfile();
+  const currency = data.currency || (profile && profile.default_currency) || 'USD';
+  const exchangeRate = Number(data.exchange_rate) || 1.0;
+
+  const dateCreatedVal = data.date_created || toDateString(new Date());
+  let dateDueVal = data.date_due !== undefined && data.date_due !== null ? String(data.date_due) : '';
+  if (!isValidDateString(dateDueVal)) {
+    const client = data.client_id ? getClient(Number(data.client_id)) : null;
+    const days = parsePaymentTermsDays(client && client.payment_terms
+      ? client.payment_terms
+      : (profile && profile.default_terms)) || 14;
+    const dueD = new Date(dateCreatedVal + 'T00:00:00');
+    dueD.setDate(dueD.getDate() + days);
+    dateDueVal = toDateString(dueD);
+  }
+
+  const totals = computeDocumentTotals(
+    { ...data, tax_lines: data.tax_lines !== undefined ? data.tax_lines : null },
+    inputLineItems
+  );
+
+  const invoiceNumber = nextInvoiceNumber();
+  const now = new Date().toISOString();
+  let invoiceId = null;
+
+  db.run('BEGIN');
+  try {
+    db.run(
+      `INSERT INTO invoices (
+        invoice_number, quote_id, client_id, contact_id, project_id, status,
+        date_created, date_due,
+        subtotal, tax_rate, tax_lines, tax_amount, discount_amount, total, amount_paid, balance_due,
+        currency, exchange_rate,
+        discount_type, discount_value,
+        notes, terms,
+        invoice_type, edit_locked, recurring_profile_id, is_recurring, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        invoiceNumber,
+        null,
+        Number(data.client_id),
+        data.contact_id || null,
+        data.project_id || null,
+        'draft',
+        dateCreatedVal,
+        dateDueVal,
+        totals.subtotal,
+        Number(data.tax_rate) || 0,
+        totals.tax_lines ? JSON.stringify(totals.tax_lines) : null,
+        totals.tax_amount,
+        totals.discount_amount,
+        totals.total,
+        0,
+        totals.total,
+        currency,
+        exchangeRate,
+        data.discount_type || 'none',
+        Number(data.discount_value) || 0,
+        data.notes || '',
+        data.terms || (profile && profile.default_terms) || '',
+        'standard',
+        0,
+        null,
+        0,
+        now,
+        now,
+      ]
+    );
+    const idRes = db.exec('SELECT last_insert_rowid() AS id');
+    invoiceId = idRes[0].values[0][0];
+
+    totals.lineItems.forEach((item, idx) => {
+      db.run(
+        `INSERT INTO invoice_line_items (
+          invoice_id, description, quantity, unit_price,
+          tax_rate, discount_type, discount_value, discount_amount,
+          discount_percent, amount, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          invoiceId,
+          String(item.description).trim(),
+          item.quantity,
+          item.unit_price,
+          item.tax_rate,
+          item.discount_type,
+          item.discount_value,
+          item.discount_amount,
+          0,
+          item.amount,
+          idx,
+        ]
+      );
+    });
+
+    db.run('COMMIT');
+  } catch (err) {
+    db.run('ROLLBACK');
+    return { ok: false, errors: { general: `Failed to create invoice: ${err.message}` } };
+  }
+
+  saveToDisk();
+  const invoice = getInvoice(invoiceId);
+  addAuditEntry({
+    entityType: 'invoice',
+    entityRef: invoice.invoice_number,
+    action: 'created',
+    description: 'Created invoice ' + invoice.invoice_number + ' for ' + (currency) + ' ' + (Number(invoice.total) || 0).toFixed(2),
+  });
+  return { ok: true, invoice };
 }
 
 function createInvoiceFromTimeEntries(input) {
@@ -8040,6 +8307,7 @@ module.exports = {
   createInvoiceFromExpenses,
   unbillExpensesForInvoice,
   duplicateInvoice,
+  createInvoice,
   updateInvoice,
   getInvoice,
   getInvoiceByQuote,

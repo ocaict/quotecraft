@@ -2237,8 +2237,93 @@
     } catch (e) { /* ignore */ }
   }
 
+  function localDateString(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  async function openNewInvoice() {
+    if (invoiceAutosave) invoiceAutosave.clearPending();
+    currentEditingInvoice = null;
+    formCurrencyCode = currencyCode || 'USD';
+    if (window.QuoteCraftUtils && window.QuoteCraftUtils.goToPage) {
+      window.QuoteCraftUtils.goToPage('invoices');
+    }
+
+    if (invoiceForm) {
+      invoiceForm.querySelectorAll('.field-error').forEach((el) => (el.textContent = ''));
+    }
+
+    if (invoiceFormId) invoiceFormId.value = '';
+    const titleEl = document.getElementById('invoiceFormTitle');
+    if (titleEl) titleEl.textContent = 'New Invoice';
+
+    // Load clients
+    try {
+      const cRes = await window.electronAPI.listClients();
+      invoiceFormClients = (cRes && cRes.clients) || [];
+      populateInvoiceClients('', '');
+    } catch (e) { /* ignore */ }
+
+    // Reset contacts and projects
+    await populateInvoiceContacts('', null);
+    await populateInvoiceProjects('', null);
+
+    // Dates: today plus the default payment terms (Net 14 if unspecified)
+    let defaultTerms = '';
+    let dueDays = 14;
+    try {
+      const pf = await window.electronAPI.getCompanyProfile();
+      if (pf.ok && pf.profile) {
+        defaultTerms = pf.profile.default_terms || '';
+        if (typeof pf.profile.default_tax_rate === 'number') {
+          if (invoiceTaxRate) invoiceTaxRate.value = pf.profile.default_tax_rate;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    const today = new Date();
+    if (invoiceFormDate) invoiceFormDate.value = localDateString(today);
+    const mTerms = defaultTerms.match(/(\d+)\s*day/i);
+    if (mTerms && Number(mTerms[1]) >= 0) dueDays = Number(mTerms[1]);
+    const dueD = new Date(today.getFullYear(), today.getMonth(), today.getDate() + dueDays);
+    if (invoiceFormDueDate) invoiceFormDueDate.value = localDateString(dueD);
+
+    // Currency
+    populateInvoiceCurrencySelect(formCurrencyCode);
+    if (invoiceFormExchangeRate) invoiceFormExchangeRate.value = '1';
+
+    // Notes & terms
+    if (invoiceFormNotes) invoiceFormNotes.value = '';
+    if (invoiceFormTerms) invoiceFormTerms.value = defaultTerms;
+
+    // Discount & tax
+    if (invoiceDiscountType) invoiceDiscountType.value = 'none';
+    if (invoiceDiscountValue) invoiceDiscountValue.value = '';
+    if (invoiceTaxRate && !(invoiceTaxRate.value)) invoiceTaxRate.value = '';
+    updateInvoiceDiscountControls();
+
+    // Line items: one blank row
+    if (invoiceItemsBody) {
+      invoiceItemsBody.innerHTML = '';
+      invoiceItemsBody.appendChild(createInvoiceItemRow({}));
+    }
+
+    // Tax lines: off
+    if (invoiceTaxLinesEnabled) invoiceTaxLinesEnabled.checked = false;
+    if (invoiceTaxLinesSection) invoiceTaxLinesSection.classList.add('hidden');
+    if (invoiceTaxLinesList) invoiceTaxLinesList.innerHTML = '';
+
+    await populateInvoiceLibrarySelect();
+    recalcInvoiceTotals();
+    await maybePromptInvoiceRestore();
+    showForm();
+  }
+
   async function openEditInvoice(inv) {
     if (!inv) return;
+    if (invoiceAutosave) invoiceAutosave.clearPending();
     currentEditingInvoice = inv;
     formCurrencyCode = inv.currency || currencyCode || 'USD';
 
@@ -2320,15 +2405,221 @@
 
     await populateInvoiceLibrarySelect();
     recalcInvoiceTotals();
+    await maybePromptInvoiceRestore();
     showForm();
   }
 
+  // ---------- Draft autosave (index.html js/drafts.js) ----------
+  let draftPromptingInv = false;
+  let invoiceAutosave;
+
+  function invoiceDraftKey() {
+    return currentEditingInvoice ? 'invoice-edit-' + currentEditingInvoice.id : 'invoice-new';
+  }
+
+  function captureInvoiceDraft() {
+    const rows = Array.from(invoiceItemsBody.querySelectorAll('tr.item-row')).map((tr) => ({
+      description: tr.querySelector('input[name="item_description"]').value,
+      quantity: tr.querySelector('input[name="item_quantity"]').value,
+      unit_price: tr.querySelector('input[name="item_unit_price"]').value,
+      discount_type: tr.querySelector('select[name="item_discount_type"]').value,
+      discount_value: tr.querySelector('input[name="item_discount_value"]').value,
+      tax_rate: tr.querySelector('input[name="item_tax_rate"]').value,
+    }));
+    const taxLines = [];
+    if (invoiceTaxLinesEnabled && invoiceTaxLinesEnabled.checked && invoiceTaxLinesList) {
+      invoiceTaxLinesList.querySelectorAll('.tax-line-row').forEach((row) => {
+        taxLines.push({
+          name: row.querySelector('.tax-line-name').value,
+          rate: row.querySelector('.tax-line-rate').value,
+        });
+      });
+    }
+    return {
+      savedAt: Date.now(),
+      client_id: invoiceFormClient ? invoiceFormClient.value : '',
+      project_id: invoiceFormProject ? invoiceFormProject.value : '',
+      contact_id: invoiceFormContact ? invoiceFormContact.value : '',
+      date_created: invoiceFormDate ? invoiceFormDate.value : '',
+      date_due: invoiceFormDueDate ? invoiceFormDueDate.value : '',
+      currency: (invoiceFormCurrency && invoiceFormCurrency.value) || formCurrencyCode,
+      exchange_rate: invoiceFormExchangeRate ? invoiceFormExchangeRate.value : '1',
+      notes: invoiceFormNotes ? invoiceFormNotes.value : '',
+      terms: invoiceFormTerms ? invoiceFormTerms.value : '',
+      discount_type: invoiceDiscountType ? invoiceDiscountType.value : 'none',
+      discount_value: invoiceDiscountValue ? invoiceDiscountValue.value : '',
+      tax_rate: invoiceTaxRate ? invoiceTaxRate.value : '',
+      tax_lines_enabled: invoiceTaxLinesEnabled ? invoiceTaxLinesEnabled.checked : false,
+      tax_lines: taxLines,
+      line_items: rows,
+    };
+  }
+
+  async function applyInvoiceDraft(d) {
+    if (!d) return;
+    if (invoiceFormClient && d.client_id) {
+      const cId = Number(d.client_id);
+      invoiceFormClient.value = String(cId);
+      await populateInvoiceContacts(cId, d.contact_id ? Number(d.contact_id) : null);
+      await populateInvoiceProjects(cId, d.project_id ? Number(d.project_id) : null);
+    }
+    if (invoiceFormDate) invoiceFormDate.value = d.date_created || '';
+    if (invoiceFormDueDate) invoiceFormDueDate.value = d.date_due || '';
+    if (invoiceFormNotes) invoiceFormNotes.value = d.notes || '';
+    if (invoiceFormTerms) invoiceFormTerms.value = d.terms || '';
+    if (invoiceDiscountType) invoiceDiscountType.value = d.discount_type || 'none';
+    if (invoiceDiscountValue) invoiceDiscountValue.value = d.discount_value || '';
+    if (invoiceTaxRate) invoiceTaxRate.value = d.tax_rate || '';
+
+    if (d.currency && invoiceFormCurrency) {
+      formCurrencyCode = d.currency;
+      populateInvoiceCurrencySelect(d.currency);
+    }
+    if (invoiceFormExchangeRate) invoiceFormExchangeRate.value = d.exchange_rate || '1';
+    updateInvoiceExchangeRateVisibility();
+
+    if (invoiceItemsBody) {
+      invoiceItemsBody.innerHTML = '';
+      (d.line_items || []).forEach((it) => {
+        invoiceItemsBody.appendChild(createInvoiceItemRow({
+          description: it.description,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          discount_type: it.discount_type || 'none',
+          discount_value: it.discount_value,
+          tax_rate: it.tax_rate !== undefined && it.tax_rate !== '' ? it.tax_rate : null,
+        }));
+      });
+      if (!invoiceItemsBody.children.length) invoiceItemsBody.appendChild(createInvoiceItemRow({}));
+    }
+
+    if (d.tax_lines_enabled && invoiceTaxLinesEnabled) {
+      invoiceTaxLinesEnabled.checked = true;
+      if (invoiceTaxLinesSection) invoiceTaxLinesSection.classList.remove('hidden');
+      if (invoiceTaxLinesList) invoiceTaxLinesList.innerHTML = '';
+      (d.tax_lines || []).forEach((l) => addInvoiceTaxLineRow(l.name, l.rate));
+    } else {
+      if (invoiceTaxLinesEnabled) invoiceTaxLinesEnabled.checked = false;
+      if (invoiceTaxLinesSection) invoiceTaxLinesSection.classList.add('hidden');
+      if (invoiceTaxLinesList) invoiceTaxLinesList.innerHTML = '';
+    }
+
+    updateInvoiceDiscountControls();
+    recalcInvoiceTotals();
+  }
+
+  async function maybePromptInvoiceRestore() {
+    if (typeof window.QuoteCraftDrafts === 'undefined') return;
+    if (draftPromptingInv) return;
+    const key = invoiceDraftKey();
+    const draft = window.QuoteCraftDrafts.load(key);
+    if (!draft) return;
+    draftPromptingInv = true;
+    try {
+      const ok = await window.QuoteCraftDrafts.promptRestore({ label: 'invoice', draft, key });
+      if (ok) {
+        invoiceAutosave.clearPending();
+        await applyInvoiceDraft(draft);
+        toast('Restored your unsaved changes.', 'success');
+      }
+    } finally {
+      draftPromptingInv = false;
+    }
+  }
+
+  function countDecimals(value) {
+    const match = String(value).match(/\.(\d+)$/);
+    return match ? match[1].length : 0;
+  }
+
+  function setInvoiceFieldError(field, message) {
+    const el = invoiceForm.querySelector(`[data-error-for="${field}"]`);
+    if (el) el.textContent = message || '';
+  }
+
+  // Client-side parity with validateInvoiceInput in database.js — the server
+  // recomputes money regardless, but we fail fast with the same messages.
+  function validateInvoiceForm(lineItems) {
+    if (!invoiceForm) return false;
+    invoiceForm.querySelectorAll('.field-error').forEach((el) => (el.textContent = ''));
+
+    if (invoiceFormClient && !invoiceFormClient.value) {
+      setInvoiceFieldError('client_id', 'Please select a client.');
+      toast('Please select a client.', 'error');
+      return false;
+    }
+
+    if (!Array.isArray(lineItems) || lineItems.length === 0) {
+      toast('Invoice must have at least one line item.', 'error');
+      return false;
+    }
+    for (let i = 0; i < lineItems.length; i++) {
+      const item = lineItems[i];
+      if (!item.description || !String(item.description).trim()) {
+        toast(`Line item ${i + 1} is missing a description.`, 'error');
+        return false;
+      }
+      if (!(Number(item.quantity) > 0)) {
+        toast(`Line item ${i + 1} must have a quantity greater than zero.`, 'error');
+        return false;
+      }
+      if (!(Number(item.unit_price) > 0)) {
+        toast(`Line item ${i + 1} must have a unit price greater than zero.`, 'error');
+        return false;
+      }
+      if (countDecimals(item.unit_price) > 2) {
+        toast(`Line item ${i + 1} unit price may only have up to 2 decimal places.`, 'error');
+        return false;
+      }
+    }
+
+    const dateCreated = invoiceFormDate ? invoiceFormDate.value : '';
+    if (!dateCreated || !/^\d{4}-\d{2}-\d{2}$/.test(dateCreated)) {
+      setInvoiceFieldError('date_created', 'Invoice date is required and must be a valid date.');
+      return false;
+    }
+    const dateDue = invoiceFormDueDate ? invoiceFormDueDate.value : '';
+    if (dateDue && !/^\d{4}-\d{2}-\d{2}$/.test(dateDue)) {
+      setInvoiceFieldError('date_due', 'Due date must be a valid date.');
+      return false;
+    }
+    if (dateDue && dateDue < dateCreated) {
+      setInvoiceFieldError('date_due', 'Due date cannot be before the invoice date.');
+      return false;
+    }
+
+    const taxRateStr = invoiceTaxRate ? invoiceTaxRate.value : '';
+    if (taxRateStr !== '') {
+      const tr = Number(taxRateStr);
+      if (isNaN(tr) || tr < 0 || tr > 100) {
+        setInvoiceFieldError('tax_rate', 'Tax rate must be a number between 0 and 100.');
+        return false;
+      }
+    }
+
+    const discType = invoiceDiscountType ? invoiceDiscountType.value : 'none';
+    if (discType !== 'none') {
+      const discStr = invoiceDiscountValue ? invoiceDiscountValue.value : '';
+      const discNum = Number(discStr);
+      if (discStr === '' || isNaN(discNum) || discNum < 0 || (discType === 'percent' && discNum > 100)) {
+        setInvoiceFieldError('discount_value', discType === 'percent'
+          ? 'Percentage discount must be between 0 and 100.'
+          : 'Discount cannot be negative.');
+        return false;
+      }
+      if (discType === 'fixed' && countDecimals(discStr) > 2) {
+        setInvoiceFieldError('discount_value', 'Discount amount may only have up to 2 decimal places.');
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   async function handleSaveInvoice() {
-    if (!currentEditingInvoice) return;
-    const invId = currentEditingInvoice.id;
+    const isNew = !currentEditingInvoice;
 
     if (!invoiceForm) return;
-    invoiceForm.querySelectorAll('.field-error').forEach((el) => (el.textContent = ''));
 
     const clientId = Number(invoiceFormClient.value);
     const projectId = invoiceFormProject && invoiceFormProject.value ? Number(invoiceFormProject.value) : null;
@@ -2345,7 +2636,6 @@
 
     const totals = recalcInvoiceTotals();
     const lineItems = [];
-    let hasItemError = false;
 
     Array.from(invoiceItemsBody.querySelectorAll('tr.item-row')).forEach((tr) => {
       const desc = tr.querySelector('input[name="item_description"]').value.trim();
@@ -2355,10 +2645,6 @@
       const dVal = Number(tr.querySelector('input[name="item_discount_value"]').value) || 0;
       const tRate = Number(tr.querySelector('input[name="item_tax_rate"]').value) || 0;
       const amount = lineNetCents(qty, price, dType, dVal) / 100;
-
-      if (!desc || !(qty > 0) || !(price > 0)) {
-        hasItemError = true;
-      }
 
       lineItems.push({
         description: desc,
@@ -2371,17 +2657,7 @@
       });
     });
 
-    if (!clientId) {
-      const errEl = invoiceForm.querySelector('[data-error-for="client_id"]');
-      if (errEl) errEl.textContent = 'Please select a client.';
-      toast('Please select a client.', 'error');
-      return;
-    }
-
-    if (lineItems.length === 0 || hasItemError) {
-      toast('Please provide a valid description, quantity, and unit price for all line items.', 'error');
-      return;
-    }
+    if (!validateInvoiceForm(lineItems)) return;
 
     const payloadData = {
       client_id: clientId,
@@ -2403,22 +2679,28 @@
       total: totals.total,
     };
 
-    window.QuoteCraftUtils.showBusy('Saving invoice…');
+    window.QuoteCraftUtils.showBusy(isNew ? 'Creating invoice…' : 'Saving invoice…');
     try {
-      const res = await window.electronAPI.updateInvoice(invId, payloadData, lineItems);
+      const res = isNew
+        ? await window.electronAPI.createInvoice(payloadData, lineItems)
+        : await window.electronAPI.updateInvoice(currentEditingInvoice.id, payloadData, lineItems);
       if (res.ok) {
-        toast('Invoice updated successfully.', 'success');
+        if (typeof window.QuoteCraftDrafts !== 'undefined') {
+          window.QuoteCraftDrafts.clear(invoiceDraftKey());
+        }
+        toast(isNew ? 'Invoice created successfully.' : 'Invoice updated successfully.', 'success');
+        currentEditingInvoice = null;
         await loadInvoices();
-        await openDetail(invId);
+        await openDetail(res.invoice.id);
       } else {
         if (res.errors) {
           Object.keys(res.errors).forEach((key) => {
             const el = invoiceForm.querySelector(`[data-error-for="${key}"]`);
             if (el) el.textContent = res.errors[key];
           });
-          toast(res.errors.general || 'Failed to update invoice.', 'error');
+          toast(res.errors.general || (isNew ? 'Failed to create invoice.' : 'Failed to update invoice.'), 'error');
         } else {
-          toast('Failed to update invoice.', 'error');
+          toast(isNew ? 'Failed to create invoice.' : 'Failed to update invoice.', 'error');
         }
       }
     } catch (e) {
@@ -2443,8 +2725,18 @@
     });
   }
 
-  if (invoiceFormBackBtn) invoiceFormBackBtn.addEventListener('click', showDetail);
-  if (cancelInvoiceBtn) cancelInvoiceBtn.addEventListener('click', showDetail);
+  if (invoiceFormBackBtn) {
+    invoiceFormBackBtn.addEventListener('click', () => {
+      if (currentEditingInvoice) showDetail(); else showList();
+    });
+  }
+  if (cancelInvoiceBtn) {
+    cancelInvoiceBtn.addEventListener('click', () => {
+      if (currentEditingInvoice) showDetail(); else showList();
+    });
+  }
+  const newInvoiceBtn = document.getElementById('newInvoiceBtn');
+  if (newInvoiceBtn) newInvoiceBtn.addEventListener('click', openNewInvoice);
   if (saveInvoiceBtn) saveInvoiceBtn.addEventListener('click', handleSaveInvoice);
   if (invoiceAddLineItemBtn) {
     invoiceAddLineItemBtn.addEventListener('click', () => {
@@ -2513,6 +2805,14 @@
       }));
       invoiceFormLibrarySelect.value = '';
       recalcInvoiceTotals();
+    });
+  }
+
+  if (typeof window.QuoteCraftDrafts !== 'undefined' && invoiceForm) {
+    invoiceAutosave = window.QuoteCraftDrafts.startAutosave(invoiceForm, {
+      key: invoiceDraftKey,
+      capture: captureInvoiceDraft,
+      onSaved: () => toast('Draft saved', 'info'),
     });
   }
 
