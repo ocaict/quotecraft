@@ -1053,20 +1053,6 @@
     return hay.includes(q);
   }
 
-  function renderQuoteList() {
-    let filtered = quotes.slice();
-
-    const q = searchTerm.trim().toLowerCase();
-    if (q || statusFilter !== 'all') {
-      filtered = filtered.filter((quote) => {
-        if (q && !matchesSearch(quote, q)) return false;
-        if (statusFilter !== 'all') {
-          if (effectiveStatus(quote) !== statusFilter) return false;
-        }
-        return true;
-      });
-    }
-
   let sortField = 'date';
   let sortDirection = 'desc';
 

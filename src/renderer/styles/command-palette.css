@@ -98,7 +98,7 @@
 }
 
 .cmd-palette-results {
-  max-height: 380px;
+  max-height: 420px;
   overflow-y: auto;
   padding: 8px;
   display: flex;
@@ -116,6 +116,9 @@
 }
 
 .cmd-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -125,11 +128,27 @@
   user-select: none;
 }
 
+.cmd-group-action {
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0 4px;
+}
+
+.cmd-group-action:hover {
+  color: var(--error, #f85149);
+}
+
 .cmd-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: 8px;
   cursor: pointer;
   color: var(--text);
@@ -163,17 +182,87 @@
   color: var(--accent);
 }
 
-.cmd-item-label {
+.cmd-item-body {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cmd-item-label {
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.cmd-item-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.cmd-item.active .cmd-item-sub {
+  color: var(--text);
 }
 
 .cmd-item-match {
   text-decoration: underline;
   font-weight: 700;
+}
+
+.cmd-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cmd-item-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.cmd-badge-paid,
+.cmd-badge-accepted {
+  background: rgba(35, 134, 54, 0.18);
+  color: #3fb950;
+  border: 1px solid rgba(63, 185, 80, 0.3);
+}
+
+.cmd-badge-sent {
+  background: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+  border: 1px solid rgba(88, 166, 255, 0.3);
+}
+
+.cmd-badge-draft {
+  background: rgba(139, 148, 158, 0.15);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.cmd-badge-overdue {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.3);
+}
+
+.cmd-badge-recent {
+  background: rgba(163, 113, 247, 0.15);
+  color: #d2a8ff;
+  border: 1px solid rgba(163, 113, 247, 0.3);
+  font-size: 9.5px;
 }
 
 .cmd-item-shortcut {

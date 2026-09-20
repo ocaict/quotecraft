@@ -31,7 +31,8 @@
     play: makeIcon('<polygon points="5 3 19 12 5 21 5 3"/>'),
     theme: makeIcon('<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>'),
     search: makeIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
-    help: makeIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>')
+    help: makeIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
+    clock: makeIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>')
   };
 
   var COMMANDS = [
@@ -316,6 +317,179 @@
   var currentFiltered = [];
   var selectedIndex = 0;
 
+  // In-memory cache for deep entity search
+  var cachedClients = [];
+  var cachedInvoices = [];
+  var cachedQuotes = [];
+  var cachedProjects = [];
+  var isFetchingEntities = false;
+  var lastFetchTime = 0;
+  var CACHE_TTL_MS = 20000; // 20s TTL
+
+  // Recents Storage
+  var RECENTS_KEY = 'qc-cmd-palette-recents';
+  var MAX_RECENTS = 6;
+
+  function getRecents() {
+    try {
+      var raw = localStorage.getItem(RECENTS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveRecents(list) {
+    try {
+      localStorage.setItem(RECENTS_KEY, JSON.stringify(list.slice(0, MAX_RECENTS)));
+    } catch (e) {}
+  }
+
+  function clearRecents() {
+    try {
+      localStorage.removeItem(RECENTS_KEY);
+    } catch (e) {}
+    filterAndRender(input ? input.value : '');
+  }
+
+  function addRecent(cmd) {
+    if (!cmd || !cmd.id) return;
+    var list = getRecents();
+    list = list.filter(function (r) { return r.id !== cmd.id; });
+    list.unshift({
+      id: cmd.id,
+      label: cmd.label,
+      sub: cmd.sub || '',
+      iconKey: cmd.iconKey || (cmd.category ? cmd.category.toLowerCase() : 'clock'),
+      badge: cmd.badge || '',
+      badgeClass: cmd.badgeClass || '',
+      actionType: cmd.actionType || 'command',
+      entityId: cmd.entityId || null
+    });
+    saveRecents(list);
+  }
+
+  async function refreshEntitiesCache() {
+    if (!window.electronAPI) return;
+    if (Date.now() - lastFetchTime < CACHE_TTL_MS && (cachedClients.length || cachedInvoices.length || cachedQuotes.length)) {
+      return;
+    }
+    if (isFetchingEntities) return;
+    isFetchingEntities = true;
+
+    try {
+      var results = await Promise.allSettled([
+        window.electronAPI.listClients ? window.electronAPI.listClients() : Promise.resolve({ ok: false }),
+        window.electronAPI.listInvoices ? window.electronAPI.listInvoices() : Promise.resolve({ ok: false }),
+        window.electronAPI.listQuotes ? window.electronAPI.listQuotes() : Promise.resolve({ ok: false }),
+        window.electronAPI.listProjects ? window.electronAPI.listProjects() : Promise.resolve({ ok: false })
+      ]);
+
+      if (results[0].status === 'fulfilled' && results[0].value && results[0].value.ok) {
+        cachedClients = results[0].value.clients || [];
+      }
+      if (results[1].status === 'fulfilled' && results[1].value && results[1].value.ok) {
+        cachedInvoices = results[1].value.invoices || [];
+      }
+      if (results[2].status === 'fulfilled' && results[2].value && results[2].value.ok) {
+        cachedQuotes = results[2].value.quotes || [];
+      }
+      if (results[3].status === 'fulfilled' && results[3].value && results[3].value.ok) {
+        cachedProjects = results[3].value.projects || [];
+      }
+      lastFetchTime = Date.now();
+
+      // If user is currently typing a search query, update the view with fetched entities
+      if (input && input.value.trim().length > 0 && overlay && !overlay.classList.contains('hidden')) {
+        filterAndRender(input.value);
+      }
+    } catch (err) {
+      console.warn('Error fetching Command Palette entities:', err);
+    } finally {
+      isFetchingEntities = false;
+    }
+  }
+
+  function formatMoney(amount, currencyCode) {
+    if (window.QuoteCraftUtils && window.QuoteCraftUtils.formatCurrency) {
+      return window.QuoteCraftUtils.formatCurrency(amount, currencyCode);
+    }
+    return (currencyCode || '$') + ' ' + Number(amount || 0).toFixed(2);
+  }
+
+  function buildRecentsItems() {
+    var rawRecents = getRecents();
+    if (!rawRecents || rawRecents.length === 0) return [];
+    var items = [];
+
+    for (var i = 0; i < rawRecents.length; i++) {
+      var r = rawRecents[i];
+      var actionFn = null;
+
+      if (r.actionType === 'command') {
+        for (var c = 0; c < COMMANDS.length; c++) {
+          if (COMMANDS[c].id === r.id) {
+            actionFn = COMMANDS[c].action;
+            break;
+          }
+        }
+      } else if (r.actionType === 'invoice') {
+        actionFn = (function (id) {
+          return function () {
+            window.QuoteCraftUtils.goToPage('invoices');
+            setTimeout(function () {
+              window.dispatchEvent(new CustomEvent('qc-open-invoice', { detail: id }));
+            }, 50);
+          };
+        })(r.entityId);
+      } else if (r.actionType === 'quote') {
+        actionFn = (function (id) {
+          return function () {
+            window.QuoteCraftUtils.goToPage('quotes');
+            setTimeout(function () {
+              window.dispatchEvent(new CustomEvent('qc-open-quote', { detail: id }));
+            }, 50);
+          };
+        })(r.entityId);
+      } else if (r.actionType === 'client') {
+        actionFn = (function (id) {
+          return function () {
+            window.QuoteCraftUtils.goToPage('clients');
+            setTimeout(function () {
+              window.dispatchEvent(new CustomEvent('qc-open-client-overview', { detail: id }));
+            }, 50);
+          };
+        })(r.entityId);
+      } else if (r.actionType === 'project') {
+        actionFn = (function (id) {
+          return function () {
+            window.QuoteCraftUtils.goToPage('projects');
+            setTimeout(function () {
+              window.dispatchEvent(new CustomEvent('qc-open-project-overview', { detail: id }));
+            }, 50);
+          };
+        })(r.entityId);
+      }
+
+      if (actionFn) {
+        items.push({
+          id: r.id,
+          label: r.label,
+          sub: r.sub,
+          category: 'Recent',
+          icon: ICONS[r.iconKey] || ICONS.clock,
+          iconKey: r.iconKey,
+          badge: r.badge || 'Recent',
+          badgeClass: r.badgeClass || 'cmd-badge-recent',
+          actionType: r.actionType,
+          entityId: r.entityId,
+          action: actionFn
+        });
+      }
+    }
+    return items;
+  }
+
   function initElements() {
     overlay = document.getElementById('commandPalette');
     if (!overlay) return false;
@@ -382,26 +556,186 @@
     selectedIndex = 0;
 
     if (!query) {
-      currentFiltered = COMMANDS.slice();
-    } else {
-      var scored = [];
-      for (var i = 0; i < COMMANDS.length; i++) {
-        var score = scoreCommand(COMMANDS[i], query);
-        if (score > 0) {
-          scored.push({ cmd: COMMANDS[i], score: score });
-        }
-      }
-      scored.sort(function (a, b) {
-        return b.score - a.score;
-      });
-      currentFiltered = scored.map(function (s) { return s.cmd; });
+      var recents = buildRecentsItems();
+      currentFiltered = recents.concat(COMMANDS);
+      renderResults(query);
+      return;
     }
 
+    var q = query.toLowerCase();
+    var scored = [];
+
+    // 1. Score Commands
+    for (var i = 0; i < COMMANDS.length; i++) {
+      var cmdScore = scoreCommand(COMMANDS[i], q);
+      if (cmdScore > 0) {
+        scored.push({ item: COMMANDS[i], score: cmdScore });
+      }
+    }
+
+    // 2. Score Invoices
+    for (var invIdx = 0; invIdx < cachedInvoices.length; invIdx++) {
+      var inv = cachedInvoices[invIdx];
+      var invNum = String(inv.invoice_number || '').toLowerCase();
+      var clientName = String(inv.client_name || '').toLowerCase();
+      var status = String(inv.status || '').toLowerCase();
+      var invScore = -1;
+
+      if (invNum.startsWith(q)) invScore = 1200;
+      else if (invNum.indexOf(q) !== -1) invScore = 950;
+      else if (clientName.startsWith(q)) invScore = 900;
+      else if (clientName.indexOf(q) !== -1) invScore = 750;
+      else if (status.startsWith(q)) invScore = 450;
+
+      if (invScore > 0) {
+        var invItem = {
+          id: 'inv-' + inv.id,
+          label: 'Invoice ' + (inv.invoice_number || '#' + inv.id),
+          sub: (inv.client_name || 'No client') + (inv.total !== undefined ? ' · ' + formatMoney(inv.total, inv.currency) : ''),
+          category: 'Invoices',
+          icon: ICONS.invoices,
+          iconKey: 'invoices',
+          badge: inv.status || 'draft',
+          badgeClass: 'cmd-badge-' + String(inv.status || 'draft').toLowerCase(),
+          actionType: 'invoice',
+          entityId: inv.id,
+          action: (function (id) {
+            return function () {
+              window.QuoteCraftUtils.goToPage('invoices');
+              setTimeout(function () {
+                window.dispatchEvent(new CustomEvent('qc-open-invoice', { detail: id }));
+              }, 50);
+            };
+          })(inv.id)
+        };
+        scored.push({ item: invItem, score: invScore });
+      }
+    }
+
+    // 3. Score Quotes
+    for (var qIdx = 0; qIdx < cachedQuotes.length; qIdx++) {
+      var qu = cachedQuotes[qIdx];
+      var quoNum = String(qu.quote_number || '').toLowerCase();
+      var quClient = String(qu.client_name || '').toLowerCase();
+      var quStatus = String(qu.status || '').toLowerCase();
+      var quScore = -1;
+
+      if (quoNum.startsWith(q)) quScore = 1200;
+      else if (quoNum.indexOf(q) !== -1) quScore = 950;
+      else if (quClient.startsWith(q)) quScore = 900;
+      else if (quClient.indexOf(q) !== -1) quScore = 750;
+      else if (quStatus.startsWith(q)) quScore = 450;
+
+      if (quScore > 0) {
+        var quoItem = {
+          id: 'quo-' + qu.id,
+          label: 'Quote ' + (qu.quote_number || '#' + qu.id),
+          sub: (qu.client_name || 'No client') + (qu.total !== undefined ? ' · ' + formatMoney(qu.total, qu.currency) : ''),
+          category: 'Quotes',
+          icon: ICONS.quotes,
+          iconKey: 'quotes',
+          badge: qu.status || 'draft',
+          badgeClass: 'cmd-badge-' + String(qu.status || 'draft').toLowerCase(),
+          actionType: 'quote',
+          entityId: qu.id,
+          action: (function (id) {
+            return function () {
+              window.QuoteCraftUtils.goToPage('quotes');
+              setTimeout(function () {
+                window.dispatchEvent(new CustomEvent('qc-open-quote', { detail: id }));
+              }, 50);
+            };
+          })(qu.id)
+        };
+        scored.push({ item: quoItem, score: quScore });
+      }
+    }
+
+    // 4. Score Clients
+    for (var cIdx = 0; cIdx < cachedClients.length; cIdx++) {
+      var cl = cachedClients[cIdx];
+      var clName = String(cl.name || '').toLowerCase();
+      var clCompany = String(cl.company || '').toLowerCase();
+      var clEmail = String(cl.email || '').toLowerCase();
+      var clPhone = String(cl.phone || '').toLowerCase();
+      var clScore = -1;
+
+      if (clName.startsWith(q)) clScore = 1100;
+      else if (clName.indexOf(q) !== -1) clScore = 900;
+      else if (clCompany.startsWith(q)) clScore = 850;
+      else if (clCompany.indexOf(q) !== -1) clScore = 750;
+      else if (clEmail.indexOf(q) !== -1) clScore = 650;
+      else if (clPhone.indexOf(q) !== -1) clScore = 600;
+
+      if (clScore > 0) {
+        var clSub = [cl.company, cl.email, cl.phone].filter(Boolean).join(' · ');
+        var clientItem = {
+          id: 'client-' + cl.id,
+          label: cl.name || 'Unnamed Client',
+          sub: clSub,
+          category: 'Clients',
+          icon: ICONS.clients,
+          iconKey: 'clients',
+          actionType: 'client',
+          entityId: cl.id,
+          action: (function (id) {
+            return function () {
+              window.QuoteCraftUtils.goToPage('clients');
+              setTimeout(function () {
+                window.dispatchEvent(new CustomEvent('qc-open-client-overview', { detail: id }));
+              }, 50);
+            };
+          })(cl.id)
+        };
+        scored.push({ item: clientItem, score: clScore });
+      }
+    }
+
+    // 5. Score Projects
+    for (var pIdx = 0; pIdx < cachedProjects.length; pIdx++) {
+      var pr = cachedProjects[pIdx];
+      var prName = String(pr.name || '').toLowerCase();
+      var prClient = String(pr.client_name || '').toLowerCase();
+      var prScore = -1;
+
+      if (prName.startsWith(q)) prScore = 1000;
+      else if (prName.indexOf(q) !== -1) prScore = 850;
+      else if (prClient.indexOf(q) !== -1) prScore = 700;
+
+      if (prScore > 0) {
+        var projItem = {
+          id: 'proj-' + pr.id,
+          label: pr.name || 'Untitled Project',
+          sub: pr.client_name ? 'Client: ' + pr.client_name : '',
+          category: 'Projects',
+          icon: ICONS.projects,
+          iconKey: 'projects',
+          actionType: 'project',
+          entityId: pr.id,
+          action: (function (id) {
+            return function () {
+              window.QuoteCraftUtils.goToPage('projects');
+              setTimeout(function () {
+                window.dispatchEvent(new CustomEvent('qc-open-project-overview', { detail: id }));
+              }, 50);
+            };
+          })(pr.id)
+        };
+        scored.push({ item: projItem, score: prScore });
+      }
+    }
+
+    // Sort by score descending
+    scored.sort(function (a, b) {
+      return b.score - a.score;
+    });
+
+    currentFiltered = scored.slice(0, 50).map(function (s) { return s.item; });
     renderResults(query);
   }
 
   function escapeHtml(str) {
-    return String(str)
+    return String(str || '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
@@ -409,6 +743,7 @@
   }
 
   function highlightMatch(text, query) {
+    if (!text) return '';
     if (!query) return escapeHtml(text);
     var lower = text.toLowerCase();
     var qLower = query.toLowerCase();
@@ -433,21 +768,35 @@
         '<svg class="cmd-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
         '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>' +
         '</svg>' +
-        '<div>No matching commands or pages</div>';
+        '<div>No matching commands, records, or pages</div>';
       resultsContainer.appendChild(empty);
       return;
     }
 
     var lastCategory = null;
-    var globalIdx = 0;
 
     currentFiltered.forEach(function (cmd, idx) {
-      // Group header when not searching with a specific query, or grouping results
-      if (!query && cmd.category !== lastCategory) {
+      if (cmd.category !== lastCategory) {
         lastCategory = cmd.category;
         var groupTitle = document.createElement('div');
         groupTitle.className = 'cmd-group-title';
-        groupTitle.textContent = cmd.category;
+
+        var titleSpan = document.createElement('span');
+        titleSpan.textContent = cmd.category;
+        groupTitle.appendChild(titleSpan);
+
+        if (cmd.category === 'Recent') {
+          var clearBtn = document.createElement('button');
+          clearBtn.type = 'button';
+          clearBtn.className = 'cmd-group-action';
+          clearBtn.textContent = 'Clear';
+          clearBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            clearRecents();
+          });
+          groupTitle.appendChild(clearBtn);
+        }
+
         resultsContainer.appendChild(groupTitle);
       }
 
@@ -457,14 +806,26 @@
 
       var iconHtml = cmd.icon || '';
       var labelHtml = highlightMatch(cmd.label, query);
+      var subHtml = cmd.sub
+        ? '<div class="cmd-item-sub">' + highlightMatch(cmd.sub, query) + '</div>'
+        : '';
+      var badgeHtml = cmd.badge
+        ? '<span class="cmd-item-badge ' + (cmd.badgeClass || '') + '">' + escapeHtml(cmd.badge) + '</span>'
+        : '';
       var shortcutHtml = cmd.shortcut
         ? '<kbd class="cmd-item-shortcut">' + escapeHtml(cmd.shortcut) + '</kbd>'
         : '';
 
       item.innerHTML =
         iconHtml +
-        '<span class="cmd-item-label">' + labelHtml + '</span>' +
-        shortcutHtml;
+        '<div class="cmd-item-body">' +
+          '<div class="cmd-item-label">' + labelHtml + '</div>' +
+          subHtml +
+        '</div>' +
+        '<div class="cmd-item-meta">' +
+          badgeHtml +
+          shortcutHtml +
+        '</div>';
 
       item.addEventListener('mouseenter', function () {
         selectedIndex = idx;
@@ -500,8 +861,11 @@
   function executeCommand(cmd) {
     closePalette();
     try {
-      if (cmd && typeof cmd.action === 'function') {
-        cmd.action();
+      if (cmd) {
+        addRecent(cmd);
+        if (typeof cmd.action === 'function') {
+          cmd.action();
+        }
       }
     } catch (err) {
       console.error('Command Palette execution error:', err);
@@ -537,6 +901,7 @@
   function openPalette() {
     if (!overlay && !initElements()) return;
     overlay.classList.remove('hidden');
+    refreshEntitiesCache();
     if (input) {
       input.value = '';
       input.focus();
@@ -579,3 +944,4 @@
     initElements();
   }
 })();
+
