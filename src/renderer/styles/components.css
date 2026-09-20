@@ -1025,5 +1025,24 @@ body.table-density-compact .badge-status {
   box-shadow: 0 1px 4px rgba(88, 166, 255, 0.25);
 }
 
+/* Budget progress card */
+.budget-card { padding: 16px 20px; }
+.budget-card.hidden { display: none; }
+.budget-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.budget-label { font-weight: 600; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 8px; }
+.budget-amounts { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.budget-spent { font-weight: 700; color: var(--text); }
+.budget-sep { color: var(--text-faint); }
+.budget-total { color: var(--text-muted); }
+.budget-bar-wrap { height: 10px; background: var(--border); border-radius: 999px; overflow: hidden; margin-bottom: 6px; }
+.budget-bar { height: 100%; background: var(--accent, #6366f1); border-radius: 999px; transition: width 0.4s ease; }
+.budget-bar.budget-warning { background: #f59e0b; }
+.budget-bar.over-budget { background: var(--error, #ef4444); }
+.budget-bar-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); }
+.budget-pct { font-weight: 600; }
+.budget-remaining { }
+.over-budget-text { color: var(--error, #ef4444); font-weight: 600; }
+
+
 
 

@@ -96,6 +96,7 @@ const {
   createExpense,
   updateExpense,
   deleteExpense,
+  bulkDeleteExpenses,
   getExpense,
   listExpenses,
   getUnbilledExpenses,
@@ -1358,6 +1359,15 @@ function registerIpcHandlers() {
 
   ipcMain.handle('expenses:categories', async () => {
     return { ok: true, categories: EXPENSE_CATEGORIES };
+  });
+
+  ipcMain.handle('expenses:bulkDelete', async (event, ids) => {
+    try {
+      const result = bulkDeleteExpenses(ids);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to bulk-delete expenses: ${err.message}` } };
+    }
   });
 
   // ---------- Time Entries ----------

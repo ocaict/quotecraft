@@ -173,5 +173,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getExpenseCategories: () => ipcRenderer.invoke('expenses:categories'),
   getUnbilledExpenses: (clientId, projectId) => ipcRenderer.invoke('expenses:getUnbilled', clientId, projectId),
   createInvoiceFromExpenses: (payload) => ipcRenderer.invoke('invoices:createFromExpenses', payload),
+  bulkDeleteExpenses: (ids) => ipcRenderer.invoke('expenses:bulkDelete', ids),
 });
 

@@ -1103,6 +1103,15 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 33,
+    up: () => {
+      const cols = new Set(db.exec(`PRAGMA table_info(projects)`)[0].values.map((v) => v[1]));
+      if (!cols.has('budget')) {
+        db.run(`ALTER TABLE projects ADD COLUMN budget REAL DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -2206,8 +2215,8 @@ function addProject(project) {
 
   const now = new Date().toISOString();
   db.run(
-    `INSERT INTO projects (client_id, name, description, status, start_date, end_date, hourly_rate, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO projects (client_id, name, description, status, start_date, end_date, hourly_rate, budget, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       project.client_id,
       String(project.name || '').trim(),
@@ -2216,6 +2225,7 @@ function addProject(project) {
       String(project.start_date || '').trim(),
       project.end_date ? String(project.end_date).trim() : null,
       normalizeNullableRate(project.hourly_rate),
+      normalizeNullableRate(project.budget),
       now,
       now,
     ]
@@ -2249,7 +2259,7 @@ function updateProject(id, project) {
   db.run(
     `UPDATE projects SET
        client_id = ?, name = ?, description = ?, status = ?,
-       start_date = ?, end_date = ?, hourly_rate = ?, updated_at = ?
+       start_date = ?, end_date = ?, hourly_rate = ?, budget = ?, updated_at = ?
      WHERE id = ?`,
     [
       project.client_id,
@@ -2259,6 +2269,7 @@ function updateProject(id, project) {
       String(project.start_date || '').trim(),
       project.end_date ? String(project.end_date).trim() : null,
       normalizeNullableRate(project.hourly_rate),
+      normalizeNullableRate(project.budget),
       now,
       id,
     ]
@@ -2337,6 +2348,14 @@ function validateProjectInput(project) {
       errors.hourly_rate = 'Hourly rate must be a number greater than or equal to zero.';
     } else if (hasMoreThanTwoDecimals(project.hourly_rate)) {
       errors.hourly_rate = 'Hourly rate may only have up to 2 decimal places.';
+    }
+  }
+  if (project.budget !== undefined && project.budget !== null && project.budget !== '') {
+    const b = Number(project.budget);
+    if (isNaN(b) || b < 0) {
+      errors.budget = 'Budget must be a number greater than or equal to zero.';
+    } else if (hasMoreThanTwoDecimals(project.budget)) {
+      errors.budget = 'Budget may only have up to 2 decimal places.';
     }
   }
   return errors;
@@ -2487,6 +2506,15 @@ function getProjectOverview(projectId) {
   const totalPaid = invoices.reduce((sum, inv) => sum + (((Number(inv.amount_paid) || 0) - (Number(inv.amount_credited) || 0)) * (Number(inv.exchange_rate) || 1.0)), 0);
   const outstandingBalance = Math.max(0, Math.round(invoices.reduce((sum, inv) => sum + ((Number(inv.balance_due) || 0) * (Number(inv.exchange_rate) || 1.0)), 0) * 100) / 100);
 
+  // Budget vs. actuals: sum all expenses linked to this project (in base currency)
+  const expRes = db.exec(
+    `SELECT COALESCE(SUM(e.amount * COALESCE(e.exchange_rate, 1.0)), 0) AS total_expenses
+       FROM expenses e
+      WHERE e.project_id = ?`,
+    [projectId]
+  );
+  const totalExpenses = expRes[0] && expRes[0].values[0] ? Math.round((Number(expRes[0].values[0][0]) || 0) * 100) / 100 : 0;
+
   return {
     project,
     client,
@@ -2499,6 +2527,8 @@ function getProjectOverview(projectId) {
       outstandingBalance,
       quoteCount: quotes.length,
       invoiceCount: invoices.length,
+      budget: project.budget != null ? Math.round(Number(project.budget) * 100) / 100 : null,
+      totalExpenses,
     },
   };
 }
@@ -2690,6 +2720,29 @@ function deleteExpense(id) {
   } catch (err) {
     return { ok: false, errors: { general: `Failed to delete expense: ${err.message}` } };
   }
+}
+
+function bulkDeleteExpenses(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: false, deleted: 0, skipped: 0, errors: { general: 'No expense IDs provided.' } };
+  }
+  let deleted = 0;
+  let skipped = 0;
+  for (const id of ids) {
+    const existing = getExpense(id);
+    if (!existing || existing.billed === 1 || existing.invoice_id) {
+      skipped++;
+      continue;
+    }
+    try {
+      db.run('DELETE FROM expenses WHERE id = ?', [id]);
+      deleted++;
+    } catch (_) {
+      skipped++;
+    }
+  }
+  if (deleted > 0) saveToDisk();
+  return { ok: true, deleted, skipped };
 }
 
 function listExpenses(filter = {}) {
@@ -7936,6 +7989,7 @@ module.exports = {
   createExpense,
   updateExpense,
   deleteExpense,
+  bulkDeleteExpenses,
   getExpense,
   listExpenses,
   getUnbilledExpenses,

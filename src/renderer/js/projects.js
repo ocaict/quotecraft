@@ -45,6 +45,15 @@
   var overviewInvoiceCount = document.getElementById('projOverviewInvoiceCount');
   var overviewInvoicesBody = document.getElementById('projOverviewInvoicesBody');
 
+  // Budget card elements
+  var budgetCard = document.getElementById('projBudgetCard');
+  var budgetBarEl = document.getElementById('projBudgetBar');
+  var budgetStatusEl = document.getElementById('projBudgetStatus');
+  var budgetSpentEl = document.getElementById('projBudgetSpent');
+  var budgetTotalEl = document.getElementById('projBudgetTotal');
+  var budgetPctEl = document.getElementById('projBudgetPct');
+  var budgetRemainingEl = document.getElementById('projBudgetRemaining');
+
   var currentOverviewId = null;
   var currentOverviewProject = null;
   var currencyCode = 'USD';
@@ -63,6 +72,7 @@
   var startDateInput = document.getElementById('projectStartDate');
   var endDateInput = document.getElementById('projectEndDate');
   var hourlyRateInput = document.getElementById('projectHourlyRate');
+  var budgetInput = document.getElementById('projectBudget');
   var descriptionInput = document.getElementById('projectDescription');
 
   var deleteDialog = document.getElementById('projectDeleteDialog');
@@ -228,6 +238,7 @@
 
     renderQuoteRows(overview.quotes || []);
     renderInvoiceRows(overview.invoices || []);
+    renderBudgetCard(stats);
 
     window.QuoteCraftUtils.mountUnbilledTimeCard({
       bodyId: 'projOverviewTimeBody',
@@ -241,6 +252,38 @@
       emptyText: 'No unbilled time entries for this project.',
       onCreated: function () { openOverview(p.id); },
     });
+  }
+
+  function renderBudgetCard(stats) {
+    if (!budgetCard) return;
+    var budget = stats.budget;
+    if (budget == null || budget <= 0) {
+      budgetCard.classList.add('hidden');
+      return;
+    }
+    var spent = stats.totalExpenses || 0;
+    var pct = Math.min(100, Math.round((spent / budget) * 10000) / 100);
+    var remaining = Math.round((budget - spent) * 100) / 100;
+    var isOver = spent > budget;
+
+    budgetCard.classList.remove('hidden');
+    if (budgetBarEl) {
+      budgetBarEl.style.width = Math.min(100, pct) + '%';
+      budgetBarEl.className = 'budget-bar' + (isOver ? ' over-budget' : pct >= 80 ? ' budget-warning' : '');
+    }
+    if (budgetStatusEl) {
+      budgetStatusEl.textContent = isOver ? 'Over budget' : pct >= 80 ? 'Approaching limit' : 'On track';
+      budgetStatusEl.className = 'badge ' + (isOver ? 'status-overdue' : pct >= 80 ? 'status-on-hold' : 'status-active');
+    }
+    if (budgetSpentEl) budgetSpentEl.textContent = formatMoney(spent) + ' spent';
+    if (budgetTotalEl) budgetTotalEl.textContent = formatMoney(budget) + ' budget';
+    if (budgetPctEl) budgetPctEl.textContent = pct.toFixed(1) + '% used';
+    if (budgetRemainingEl) {
+      budgetRemainingEl.textContent = isOver
+        ? formatMoney(Math.abs(remaining)) + ' over'
+        : formatMoney(remaining) + ' remaining';
+      budgetRemainingEl.className = 'budget-remaining' + (isOver ? ' over-budget-text' : '');
+    }
   }
 
   function renderQuoteRows(quotes) {
@@ -516,6 +559,7 @@
       startDateInput.value = p.start_date || '';
       endDateInput.value = p.end_date || '';
       if (hourlyRateInput) hourlyRateInput.value = p.hourly_rate != null ? p.hourly_rate : '';
+      if (budgetInput) budgetInput.value = p.budget != null ? p.budget : '';
       if (statusSelect) statusSelect.value = p.status || 'active';
 
       clientSelect.innerHTML = '<option value="">Select a client…</option>';
@@ -543,6 +587,7 @@
       start_date: startDateInput ? startDateInput.value : '',
       end_date: endDateInput ? endDateInput.value : '',
       hourly_rate: hourlyRateInput ? hourlyRateInput.value : '',
+      budget: budgetInput ? budgetInput.value : '',
       description: descriptionInput ? descriptionInput.value.trim() : '',
     };
 

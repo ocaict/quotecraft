@@ -1,4 +1,4 @@
-// Expenses Tracker Controller
+﻿// Expenses Tracker Controller
 (function () {
   'use strict';
 
@@ -25,6 +25,15 @@
   const countEl = document.getElementById('expensesCount');
   const categoriesGridEl = document.getElementById('expensesCategoriesGrid');
   const tableBodyEl = document.getElementById('expensesTableBody');
+
+  // Bulk action bar
+  const selectAllChk = document.getElementById('expensesSelectAll');
+  const bulkBar = document.getElementById('expenseBulkBar');
+  const bulkCountEl = document.getElementById('expenseBulkCount');
+  const bulkDeleteBtn = document.getElementById('expenseBulkDeleteBtn');
+  const bulkClearBtn = document.getElementById('expenseBulkClearBtn');
+
+  let selectedExpenseIds = new Set();
 
   // Modal Elements (Create / Edit)
   const modal = document.getElementById('expenseModal');
@@ -106,7 +115,7 @@
       periodLabelEl.textContent = 'All time';
     } else {
       periodLabelEl.textContent = startDateInput.value || endDateInput.value
-        ? `Custom (${startDateInput.value || '…'} to ${endDateInput.value || '…'})`
+        ? `Custom (${startDateInput.value || 'â€¦'} to ${endDateInput.value || 'â€¦'})`
         : 'All time';
     }
   }
@@ -158,7 +167,7 @@
     // Modal client select
     if (clientSelect) {
       const currentVal = clientSelect.value;
-      clientSelect.innerHTML = '<option value="">Select a client…</option>';
+      clientSelect.innerHTML = '<option value="">Select a clientâ€¦</option>';
       cachedClients.forEach((c) => {
         const opt = document.createElement('option');
         opt.value = c.id;
@@ -171,7 +180,7 @@
     // Bill modal client select
     if (billClientSelect) {
       const currentVal = billClientSelect.value;
-      billClientSelect.innerHTML = '<option value="">Select a client…</option>';
+      billClientSelect.innerHTML = '<option value="">Select a clientâ€¦</option>';
       cachedClients.forEach((c) => {
         const opt = document.createElement('option');
         opt.value = c.id;
@@ -343,16 +352,19 @@
       });
     }
 
-    // 4. Render Table Body (7 columns)
+    // 4. Render Table Body (8 columns now; col-check + 7 data cols)
     tableBodyEl.innerHTML = '';
     if (!summary.expenses || summary.expenses.length === 0) {
+      selectedExpenseIds.clear();
+      updateBulkBar();
       tableBodyEl.innerHTML = `
         <tr>
-          <td colspan="7" class="expenses-empty">
+          <td colspan="8" class="expenses-empty">
             <p>No expenses found matching the selected criteria.</p>
           </td>
         </tr>
       `;
+      if (selectAllChk) selectAllChk.checked = false;
       return;
     }
 
@@ -365,7 +377,7 @@
       let convertedSub = '';
       if (isMultiCurrency) {
         const converted = Math.round((Number(exp.amount) || 0) * Number(exp.exchange_rate) * 100) / 100;
-        convertedSub = `<span class="expense-amount-original">≈ ${window.QuoteCraftUtils.formatCurrency(converted, baseCurr)} (${baseCurr})</span>`;
+        convertedSub = `<span class="expense-amount-original">â‰ˆ ${window.QuoteCraftUtils.formatCurrency(converted, baseCurr)} (${baseCurr})</span>`;
       }
 
       // Status badge
@@ -377,7 +389,7 @@
       }
 
       // Client / Project
-      let clientProjectHtml = '<span class="text-muted">—</span>';
+      let clientProjectHtml = '<span class="text-muted">â€”</span>';
       if (exp.client_name) {
         clientProjectHtml = `<div><strong>${escapeHtml(exp.client_name)}</strong></div>`;
         if (exp.project_name) {
@@ -385,13 +397,20 @@
         }
       }
 
+      // Checkbox cell â€” billed rows get an empty, disabled placeholder
+      const isChecked = selectedExpenseIds.has(exp.id);
+      const checkCell = exp.billed
+        ? `<td class="col-check"><span class="check-locked" title="Billed â€” cannot be selected">ðŸ”’</span></td>`
+        : `<td class="col-check"><input type="checkbox" class="expense-row-chk" data-id="${exp.id}"${isChecked ? ' checked' : ''}></td>`;
+
       tr.innerHTML = `
+        ${checkCell}
         <td style="white-space: nowrap;">${window.QuoteCraftUtils.formatDate(exp.date)}</td>
         <td>
           <span class="badge-category badge-cat-${slug}">${escapeHtml(exp.category || 'Other')}</span>
         </td>
         <td>${clientProjectHtml}</td>
-        <td>${escapeHtml(exp.notes || '—')}</td>
+        <td>${escapeHtml(exp.notes || 'â€”')}</td>
         <td>${statusBadgeHtml}</td>
         <td class="expense-amount-cell">
           ${nativeAmountStr}
@@ -409,6 +428,19 @@
       `;
 
       if (!exp.billed) {
+        const chkInput = tr.querySelector('.expense-row-chk');
+        if (chkInput) {
+          chkInput.addEventListener('change', () => {
+            if (chkInput.checked) {
+              selectedExpenseIds.add(exp.id);
+            } else {
+              selectedExpenseIds.delete(exp.id);
+            }
+            updateBulkBar();
+            syncSelectAll();
+          });
+        }
+
         const editBtn = tr.querySelector('.edit-btn');
         if (editBtn) editBtn.addEventListener('click', () => openExpenseModal(exp));
 
@@ -418,6 +450,8 @@
 
       tableBodyEl.appendChild(tr);
     });
+
+    syncSelectAll();
   }
 
   async function openExpenseModal(exp = null) {
@@ -623,7 +657,7 @@
       return;
     }
 
-    billListEl.innerHTML = '<p class="placeholder" style="padding:16px;text-align:center;color:var(--text-muted);">Loading unbilled expenses…</p>';
+    billListEl.innerHTML = '<p class="placeholder" style="padding:16px;text-align:center;color:var(--text-muted);">Loading unbilled expensesâ€¦</p>';
 
     try {
       const res = await window.electronAPI.getUnbilledExpenses(clientId, projectId);
@@ -643,8 +677,8 @@
           <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
             <input type="checkbox" class="bill-expense-chk" data-id="${exp.id}" data-amount="${exp.amount}" checked>
             <div>
-              <div style="font-weight:600;font-size:13px;">${escapeHtml(exp.category)} — ${amtStr}</div>
-              <div style="font-size:11px;color:var(--text-muted);">${window.QuoteCraftUtils.formatDate(exp.date)}${exp.notes ? ' · ' + escapeHtml(exp.notes) : ''}${exp.project_name ? ' · ' + escapeHtml(exp.project_name) : ''}</div>
+              <div style="font-weight:600;font-size:13px;">${escapeHtml(exp.category)} â€” ${amtStr}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${window.QuoteCraftUtils.formatDate(exp.date)}${exp.notes ? ' Â· ' + escapeHtml(exp.notes) : ''}${exp.project_name ? ' Â· ' + escapeHtml(exp.project_name) : ''}</div>
             </div>
           </label>
         `;
@@ -719,6 +753,81 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  // ---------- Bulk bar helpers ----------
+  function updateBulkBar() {
+    if (!bulkBar) return;
+    const count = selectedExpenseIds.size;
+    if (count === 0) {
+      bulkBar.classList.add('hidden');
+    } else {
+      bulkBar.classList.remove('hidden');
+      if (bulkCountEl) bulkCountEl.textContent = count + ' expense' + (count === 1 ? '' : 's') + ' selected';
+    }
+  }
+
+  function syncSelectAll() {
+    if (!selectAllChk) return;
+    const allCheckable = tableBodyEl.querySelectorAll('.expense-row-chk');
+    if (allCheckable.length === 0) { selectAllChk.checked = false; return; }
+    const allChecked = Array.from(allCheckable).every((c) => c.checked);
+    selectAllChk.indeterminate = !allChecked && selectedExpenseIds.size > 0;
+    selectAllChk.checked = allChecked;
+  }
+
+  if (selectAllChk) {
+    selectAllChk.addEventListener('change', () => {
+      const allCheckable = tableBodyEl.querySelectorAll('.expense-row-chk');
+      allCheckable.forEach((chk) => {
+        chk.checked = selectAllChk.checked;
+        const id = Number(chk.dataset.id);
+        if (selectAllChk.checked) {
+          selectedExpenseIds.add(id);
+        } else {
+          selectedExpenseIds.delete(id);
+        }
+      });
+      updateBulkBar();
+    });
+  }
+
+  if (bulkClearBtn) {
+    bulkClearBtn.addEventListener('click', () => {
+      selectedExpenseIds.clear();
+      tableBodyEl.querySelectorAll('.expense-row-chk').forEach((c) => { c.checked = false; });
+      if (selectAllChk) { selectAllChk.checked = false; selectAllChk.indeterminate = false; }
+      updateBulkBar();
+    });
+  }
+
+  if (bulkDeleteBtn) {
+    bulkDeleteBtn.addEventListener('click', async () => {
+      const ids = Array.from(selectedExpenseIds);
+      if (ids.length === 0) return;
+      const confirmed = await window.QuoteCraftUtils.confirmAction({
+        title: 'Delete Selected Expenses',
+        message: `Are you sure you want to delete ${ids.length} expense${ids.length === 1 ? '' : 's'}? Billed expenses will be skipped. This cannot be undone.`,
+        confirmLabel: 'Delete',
+        confirmClass: 'btn-danger',
+      });
+      if (!confirmed) return;
+      try {
+        const res = await window.electronAPI.bulkDeleteExpenses(ids);
+        if (res && res.ok) {
+          const msg = `Deleted ${res.deleted} expense${res.deleted === 1 ? '' : 's'}` +
+            (res.skipped > 0 ? ` (${res.skipped} skipped â€” billed or not found).` : '.');
+          window.QuoteCraftUtils.showToast(msg, 'success');
+          selectedExpenseIds.clear();
+          updateBulkBar();
+          loadExpenses();
+        } else {
+          window.QuoteCraftUtils.showToast('Could not delete expenses.', 'error');
+        }
+      } catch (err) {
+        window.QuoteCraftUtils.showToast('Error deleting expenses: ' + err.message, 'error');
+      }
+    });
   }
 
   // Event Listeners
@@ -862,7 +971,7 @@
         h.classList.toggle('sorted-desc', isCurrent && expenseSortDirection === 'desc');
         const indicator = h.querySelector('.sort-indicator');
         if (indicator) {
-          indicator.textContent = isCurrent ? (expenseSortDirection === 'asc' ? '▲' : '▼') : '▲';
+          indicator.textContent = isCurrent ? (expenseSortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â–²';
         }
       });
       if (currentSummary) {

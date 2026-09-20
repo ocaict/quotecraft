@@ -358,3 +358,22 @@
 .bill-expense-item:hover {
   background: var(--bg-hover);
 }
+
+/* Bulk action bar */
+.bulk-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--accent-muted, rgba(99,102,241,0.12));
+  border: 1px solid var(--accent, #6366f1);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.bulk-action-bar.hidden { display: none; }
+.bulk-count { font-weight: 600; font-size: 13px; }
+.bulk-actions { display: flex; gap: 8px; margin-left: auto; }
+.col-check { width: 36px; text-align: center; }
+.col-check input[type="checkbox"] { cursor: pointer; }
+.check-locked { font-size: 11px; opacity: 0.5; }
+

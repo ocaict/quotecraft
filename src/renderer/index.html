@@ -602,6 +602,28 @@
           </div>
         </div>
 
+        <!-- Budget vs. Actuals card (only shown when budget is set) -->
+        <div id="projBudgetCard" class="card budget-card hidden">
+          <div class="budget-card-header">
+            <div>
+              <span class="budget-label">Budget vs. Expenses</span>
+              <span id="projBudgetStatus" class="badge">On track</span>
+            </div>
+            <div class="budget-amounts">
+              <span id="projBudgetSpent" class="budget-spent">£0.00 spent</span>
+              <span class="budget-sep">/</span>
+              <span id="projBudgetTotal" class="budget-total">£0.00 budget</span>
+            </div>
+          </div>
+          <div class="budget-bar-wrap">
+            <div id="projBudgetBar" class="budget-bar"></div>
+          </div>
+          <div class="budget-bar-labels">
+            <span id="projBudgetPct" class="budget-pct">0%</span>
+            <span id="projBudgetRemaining" class="budget-remaining">£0.00 remaining</span>
+          </div>
+        </div>
+
         <!-- Project Details Card -->
         <div class="card">
           <h2>Project Details</h2>
@@ -1750,10 +1772,20 @@
         </div>
       </div>
 
+      <!-- Bulk action bar (shown when 1+ rows are checked) -->
+      <div id="expenseBulkBar" class="bulk-action-bar hidden">
+        <span id="expenseBulkCount" class="bulk-count">0 selected</span>
+        <div class="bulk-actions">
+          <button type="button" id="expenseBulkDeleteBtn" class="btn btn-danger btn-small">🗑 Delete Selected</button>
+          <button type="button" id="expenseBulkClearBtn" class="btn btn-ghost btn-small">✕ Clear selection</button>
+        </div>
+      </div>
+
       <div class="card expenses-table-card">
         <table class="expenses-table">
           <thead>
             <tr>
+              <th class="col-check"><input type="checkbox" id="expensesSelectAll" title="Select all visible rows"></th>
               <th class="sortable sorted-desc" data-sort="date" title="Sort by Date">Date<span class="sort-indicator">▼</span></th>
               <th class="sortable" data-sort="category" title="Sort by Category">Category<span class="sort-indicator">▲</span></th>
               <th>Client / Project</th>
@@ -1765,7 +1797,7 @@
           </thead>
           <tbody id="expensesTableBody">
             <tr>
-              <td colspan="7" class="expenses-empty">
+              <td colspan="8" class="expenses-empty">
                 <p>Loading expenses…</p>
               </td>
             </tr>
@@ -3488,6 +3520,13 @@
           <input type="number" id="projectHourlyRate" name="hourly_rate" min="0" step="0.01" placeholder="e.g. 85.00">
           <span class="hint">Used as the default billing rate when logging time entries against this project.</span>
           <span class="field-error" data-error-for="hourly_rate"></span>
+        </div>
+
+        <div class="field">
+          <label for="projectBudget">Budget (optional)</label>
+          <input type="number" id="projectBudget" name="budget" min="0" step="0.01" placeholder="e.g. 5000.00">
+          <span class="hint">Set a spending limit to track budget vs. actual expenses on the project overview.</span>
+          <span class="field-error" data-error-for="budget"></span>
         </div>
 
         <div class="field">
