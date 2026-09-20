@@ -15,6 +15,11 @@
   const statProfitYear = document.getElementById('statProfitYear');
   const dashExpensesMonthCard = document.getElementById('dashExpensesMonthCard');
   const dashExpensesYearCard = document.getElementById('dashExpensesYearCard');
+  const statRecurringActive = document.getElementById('statRecurringActive');
+  const statRecurringBadge = document.getElementById('statRecurringBadge');
+  const statRecurringSub = document.getElementById('statRecurringSub');
+  const statRecurringNext = document.getElementById('statRecurringNext');
+  const dashRecurringCard = document.getElementById('dashRecurringCard');
   const activityEl = document.getElementById('dashboardActivity');
   const overdueCard = document.getElementById('overdueCard');
   const dashNewQuoteBtn = document.getElementById('dashNewQuoteBtn');
@@ -282,6 +287,57 @@
     activityEl.appendChild(footer);
   }
 
+  async function loadRecurringSummary() {
+    if (!statRecurringActive) return;
+    try {
+      const res = await window.electronAPI.getRecurringSummary();
+      if (!res || !res.ok || !res.summary) {
+        statRecurringActive.textContent = '—';
+        if (statRecurringBadge) statRecurringBadge.classList.add('hidden');
+        if (statRecurringNext) statRecurringNext.textContent = '';
+        return;
+      }
+      const s = res.summary;
+      const count = s.active_count || 0;
+      statRecurringActive.textContent = count === 1 ? '1 active' : `${count} active`;
+
+      if (s.monthly_expected > 0) {
+        const cur = s.reporting_currency || currencyCode;
+        statRecurringSub.textContent = `~${window.QuoteCraftUtils.formatCurrency(s.monthly_expected, cur)}/mo expected →`;
+      } else {
+        statRecurringSub.textContent = 'Active recurring schedules →';
+      }
+
+      if (s.overdue_count > 0) {
+        if (statRecurringBadge) {
+          statRecurringBadge.className = 'kpi-trend-badge trend-down';
+          statRecurringBadge.textContent = `${s.overdue_count} due`;
+          statRecurringBadge.classList.remove('hidden');
+        }
+      } else if (count > 0) {
+        if (statRecurringBadge) {
+          statRecurringBadge.className = 'kpi-trend-badge trend-up';
+          statRecurringBadge.textContent = 'Active';
+          statRecurringBadge.classList.remove('hidden');
+        }
+      } else {
+        if (statRecurringBadge) statRecurringBadge.classList.add('hidden');
+      }
+
+      if (statRecurringNext) {
+        if (s.next_fire_date) {
+          const formattedNext = window.QuoteCraftUtils.formatDate(s.next_fire_date);
+          const nextAmt = s.next_amount > 0 ? window.QuoteCraftUtils.formatCurrency(s.next_amount, s.next_currency || currencyCode) : '';
+          statRecurringNext.textContent = nextAmt ? `Next: ${formattedNext} (${nextAmt})` : `Next: ${formattedNext}`;
+        } else {
+          statRecurringNext.textContent = count > 0 ? 'No upcoming dates' : 'None configured';
+        }
+      }
+    } catch (e) {
+      console.warn('Error loading recurring summary:', e);
+    }
+  }
+
   async function loadStats() {
     try {
       const res = await window.electronAPI.getDashboardStats();
@@ -294,6 +350,7 @@
     } catch (e) {
       activityEl.innerHTML = '<p class="empty">Could not load dashboard: ' + e.message + '</p>';
     }
+    await loadRecurringSummary();
   }
 
   async function checkDueRecurringDashboard() {
@@ -591,6 +648,18 @@
       if (presetSelect) {
         presetSelect.value = 'this_year';
         presetSelect.dispatchEvent(new Event('change'));
+      }
+    });
+  }
+
+  if (dashRecurringCard) {
+    dashRecurringCard.addEventListener('click', () => {
+      window.QuoteCraftUtils.goToPage('invoices');
+    });
+    dashRecurringCard.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        window.QuoteCraftUtils.goToPage('invoices');
       }
     });
   }

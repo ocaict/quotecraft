@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="styles/attachments.css">
   <link rel="stylesheet" href="styles/app-lock.css">
   <link rel="stylesheet" href="styles/command-palette.css">
+  <link rel="stylesheet" href="styles/notifications.css">
   <script src="js/theme.js"></script>
 </head>
 <body>
@@ -44,6 +45,15 @@
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
           <span class="nav-label">Dashboard</span>
         </a>
+      </div>
+
+      <!-- Notification bell (bottom of sidebar) -->
+      <div class="nav-group nav-group-bell">
+        <button type="button" id="notificationBellBtn" class="nav-bell-btn" title="Notifications" aria-label="Open notifications panel">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="nav-label">Notifications</span>
+          <span id="notifBellBadge" class="nav-badge nav-badge-overdue hidden">0</span>
+        </button>
       </div>
 
       <!-- Work & Clients -->
@@ -254,6 +264,17 @@
           <span class="stat-label">Net profit this year</span>
           <span id="statProfitYear" class="stat-value">—</span>
           <span class="stat-sub">Cash received minus expenses &rarr;</span>
+        </div>
+
+        <!-- Recurring Revenue KPI -->
+        <div class="card stat-card stat-card-link" id="dashRecurringCard" role="button" tabindex="0">
+          <span class="stat-label">Recurring revenue</span>
+          <div class="stat-value-trend-row">
+            <span id="statRecurringActive" class="stat-value">—</span>
+            <span id="statRecurringBadge" class="kpi-trend-badge hidden"></span>
+          </div>
+          <span class="stat-sub" id="statRecurringSub">Active recurring schedules &rarr;</span>
+          <div id="statRecurringNext" class="recurring-next-label"></div>
         </div>
       </div>
 
@@ -4203,6 +4224,35 @@
     </div>
   </div>
 
+  <!-- Notification slide-out panel -->
+  <div id="notificationPanel" class="notif-panel hidden" role="dialog" aria-label="Notifications" aria-modal="true">
+    <div class="notif-panel-header">
+      <div class="notif-header-title">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <h3>Notifications</h3>
+        <span id="notifPanelCountBadge" class="nav-badge nav-badge-overdue">0</span>
+      </div>
+      <div class="notif-header-actions">
+        <button type="button" id="notifRefreshBtn" class="btn btn-small btn-ghost" title="Refresh notifications">↻</button>
+        <button type="button" id="notifCloseBtn" class="btn btn-small btn-ghost" title="Close panel">✕</button>
+      </div>
+    </div>
+    <div class="notif-panel-tabs">
+      <button type="button" class="notif-tab active" data-filter="all">All</button>
+      <button type="button" class="notif-tab" data-filter="invoices">Invoices</button>
+      <button type="button" class="notif-tab" data-filter="quotes">Quotes</button>
+      <button type="button" class="notif-tab" data-filter="reminders">Reminders</button>
+    </div>
+    <div id="notifPanelList" class="notif-panel-list">
+      <p class="placeholder">Loading notifications…</p>
+    </div>
+    <div class="notif-panel-footer">
+      <button type="button" id="notifMarkAllSeenBtn" class="btn btn-small btn-ghost">Dismiss all</button>
+      <button type="button" id="notifViewInvoicesBtn" class="btn btn-small btn-secondary">View Invoices &rarr;</button>
+    </div>
+  </div>
+  <div id="notifBackdrop" class="notif-backdrop hidden"></div>
+
   <script src="js/currencies.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/attachments.js"></script>
@@ -4227,6 +4277,7 @@
   <script src="js/shortcuts.js"></script>
   <script src="js/command-palette.js"></script>
   <script src="js/app-lock.js"></script>
+  <script src="js/notifications.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

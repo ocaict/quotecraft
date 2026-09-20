@@ -400,3 +400,13 @@
 .activity-view-all:hover {
   text-decoration: underline;
 }
+
+/* ── Recurring Revenue KPI ── */
+.recurring-next-label {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

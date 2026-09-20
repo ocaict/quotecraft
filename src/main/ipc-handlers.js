@@ -136,6 +136,7 @@ const {
   discardLiveTimer,
   addAuditEntry,
   getAuditLogEntries,
+  getRecurringSummary,
 } = require('./database');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
 const {
@@ -1482,6 +1483,14 @@ function registerIpcHandlers() {
       return res;
     } catch (err) {
       return { ok: false, errors: { general: `Failed to process due recurring invoices: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('dashboard:recurringSummary', async () => {
+    try {
+      return getRecurringSummary();
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to load recurring summary: ${err.message}` } };
     }
   });
 

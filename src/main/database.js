@@ -6762,10 +6762,81 @@ function getDashboardStats() {
   };
 }
 
+// ---------- Recurring summary (Dashboard KPI widget) ----------
+function getRecurringSummary() {
+  const todayStr = toDateString(new Date());
+
+  // Count active profiles
+  const activeRes = db.exec(
+    `SELECT COUNT(*) FROM recurring_profiles WHERE status = 'active'`
+  );
+  const activeCount = (activeRes.length && activeRes[0].values.length)
+    ? Number(activeRes[0].values[0][0]) || 0
+    : 0;
+
+  // Next fire date + amount
+  const nextRes = db.exec(
+    `SELECT rp.next_issue_date, i.total, i.currency, COALESCE(i.exchange_rate, 1.0) AS exchange_rate
+     FROM recurring_profiles rp
+     JOIN invoices i ON i.id = rp.source_invoice_id
+     WHERE rp.status = 'active'
+     ORDER BY rp.next_issue_date ASC
+     LIMIT 1`
+  );
+  let nextFireDate = null;
+  let nextAmount = 0;
+  let nextCurrency = 'USD';
+  if (nextRes.length && nextRes[0].values.length) {
+    const cols = nextRes[0].columns;
+    const row = nextRes[0].values[0];
+    const obj = {};
+    cols.forEach((c, idx) => { obj[c] = row[idx]; });
+    nextFireDate = obj.next_issue_date || null;
+    nextCurrency = obj.currency || 'USD';
+    nextAmount = Number(obj.total) || 0;
+  }
+
+  // Monthly expected = sum of source invoice totals for active profiles
+  const profile = getCompanyProfile();
+  const baseCurrency = (profile && (profile.reporting_currency || profile.default_currency)) || 'USD';
+  const monthlyRes = db.exec(
+    `SELECT COALESCE(SUM(i.total * COALESCE(i.exchange_rate, 1.0)), 0)
+     FROM recurring_profiles rp
+     JOIN invoices i ON i.id = rp.source_invoice_id
+     WHERE rp.status = 'active'`
+  );
+  const monthlyExpected = (monthlyRes.length && monthlyRes[0].values.length)
+    ? Math.round((Number(monthlyRes[0].values[0][0]) || 0) * 100) / 100
+    : 0;
+
+  // Count overdue-on-next (next_issue_date <= today)
+  const overdueRes = db.exec(
+    `SELECT COUNT(*) FROM recurring_profiles WHERE status = 'active' AND next_issue_date <= ?`,
+    [todayStr]
+  );
+  const overdueCount = (overdueRes.length && overdueRes[0].values.length)
+    ? Number(overdueRes[0].values[0][0]) || 0
+    : 0;
+
+  return {
+    ok: true,
+    summary: {
+      active_count: activeCount,
+      next_fire_date: nextFireDate,
+      next_amount: nextAmount,
+      next_currency: nextCurrency,
+      monthly_expected: monthlyExpected,
+      reporting_currency: baseCurrency,
+      overdue_count: overdueCount,
+    },
+  };
+}
+
 function getDatabaseBuffer() {
   saveToDisk();
   return Buffer.from(db.export());
 }
+
 
 async function validateBackupBuffer(buffer) {
   let payload = null;
@@ -7908,4 +7979,6 @@ module.exports = {
   saveAutoBackupSettings,
   addAuditEntry,
   getAuditLogEntries,
+  getRecurringSummary,
 };
+

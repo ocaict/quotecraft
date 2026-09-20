@@ -121,6 +121,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelRecurringProfile: (profileId) => ipcRenderer.invoke('invoices:cancelRecurring', profileId),
   triggerRecurringNow: (profileId) => ipcRenderer.invoke('invoices:triggerRecurringNow', profileId),
   checkDueRecurring: () => ipcRenderer.invoke('invoices:checkRecurringDue'),
+  getRecurringSummary: () => ipcRenderer.invoke('dashboard:recurringSummary'),
 
   exportBackup: () => ipcRenderer.invoke('backup:export'),
   prepareRestore: () => ipcRenderer.invoke('backup:prepareRestore'),
