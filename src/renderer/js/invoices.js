@@ -107,6 +107,43 @@
   const saveInvoiceBtn = document.getElementById('saveInvoiceBtn');
   const cancelInvoiceBtn = document.getElementById('cancelInvoiceBtn');
 
+  const invoiceTaxLinesEnabled = document.getElementById('invoiceTaxLinesEnabled');
+  const invoiceTaxLinesSection = document.getElementById('invoiceTaxLinesSection');
+  const invoiceTaxLinesList = document.getElementById('invoiceTaxLinesList');
+  const invoiceAddTaxLineBtn = document.getElementById('invoiceAddTaxLineBtn');
+
+  function addInvoiceTaxLineRow(name = '', rate = '') {
+    if (!invoiceTaxLinesList) return null;
+    const row = document.createElement('div');
+    row.className = 'tax-line-row';
+    row.innerHTML = `
+      <input type="text" class="tax-line-name" placeholder="Tax name (e.g. GST)" value="${escapeHtml(name)}">
+      <div class="tax-line-rate-wrap">
+        <input type="number" class="tax-line-rate" placeholder="0" min="0" max="100" step="0.01" value="${rate !== '' && rate !== null && !isNaN(rate) ? rate : ''}">
+        <span style="color: var(--text-muted); font-size: 13px;">%</span>
+      </div>
+      <span class="tax-line-amount">$0.00</span>
+      <button type="button" class="tax-line-remove" title="Remove tax line">✕</button>
+    `;
+
+    row.querySelector('.tax-line-remove').addEventListener('click', () => {
+      row.remove();
+      recalcInvoiceTotals();
+    });
+
+    row.querySelector('.tax-line-name').addEventListener('input', () => {
+      recalcInvoiceTotals();
+    });
+
+    row.querySelector('.tax-line-rate').addEventListener('input', () => {
+      recalcInvoiceTotals();
+    });
+
+    invoiceTaxLinesList.appendChild(row);
+    recalcInvoiceTotals();
+    return row;
+  }
+
   let currentRecurringProfile = null;
   let currentEditingInvoice = null;
   let invoiceFormClients = [];
@@ -176,10 +213,44 @@
     return window.QuoteCraftUtils.formatCurrency(amount, customCurrency || currencyCode);
   }
 
-  function renderInvoiceTaxBreakdown(containerEl, lineItems, subtotal, discountAmount, customCurrency) {
+  function renderInvoiceTaxBreakdown(containerEl, lineItems, subtotal, discountAmount, customCurrency, taxLines) {
     if (!containerEl) return;
     containerEl.innerHTML = '';
     const curr = customCurrency || currencyCode;
+
+    let parsedTaxLines = taxLines;
+    if (typeof parsedTaxLines === 'string') {
+      try { parsedTaxLines = JSON.parse(parsedTaxLines); } catch (_) { parsedTaxLines = null; }
+    }
+    if (Array.isArray(parsedTaxLines) && parsedTaxLines.length > 0) {
+      let totalTax = 0;
+      parsedTaxLines.forEach((tl) => {
+        const name = tl.name || tl.label || 'Tax';
+        const rateStr = tl.rate !== undefined && tl.rate !== null && !isNaN(Number(tl.rate)) ? `${tl.rate}%` : '';
+        const label = rateStr ? `${name} (${rateStr})` : name;
+        let amt = Number(tl.amount);
+        if (isNaN(amt) || amt === 0) {
+          const taxableBase = Math.max(0, (Number(subtotal) || 0) - (Number(discountAmount) || 0));
+          amt = Math.round(taxableBase * (Number(tl.rate) || 0)) / 100;
+        }
+        totalTax += amt;
+        const row = document.createElement('div');
+        row.className = 'tax-breakdown-row';
+        row.innerHTML = `<span class="tax-label">${escapeHtml(label)}</span><span class="tax-val">${money(amt, curr)}</span>`;
+        containerEl.appendChild(row);
+      });
+      if (parsedTaxLines.length > 1) {
+        const totalRow = document.createElement('div');
+        totalRow.className = 'tax-breakdown-row';
+        totalRow.style.fontWeight = '600';
+        totalRow.style.borderTop = '1px dashed var(--border)';
+        totalRow.style.paddingTop = '4px';
+        totalRow.style.marginTop = '2px';
+        totalRow.innerHTML = `<span class="tax-label">Total Tax</span><span class="tax-val">${money(totalTax, curr)}</span>`;
+        containerEl.appendChild(totalRow);
+      }
+      return;
+    }
 
     const subtotalCents = Math.round((Number(subtotal) || 0) * 100);
     const docDiscCents = Math.round((Number(discountAmount) || 0) * 100);
@@ -808,7 +879,7 @@
 
     // Render multi-rate tax breakdown
     const invTaxBreakdownEl = document.getElementById('invoiceDetailTaxBreakdown');
-    renderInvoiceTaxBreakdown(invTaxBreakdownEl, inv.line_items, inv.subtotal, inv.discount_amount, invCurr);
+    renderInvoiceTaxBreakdown(invTaxBreakdownEl, inv.line_items, inv.subtotal, inv.discount_amount, invCurr, inv.tax_lines);
 
     document.getElementById('invoiceDetailTotal').textContent = money(inv.total, invCurr);
     document.getElementById('invoiceDetailPaid').textContent = money(inv.amount_paid, invCurr);
@@ -1861,17 +1932,42 @@
 
     const ratio = subtotalCents > 0 ? (subtotalCents - docDiscCents) / subtotalCents : 1;
     let totalTaxCents = 0;
-    const brackets = new Map();
-    for (const item of lineItemsData) {
-      const rate = Number(item.tax_rate) || 0;
-      const amountCents = Math.round(item.amount * 100);
-      if (!brackets.has(rate)) brackets.set(rate, 0);
-      brackets.set(rate, brackets.get(rate) + amountCents);
-    }
-    for (const [rate, bNet] of brackets.entries()) {
-      const basisCents = Math.round(bNet * ratio);
-      const tCents = rate > 0 ? Math.round(basisCents * rate / 100) : 0;
-      totalTaxCents += tCents;
+    const multiTaxActive = invoiceTaxLinesEnabled && invoiceTaxLinesEnabled.checked;
+    let currentTaxLines = null;
+
+    if (multiTaxActive) {
+      const taxableBasisCents = Math.max(0, subtotalCents - docDiscCents);
+      const rows = invoiceTaxLinesList ? invoiceTaxLinesList.querySelectorAll('.tax-line-row') : [];
+      currentTaxLines = [];
+      rows.forEach((row) => {
+        const name = (row.querySelector('.tax-line-name')?.value || '').trim() || 'Tax';
+        const rate = Number(row.querySelector('.tax-line-rate')?.value) || 0;
+        const taxCents = rate > 0 ? Math.round(taxableBasisCents * rate / 100) : 0;
+        totalTaxCents += taxCents;
+        const amtSpan = row.querySelector('.tax-line-amount');
+        if (amtSpan) {
+          amtSpan.textContent = window.QuoteCraftUtils.formatCurrency(taxCents / 100, formCurrencyCode);
+        }
+        currentTaxLines.push({
+          name,
+          label: name,
+          rate,
+          amount: taxCents / 100,
+        });
+      });
+    } else {
+      const brackets = new Map();
+      for (const item of lineItemsData) {
+        const rate = Number(item.tax_rate) || 0;
+        const amountCents = Math.round(item.amount * 100);
+        if (!brackets.has(rate)) brackets.set(rate, 0);
+        brackets.set(rate, brackets.get(rate) + amountCents);
+      }
+      for (const [rate, bNet] of brackets.entries()) {
+        const basisCents = Math.round(bNet * ratio);
+        const tCents = rate > 0 ? Math.round(basisCents * rate / 100) : 0;
+        totalTaxCents += tCents;
+      }
     }
 
     const grandTotalCents = Math.max(0, subtotalCents - docDiscCents + totalTaxCents);
@@ -1880,12 +1976,13 @@
     if (invoiceTotalsDiscount) invoiceTotalsDiscount.textContent = window.QuoteCraftUtils.formatCurrency(docDiscCents / 100, formCurrencyCode);
     if (invoiceTotalsGrand) invoiceTotalsGrand.textContent = window.QuoteCraftUtils.formatCurrency(grandTotalCents / 100, formCurrencyCode);
 
-    renderInvoiceTaxBreakdown(invoiceTotalsTaxBreakdown, lineItemsData, subtotalCents / 100, docDiscCents / 100, formCurrencyCode);
+    renderInvoiceTaxBreakdown(invoiceTotalsTaxBreakdown, lineItemsData, subtotalCents / 100, docDiscCents / 100, formCurrencyCode, currentTaxLines);
 
     return {
       subtotal: subtotalCents / 100,
       discount_amount: docDiscCents / 100,
       tax_amount: totalTaxCents / 100,
+      tax_lines: currentTaxLines,
       total: grandTotalCents / 100,
       line_items: lineItemsData,
     };
@@ -2200,6 +2297,27 @@
       }
     }
 
+    if (inv.tax_lines) {
+      let lines = inv.tax_lines;
+      if (typeof lines === 'string') {
+        try { lines = JSON.parse(lines); } catch (_) { lines = null; }
+      }
+      if (Array.isArray(lines) && lines.length > 0) {
+        if (invoiceTaxLinesEnabled) invoiceTaxLinesEnabled.checked = true;
+        if (invoiceTaxLinesSection) invoiceTaxLinesSection.classList.remove('hidden');
+        if (invoiceTaxLinesList) invoiceTaxLinesList.innerHTML = '';
+        lines.forEach((l) => addInvoiceTaxLineRow(l.name || l.label, l.rate));
+      } else {
+        if (invoiceTaxLinesEnabled) invoiceTaxLinesEnabled.checked = false;
+        if (invoiceTaxLinesSection) invoiceTaxLinesSection.classList.add('hidden');
+        if (invoiceTaxLinesList) invoiceTaxLinesList.innerHTML = '';
+      }
+    } else {
+      if (invoiceTaxLinesEnabled) invoiceTaxLinesEnabled.checked = false;
+      if (invoiceTaxLinesSection) invoiceTaxLinesSection.classList.add('hidden');
+      if (invoiceTaxLinesList) invoiceTaxLinesList.innerHTML = '';
+    }
+
     await populateInvoiceLibrarySelect();
     recalcInvoiceTotals();
     showForm();
@@ -2279,6 +2397,7 @@
       discount_value: discountValue,
       discount: totals.discount_amount,
       tax_rate: taxRate,
+      tax_lines: totals.tax_lines,
       tax: totals.tax_amount,
       subtotal: totals.subtotal,
       total: totals.total,
@@ -2341,6 +2460,24 @@
   }
   if (invoiceTaxRate) {
     invoiceTaxRate.addEventListener('input', recalcInvoiceTotals);
+  }
+  if (invoiceTaxLinesEnabled) {
+    invoiceTaxLinesEnabled.addEventListener('change', () => {
+      if (invoiceTaxLinesSection) {
+        invoiceTaxLinesSection.classList.toggle('hidden', !invoiceTaxLinesEnabled.checked);
+      }
+      if (invoiceTaxLinesEnabled.checked && invoiceTaxLinesList && invoiceTaxLinesList.children.length === 0) {
+        addInvoiceTaxLineRow('GST', 5);
+        addInvoiceTaxLineRow('PST', 7);
+      }
+      recalcInvoiceTotals();
+    });
+  }
+  if (invoiceAddTaxLineBtn) {
+    invoiceAddTaxLineBtn.addEventListener('click', () => {
+      const row = addInvoiceTaxLineRow('', '');
+      if (row) row.querySelector('.tax-line-name')?.focus();
+    });
   }
   if (invoiceFormCurrency) {
     invoiceFormCurrency.addEventListener('change', () => {

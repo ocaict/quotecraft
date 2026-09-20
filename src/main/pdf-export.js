@@ -385,7 +385,32 @@ function drawItemsTable(ctx, items, currency) {
   ctx.y += 20;
 }
 
-function buildPdfTaxRows(lineItems, subtotal, discountAmount, currency) {
+function buildPdfTaxRows(lineItems, subtotal, discountAmount, currency, taxLines) {
+  let parsedTaxLines = taxLines;
+  if (typeof parsedTaxLines === 'string' && parsedTaxLines.trim()) {
+    try { parsedTaxLines = JSON.parse(parsedTaxLines); } catch (_) { parsedTaxLines = null; }
+  }
+  if (Array.isArray(parsedTaxLines) && parsedTaxLines.length > 0) {
+    const rows = [];
+    let totalTax = 0;
+    for (const tl of parsedTaxLines) {
+      const name = tl.name || tl.label || 'Tax';
+      const rateStr = tl.rate !== undefined && tl.rate !== null && !isNaN(Number(tl.rate)) ? `${tl.rate}%` : '';
+      const label = rateStr ? `${name} (${rateStr})` : name;
+      let amt = Number(tl.amount);
+      if (isNaN(amt) || amt === 0) {
+        const taxableBase = Math.max(0, (Number(subtotal) || 0) - (Number(discountAmount) || 0));
+        amt = Math.round(taxableBase * (Number(tl.rate) || 0)) / 100;
+      }
+      totalTax += amt;
+      rows.push([label, money(amt, currency)]);
+    }
+    if (parsedTaxLines.length > 1) {
+      rows.push(['Total Tax', money(totalTax, currency)]);
+    }
+    return rows;
+  }
+
   const subtotalCents = Math.round((Number(subtotal) || 0) * 100);
   const docDiscCents = Math.round((Number(discountAmount) || 0) * 100);
   const ratio = subtotalCents > 0 ? (subtotalCents - docDiscCents) / subtotalCents : 1;
@@ -656,7 +681,7 @@ function renderQuotePdf(quote, client, profile, opts) {
 
   const totalRows = [['Subtotal', money(quote.subtotal, currency)]];
   if (Number(quote.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(quote.discount_amount, currency)}`]);
-  const taxRows = buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency);
+  const taxRows = buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency, quote.tax_lines);
   taxRows.forEach((r) => totalRows.push(r));
 
   drawTotals(ctx, {
@@ -729,7 +754,7 @@ function renderInvoicePdf(invoice, client, profile, opts) {
 
   const totalRows = [['Subtotal', money(invoice.subtotal, currency)]];
   if (Number(invoice.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(invoice.discount_amount, currency)}`]);
-  const taxRows = buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency);
+  const taxRows = buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency, invoice.tax_lines);
   taxRows.forEach((r) => totalRows.push(r));
 
   const paid = Number(invoice.amount_paid) || 0;
@@ -1080,7 +1105,7 @@ function renderQuotePrintHtml(quote, client, profile) {
 
   const totalRows = [['Subtotal', money(quote.subtotal, currency)]];
   if (Number(quote.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(quote.discount_amount, currency)}`]);
-  buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency).forEach((r) => totalRows.push(r));
+  buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency, quote.tax_lines).forEach((r) => totalRows.push(r));
   const notesTerms = [quote.notes, quote.terms].filter(Boolean).join('\n\n') || null;
 
   return renderDocumentPrintHtml({
@@ -1135,7 +1160,7 @@ function renderInvoicePrintHtml(invoice, client, profile) {
 
   const totalRows = [['Subtotal', money(invoice.subtotal, currency)]];
   if (Number(invoice.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(invoice.discount_amount, currency)}`]);
-  buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency).forEach((r) => totalRows.push(r));
+  buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency, invoice.tax_lines).forEach((r) => totalRows.push(r));
 
   const paid = Number(invoice.amount_paid) || 0;
   const credited = Number(invoice.amount_credited) || 0;
@@ -1606,7 +1631,7 @@ function renderQuoteHtml(quote, client, profile) {
 
   const totalRows = [['Subtotal', money(quote.subtotal, currency)]];
   if (Number(quote.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(quote.discount_amount, currency)}`]);
-  const taxRows = buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency);
+  const taxRows = buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency, quote.tax_lines);
   taxRows.forEach((r) => totalRows.push(r));
 
   const acceptMethodLabels = {
@@ -2083,7 +2108,7 @@ function renderInvoiceHtml(invoice, client, profile) {
   if (Number(invoice.discount_amount) > 0) {
     totalRows.push(['Discount', `\u2212${money(invoice.discount_amount, currency)}`]);
   }
-  const taxRows = buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency);
+  const taxRows = buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency, invoice.tax_lines);
   taxRows.forEach((r) => totalRows.push(r));
 
   const paid = Number(invoice.amount_paid) || 0;

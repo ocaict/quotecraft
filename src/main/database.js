@@ -86,6 +86,8 @@ function createTables() {
       payment_details TEXT DEFAULT '',
       default_quote_acceptance_instructions TEXT DEFAULT 'To accept this quote, please reply to confirm via email or phone.',
       pdf_theme       TEXT NOT NULL DEFAULT 'classic',
+      number_padding  INTEGER NOT NULL DEFAULT 4,
+      number_include_year INTEGER NOT NULL DEFAULT 1,
       created_at      TEXT NOT NULL,
       updated_at      TEXT NOT NULL
     );
@@ -176,6 +178,7 @@ function createTables() {
       discount_type   TEXT NOT NULL DEFAULT 'none',
       discount_value  REAL NOT NULL DEFAULT 0,
       tax_rate        REAL NOT NULL DEFAULT 0,
+      tax_lines       TEXT DEFAULT NULL,
       quote_number_root TEXT DEFAULT NULL,
       version         INTEGER NOT NULL DEFAULT 1,
       is_latest       INTEGER NOT NULL DEFAULT 1,
@@ -230,6 +233,7 @@ function createTables() {
       discount_type   TEXT NOT NULL DEFAULT 'none',
       discount_value  REAL NOT NULL DEFAULT 0,
       tax_rate        REAL NOT NULL DEFAULT 0,
+      tax_lines       TEXT DEFAULT NULL,
       amount_credited REAL NOT NULL DEFAULT 0,
       edit_locked     INTEGER NOT NULL DEFAULT 0,
       recurring_profile_id INTEGER DEFAULT NULL,
@@ -1112,6 +1116,31 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 34,
+    up: () => {
+      const cols = new Set(db.exec(`PRAGMA table_info(company_profile)`)[0].values.map((v) => v[1]));
+      if (!cols.has('number_padding')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN number_padding INTEGER NOT NULL DEFAULT 4`);
+      }
+      if (!cols.has('number_include_year')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN number_include_year INTEGER NOT NULL DEFAULT 1`);
+      }
+    },
+  },
+  {
+    version: 35,
+    up: () => {
+      const qCols = new Set(db.exec(`PRAGMA table_info(quotes)`)[0].values.map((v) => v[1]));
+      if (!qCols.has('tax_lines')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN tax_lines TEXT DEFAULT NULL`);
+      }
+      const invCols = new Set(db.exec(`PRAGMA table_info(invoices)`)[0].values.map((v) => v[1]));
+      if (!invCols.has('tax_lines')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN tax_lines TEXT DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -1157,6 +1186,8 @@ function getCompanyProfile() {
     profile.reporting_currency = profile.default_currency || 'USD';
   }
   profile.pdf_theme = profile.pdf_theme || 'classic';
+  profile.number_padding = profile.number_padding != null ? Number(profile.number_padding) : 4;
+  profile.number_include_year = profile.number_include_year != null ? Number(profile.number_include_year) : 1;
   return profile;
 }
 
@@ -1196,6 +1227,12 @@ function saveCompanyProfile(profile) {
       ? profile.default_quote_acceptance_instructions
       : (existing && existing.default_quote_acceptance_instructions) || 'To accept this quote, please reply to confirm via email or phone.',
     pdf_theme: profile.pdf_theme !== undefined ? profile.pdf_theme : (existing && existing.pdf_theme) || 'classic',
+    number_padding: profile.number_padding !== undefined && profile.number_padding !== null && profile.number_padding !== ''
+      ? Number(profile.number_padding)
+      : (existing && existing.number_padding != null ? existing.number_padding : 4),
+    number_include_year: profile.number_include_year !== undefined && profile.number_include_year !== null && profile.number_include_year !== ''
+      ? (Number(profile.number_include_year) ? 1 : 0)
+      : (existing && existing.number_include_year != null ? existing.number_include_year : 1),
   };
 
   if (existing) {
@@ -1207,7 +1244,7 @@ function saveCompanyProfile(profile) {
         default_hourly_rate = ?, invoice_prefix = ?, invoice_start_number = ?, quote_prefix = ?,
         quote_start_number = ?, default_terms = ?, payment_details = ?,
         credit_note_prefix = ?, credit_note_start_number = ?, default_quote_acceptance_instructions = ?,
-        pdf_theme = ?, updated_at = ?
+        pdf_theme = ?, number_padding = ?, number_include_year = ?, updated_at = ?
        WHERE id = 1`,
       [
         fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
@@ -1216,7 +1253,7 @@ function saveCompanyProfile(profile) {
         fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
-        fields.pdf_theme, now,
+        fields.pdf_theme, fields.number_padding, fields.number_include_year, now,
       ]
     );
   } else {
@@ -1226,8 +1263,9 @@ function saveCompanyProfile(profile) {
         postal_code, country, phone, email, website, tax_id, default_currency,
         reporting_currency, default_tax_rate, default_hourly_rate, invoice_prefix, invoice_start_number, quote_prefix,
         quote_start_number, default_terms, payment_details,
-        credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, pdf_theme, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, pdf_theme,
+        number_padding, number_include_year, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         1, fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
@@ -1235,7 +1273,7 @@ function saveCompanyProfile(profile) {
         fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
-        fields.pdf_theme, now, now,
+        fields.pdf_theme, fields.number_padding, fields.number_include_year, now, now,
       ]
     );
   }
@@ -3508,9 +3546,10 @@ function formatElapsedLabel(elapsedMs) {
 // increments and is never decremented, so even if a quote is deleted the
 // number is never reused. quote_number is UNIQUE, enforcing this hard.
 
-function padNumber(n) {
+function padNumber(n, padding) {
+  const pad = typeof padding === 'number' && padding >= 1 ? padding : 4;
   const s = String(n);
-  return s.length >= 4 ? s : s.padStart(4, '0');
+  return s.length >= pad ? s : s.padStart(pad, '0');
 }
 
 function getQuotePrefix() {
@@ -3525,7 +3564,10 @@ function getQuoteStartNumber() {
 
 function nextQuoteNumber() {
   const now = new Date();
-  const year = now.getFullYear();
+  const profile = getCompanyProfile();
+  const includeYear = profile && profile.number_include_year !== undefined ? Boolean(Number(profile.number_include_year)) : true;
+  const padding = profile && profile.number_padding !== undefined ? Number(profile.number_padding) : 4;
+  const year = includeYear ? now.getFullYear() : 0;
   const prefix = getQuotePrefix();
   const startNumber = getQuoteStartNumber();
 
@@ -3546,8 +3588,8 @@ function nextQuoteNumber() {
       );
     }
     const next = last + 1;
-    const padded = padNumber(next);
-    const quoteNumber = `${prefix}${year}-${padded}`;
+    const padded = padNumber(next, padding);
+    const quoteNumber = includeYear ? `${prefix}${now.getFullYear()}-${padded}` : `${prefix}${padded}`;
     db.run(
       `UPDATE sequence_counters SET last_number = ? WHERE prefix = ? AND year = ?`,
       [next, prefix, year]
@@ -3630,6 +3672,7 @@ function duplicateQuote(id) {
     discount_value: Number(source.discount_value) || 0,
     discount: Number(source.discount_amount) || 0,
     tax_rate: Number(source.tax_rate) || 0,
+    tax_lines: source.tax_lines || null,
     tax: Number(source.tax_amount) || 0,
     subtotal: Number(source.subtotal) || 0,
     total: Number(source.total) || 0,
@@ -3668,14 +3711,18 @@ function createQuote(data, lineItems) {
   const quoteNumber = nextQuoteNumber();
   let createdQuoteId = null;
 
+  const taxLinesVal = data.tax_lines !== undefined && data.tax_lines !== null
+    ? (typeof data.tax_lines === 'string' ? data.tax_lines : JSON.stringify(data.tax_lines))
+    : null;
+
   db.run('BEGIN');
   try {
     const insertRes = db.run(
       `INSERT INTO quotes (
         quote_number, quote_number_root, version, is_latest, client_id, contact_id, project_id, status, date_created, valid_until,
-        subtotal, discount_amount, discount_type, discount_value, tax_rate,
+        subtotal, discount_amount, discount_type, discount_value, tax_rate, tax_lines,
         tax_amount, total, currency, exchange_rate, notes, terms, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         quoteNumber,
         quoteNumber,
@@ -3692,6 +3739,7 @@ function createQuote(data, lineItems) {
         data.discount_type || 'none',
         Number(data.discount_value) || 0,
         Number(data.tax_rate) || 0,
+        taxLinesVal,
         Number(data.tax) || 0,
         Number(data.total) || 0,
         currency,
@@ -3797,6 +3845,10 @@ function updateQuote(id, data, lineItems) {
     const nextVersion = (vRes.length && vRes[0].values.length > 0 ? Number(vRes[0].values[0][0]) : 1) + 1;
     const newQuoteNumber = `${root} v${nextVersion}`;
 
+    const taxLinesVal = data.tax_lines !== undefined
+      ? (data.tax_lines ? (typeof data.tax_lines === 'string' ? data.tax_lines : JSON.stringify(data.tax_lines)) : null)
+      : (existing ? (typeof existing.tax_lines === 'string' ? existing.tax_lines : (existing.tax_lines ? JSON.stringify(existing.tax_lines) : null)) : null);
+
     db.run('BEGIN');
     try {
       db.run(`UPDATE quotes SET is_latest = 0 WHERE quote_number_root = ? OR quote_number = ?`, [root, root]);
@@ -3804,9 +3856,9 @@ function updateQuote(id, data, lineItems) {
       const insertRes = db.run(
         `INSERT INTO quotes (
           quote_number, quote_number_root, version, is_latest, client_id, contact_id, project_id, status, date_created, valid_until,
-          subtotal, discount_amount, discount_type, discount_value, tax_rate,
+          subtotal, discount_amount, discount_type, discount_value, tax_rate, tax_lines,
           tax_amount, total, currency, exchange_rate, notes, terms, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newQuoteNumber,
           root,
@@ -3823,6 +3875,7 @@ function updateQuote(id, data, lineItems) {
           data.discount_type || 'none',
           Number(data.discount_value) || 0,
           Number(data.tax_rate) || 0,
+          taxLinesVal,
           Number(data.tax) || 0,
           Number(data.total) || 0,
           currency,
@@ -3870,6 +3923,10 @@ function updateQuote(id, data, lineItems) {
     }
   }
 
+  const taxLinesVal = data.tax_lines !== undefined
+    ? (data.tax_lines ? (typeof data.tax_lines === 'string' ? data.tax_lines : JSON.stringify(data.tax_lines)) : null)
+    : (existing ? (typeof existing.tax_lines === 'string' ? existing.tax_lines : (existing.tax_lines ? JSON.stringify(existing.tax_lines) : null)) : null);
+
   // Draft in-place update
   db.run('BEGIN');
   try {
@@ -3877,7 +3934,7 @@ function updateQuote(id, data, lineItems) {
       `UPDATE quotes SET
         client_id = ?, contact_id = ?, project_id = ?, date_created = ?, valid_until = ?,
         subtotal = ?, discount_amount = ?, discount_type = ?,
-        discount_value = ?, tax_rate = ?, tax_amount = ?, total = ?,
+        discount_value = ?, tax_rate = ?, tax_lines = ?, tax_amount = ?, total = ?,
         currency = ?, exchange_rate = ?, notes = ?, terms = ?, updated_at = ?
        WHERE id = ?`,
       [
@@ -3891,6 +3948,7 @@ function updateQuote(id, data, lineItems) {
         data.discount_type || 'none',
         Number(data.discount_value) || 0,
         Number(data.tax_rate) || 0,
+        taxLinesVal,
         Number(data.tax) || 0,
         Number(data.total) || 0,
         currency,
@@ -3948,6 +4006,9 @@ function updateQuote(id, data, lineItems) {
 function getQuote(id) {
   const quote = rowToObject(db.exec('SELECT * FROM quotes WHERE id = ?', [id]));
   if (!quote) return null;
+  if (quote.tax_lines && typeof quote.tax_lines === 'string') {
+    try { quote.tax_lines = JSON.parse(quote.tax_lines); } catch (_) {}
+  }
   quote.line_items = getQuoteLineItems(id);
   const client = getClient(quote.client_id);
   quote.client = client ? { id: client.id, name: client.name, company_name: client.company_name, email: client.email, contacts: client.contacts } : null;
@@ -4136,7 +4197,10 @@ function getInvoiceStartNumber() {
 
 function nextInvoiceNumber() {
   const now = new Date();
-  const year = now.getFullYear();
+  const profile = getCompanyProfile();
+  const includeYear = profile && profile.number_include_year !== undefined ? Boolean(Number(profile.number_include_year)) : true;
+  const padding = profile && profile.number_padding !== undefined ? Number(profile.number_padding) : 4;
+  const year = includeYear ? now.getFullYear() : 0;
   const prefix = getInvoicePrefix();
   const startNumber = getInvoiceStartNumber();
 
@@ -4157,7 +4221,8 @@ function nextInvoiceNumber() {
       );
     }
     const next = last + 1;
-    const invoiceNumber = `${prefix}${year}-${padNumber(next)}`;
+    const padded = padNumber(next, padding);
+    const invoiceNumber = includeYear ? `${prefix}${now.getFullYear()}-${padded}` : `${prefix}${padded}`;
     db.run(
       `UPDATE sequence_counters SET last_number = ? WHERE prefix = ? AND year = ?`,
       [next, prefix, year]
@@ -4293,6 +4358,9 @@ function getInvoiceLineItems(invoiceId) {
 function getInvoice(id) {
   const invoice = rowToObject(db.exec('SELECT * FROM invoices WHERE id = ?', [id]));
   if (!invoice) return null;
+  if (invoice.tax_lines && typeof invoice.tax_lines === 'string') {
+    try { invoice.tax_lines = JSON.parse(invoice.tax_lines); } catch (_) {}
+  }
   invoice.line_items = getInvoiceLineItems(id);
   invoice.payments = getPaymentHistory(id);
   invoice.credit_notes = getCreditNotesForInvoice(id);
@@ -4502,13 +4570,17 @@ function updateInvoice(id, data, lineItems) {
   const credited = computeCreditedTotal(id);
   const balanceDue = Math.max(0, Math.round((total + credited) * 100) / 100);
 
+  const taxLinesVal = data.tax_lines !== undefined
+    ? (data.tax_lines ? (typeof data.tax_lines === 'string' ? data.tax_lines : JSON.stringify(data.tax_lines)) : null)
+    : (existing ? (typeof existing.tax_lines === 'string' ? existing.tax_lines : (existing.tax_lines ? JSON.stringify(existing.tax_lines) : null)) : null);
+
   db.run('BEGIN');
   try {
     db.run(
       `UPDATE invoices SET
         client_id = ?, contact_id = ?, project_id = ?, date_created = ?, date_due = ?,
         subtotal = ?, discount_amount = ?, discount_type = ?,
-        discount_value = ?, tax_rate = ?, tax_amount = ?, total = ?, balance_due = ?,
+        discount_value = ?, tax_rate = ?, tax_lines = ?, tax_amount = ?, total = ?, balance_due = ?,
         currency = ?, exchange_rate = ?, notes = ?, terms = ?, updated_at = ?
        WHERE id = ?`,
       [
@@ -4522,6 +4594,7 @@ function updateInvoice(id, data, lineItems) {
         data.discount_type || 'none',
         Number(data.discount_value) || 0,
         Number(data.tax_rate) || 0,
+        taxLinesVal,
         Number(data.tax !== undefined ? data.tax : data.tax_amount) || 0,
         total,
         balanceDue,
@@ -4839,16 +4912,17 @@ function duplicateInvoice(id) {
 
   db.run('BEGIN');
   try {
+    const sourceTaxLines = source.tax_lines ? (typeof source.tax_lines === 'string' ? source.tax_lines : JSON.stringify(source.tax_lines)) : null;
     db.run(
       `INSERT INTO invoices (
          invoice_number, quote_id, client_id, contact_id, project_id, status,
          date_created, date_due, date_sent,
-         subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
+         subtotal, tax_rate, tax_lines, tax_amount, discount_amount, total, amount_paid, balance_due,
          currency, exchange_rate,
          notes, terms,
          invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
          recurring_profile_id, is_recurring, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         null,
@@ -4860,6 +4934,8 @@ function duplicateInvoice(id) {
         dueDate,
         null,
         Number(source.subtotal) || 0,
+        Number(source.tax_rate) || 0,
+        sourceTaxLines,
         Number(source.tax_amount) || 0,
         Number(source.discount_amount) || 0,
         Number(source.total) || 0,
@@ -5113,14 +5189,15 @@ function convertQuoteToInvoice(quoteId, overrides) {
   // Full invoice conversion
   db.run('BEGIN');
   try {
+    const quoteTaxLinesVal = quote.tax_lines ? (typeof quote.tax_lines === 'string' ? quote.tax_lines : JSON.stringify(quote.tax_lines)) : null;
     db.run(
       `INSERT INTO invoices (
         invoice_number, quote_id, client_id, contact_id, project_id, status, date_created, date_sent, date_due,
-        subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
+        subtotal, tax_rate, tax_lines, tax_amount, discount_amount, total, amount_paid, balance_due,
         currency, exchange_rate, notes, terms,
         invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         quoteId,
@@ -5132,6 +5209,8 @@ function convertQuoteToInvoice(quoteId, overrides) {
         status === 'sent' ? now : null,
         dueDate,
         Number(quote.subtotal) || 0,
+        Number(quote.tax_rate) || 0,
+        quoteTaxLinesVal,
         Number(quote.tax_amount) || 0,
         Number(quote.discount_amount) || 0,
         Number(quote.total) || 0,
@@ -6304,7 +6383,10 @@ function getCreditNoteStartNumber() {
 
 function nextCreditNoteNumber() {
   const now = new Date();
-  const year = now.getFullYear();
+  const profile = getCompanyProfile();
+  const includeYear = profile && profile.number_include_year !== undefined ? Boolean(Number(profile.number_include_year)) : true;
+  const padding = profile && profile.number_padding !== undefined ? Number(profile.number_padding) : 4;
+  const year = includeYear ? now.getFullYear() : 0;
   const prefix = getCreditNotePrefix();
   const startNumber = getCreditNoteStartNumber();
 
@@ -6325,7 +6407,8 @@ function nextCreditNoteNumber() {
       );
     }
     const next = last + 1;
-    const creditNoteNumber = `${prefix}${year}-${padNumber(next)}`;
+    const padded = padNumber(next, padding);
+    const creditNoteNumber = includeYear ? `${prefix}${now.getFullYear()}-${padded}` : `${prefix}${padded}`;
     db.run(
       `UPDATE sequence_counters SET last_number = ? WHERE prefix = ? AND year = ?`,
       [next, prefix, year]

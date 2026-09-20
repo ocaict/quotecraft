@@ -943,6 +943,17 @@
               </div>
             </div>
 
+            <div class="multi-tax-container">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <input type="checkbox" id="quoteTaxLinesEnabled" name="tax_lines_enabled" style="width: auto; cursor: pointer;">
+                <label for="quoteTaxLinesEnabled" style="margin: 0; cursor: pointer; font-weight: 500;">Use multi-tax breakdown (e.g. GST + PST)</label>
+              </div>
+              <div id="quoteTaxLinesSection" class="multi-tax-box hidden">
+                <div id="quoteTaxLinesList" class="tax-lines-list"></div>
+                <button type="button" id="quoteAddTaxLineBtn" class="btn btn-secondary btn-sm">+ Add Tax Line</button>
+              </div>
+            </div>
+
             <div class="totals-panel">
               <div class="total-row">
                 <span>Subtotal</span>
@@ -1318,6 +1329,17 @@
                 <input type="number" id="invoiceTaxRate" name="tax_rate" min="0" max="100" step="0.01" placeholder="0">
                 <span class="field-error" data-error-for="tax_rate"></span>
                 <span class="hint">Applied to new rows by default. Editable per line item.</span>
+              </div>
+            </div>
+
+            <div class="multi-tax-container">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <input type="checkbox" id="invoiceTaxLinesEnabled" name="tax_lines_enabled" style="width: auto; cursor: pointer;">
+                <label for="invoiceTaxLinesEnabled" style="margin: 0; cursor: pointer; font-weight: 500;">Use multi-tax breakdown (e.g. GST + PST)</label>
+              </div>
+              <div id="invoiceTaxLinesSection" class="multi-tax-box hidden">
+                <div id="invoiceTaxLinesList" class="tax-lines-list"></div>
+                <button type="button" id="invoiceAddTaxLineBtn" class="btn btn-secondary btn-sm">+ Add Tax Line</button>
               </div>
             </div>
 
@@ -1875,7 +1897,14 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="time-view-toolbar" style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px;">
+        <div class="time-view-toggle">
+          <button type="button" id="timeListViewBtn" class="btn active">List View</button>
+          <button type="button" id="timeWeeklyViewBtn" class="btn">Weekly View</button>
+        </div>
+      </div>
+
+      <div class="card" id="timeEntriesCard">
         <div class="items-table-wrap">
           <table class="data-table" id="timeEntriesTable">
             <thead>
@@ -1897,6 +1926,8 @@
           </table>
         </div>
       </div>
+
+      <div id="timeWeeklyView" class="hidden"></div>
     </section>
 
     <section id="page-profit-loss" class="page">
@@ -2681,6 +2712,24 @@
               <label for="credit_note_start_number">Credit note start number</label>
               <input type="number" id="credit_note_start_number" name="credit_note_start_number" min="1" step="1" value="1">
               <span class="field-error" data-error-for="credit_note_start_number"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="number_padding">Number padding (digits)</label>
+              <input type="number" id="number_padding" name="number_padding" min="1" max="10" step="1" value="4">
+              <span class="field-hint">e.g. 4 → INV-0001. Numbers are zero-padded to this width.</span>
+            </div>
+            <div class="field">
+              <label>Include year in number</label>
+              <div class="toggle-row">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="number_include_year" name="number_include_year" value="1">
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="toggle-label">Prefix with current year (e.g. INV-2025-0001)</span>
+              </div>
             </div>
           </div>
         </div>

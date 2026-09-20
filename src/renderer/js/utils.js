@@ -392,4 +392,70 @@ window.QuoteCraftUtils = {
 
     return { sync };
   },
+
+  /**
+   * Adds keyboard navigation to a <tbody> element.
+   * - Arrow Up / Down: moves focus to prev/next row
+   * - Home / End: jump to first / last row
+   * - Enter / Space: activates the first actionable button in the focused row
+   *
+   * @param {HTMLElement} tbody - the <tbody> to attach navigation to
+   * @param {object} [opts]
+   * @param {string} [opts.actionSelector] - CSS selector for primary action (default: 'button:not([disabled])')
+   * @param {Function} [opts.onActivate] - optional callback(row, event) instead of clicking primary action
+   */
+  addTableKeyNav(tbody, opts) {
+    if (!tbody) return;
+    opts = opts || {};
+    const actionSel = opts.actionSelector || 'button:not([disabled])';
+
+    function rows() {
+      return Array.from(tbody.querySelectorAll('tr[tabindex]'));
+    }
+
+    function focusRow(tr) {
+      if (tr) tr.focus();
+    }
+
+    function refreshTabIndex() {
+      tbody.querySelectorAll('tr').forEach(function (tr) {
+        if (!tr.hasAttribute('tabindex')) {
+          tr.setAttribute('tabindex', '0');
+        }
+      });
+    }
+
+    var observer = new MutationObserver(refreshTabIndex);
+    observer.observe(tbody, { childList: true });
+    refreshTabIndex();
+
+    tbody.addEventListener('keydown', function (e) {
+      var all = rows();
+      var focused = document.activeElement;
+      var idx = all.indexOf(focused);
+      if (idx === -1) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusRow(all[Math.min(idx + 1, all.length - 1)]);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusRow(all[Math.max(idx - 1, 0)]);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        focusRow(all[0]);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        focusRow(all[all.length - 1]);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (typeof opts.onActivate === 'function') {
+          opts.onActivate(focused, e);
+        } else {
+          var btn = focused.querySelector(actionSel);
+          if (btn) btn.click();
+        }
+      }
+    });
+  },
 };

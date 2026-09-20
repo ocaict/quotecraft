@@ -30,6 +30,10 @@
   var kpiBilled = document.getElementById('timeBilledHours');
 
   var tableBody = document.getElementById('timeEntriesBody');
+  var listViewBtn = document.getElementById('timeListViewBtn');
+  var weeklyViewBtn = document.getElementById('timeWeeklyViewBtn');
+  var entriesCard = document.getElementById('timeEntriesCard');
+  var weeklyViewContainer = document.getElementById('timeWeeklyView');
 
   var modal = document.getElementById('timeEntryModal');
   var modalTitle = document.getElementById('timeEntryModalTitle');
@@ -57,6 +61,8 @@
   var rateAutoFilled = false;
   var formReadonly = false;
   var loaded = false;
+  var viewMode = 'list';
+  var lastEntries = [];
 
   function el(id) {
     return document.getElementById(id);
@@ -239,6 +245,171 @@
     });
   }
 
+  function getWeekRange(dateStr) {
+    if (!dateStr) return null;
+    var parts = dateStr.split('-');
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    if (isNaN(d.getTime())) return null;
+    var day = d.getDay();
+    var diffToMonday = day === 0 ? -6 : 1 - day;
+    var monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMonday);
+    var sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return {
+      monday: monday,
+      sunday: sunday,
+      mondayStr: getISODate(monday),
+      sundayStr: getISODate(sunday),
+    };
+  }
+
+  function renderWeeklyView(entries) {
+    if (!weeklyViewContainer) return;
+    weeklyViewContainer.innerHTML = '';
+
+    if (!entries.length) {
+      weeklyViewContainer.innerHTML =
+        '<div class="card" style="text-align:center;color:var(--text-muted);padding:32px;">No time entries found matching the selected criteria.</div>';
+      return;
+    }
+
+    var groupsByWeek = {};
+    var weekKeys = [];
+
+    entries.forEach(function (entry) {
+      var range = getWeekRange(entry.date);
+      var key = range ? range.mondayStr : 'unknown';
+      if (!groupsByWeek[key]) {
+        groupsByWeek[key] = {
+          range: range,
+          entries: [],
+          totalHours: 0,
+          totalAmount: 0,
+        };
+        weekKeys.push(key);
+      }
+      groupsByWeek[key].entries.push(entry);
+      groupsByWeek[key].totalHours += Number(entry.hours || 0);
+      groupsByWeek[key].totalAmount += Number(entry.amount || 0);
+    });
+
+    weekKeys.sort(function (a, b) {
+      return b.localeCompare(a);
+    });
+
+    weekKeys.forEach(function (key) {
+      var group = groupsByWeek[key];
+      var weekEl = document.createElement('div');
+      weekEl.className = 'card weekly-group';
+
+      var label = group.range
+        ? 'Week of ' + window.QuoteCraftUtils.formatDate(group.range.mondayStr) + ' – ' + window.QuoteCraftUtils.formatDate(group.range.sundayStr)
+        : 'Other Entries';
+
+      var countLabel = group.entries.length + ' ' + (group.entries.length === 1 ? 'entry' : 'entries');
+
+      weekEl.innerHTML =
+        '<div class="weekly-group-header">' +
+        '  <div class="weekly-group-title">' +
+        '    <span>' + escapeHtml(label) + '</span>' +
+        '    <span class="weekly-stat-badge">' + countLabel + '</span>' +
+        '  </div>' +
+        '  <div class="weekly-group-summary">' +
+        '    <span class="weekly-stat-badge"><strong>' + group.totalHours.toFixed(2) + '</strong> hrs</span>' +
+        '    <span class="weekly-stat-amount">' + formatCurrency(group.totalAmount) + '</span>' +
+        '  </div>' +
+        '</div>' +
+        '<div class="items-table-wrap">' +
+        '  <table class="data-table">' +
+        '    <thead>' +
+        '      <tr>' +
+        '        <th>Date</th>' +
+        '        <th>Client</th>' +
+        '        <th>Project</th>' +
+        '        <th>Description</th>' +
+        '        <th>Hours</th>' +
+        '        <th>Rate</th>' +
+        '        <th>Amount</th>' +
+        '        <th>Billed</th>' +
+        '        <th class="th-actions">Actions</th>' +
+        '      </tr>' +
+        '    </thead>' +
+        '    <tbody></tbody>' +
+        '  </table>' +
+        '</div>';
+
+      var tbody = weekEl.querySelector('tbody');
+      group.entries.forEach(function (entry) {
+        var tr = document.createElement('tr');
+        var billed = Number(entry.billed) ? 1 : 0;
+        var statusCell = billed
+          ? '<span class="badge status-billed">Billed</span>' +
+            (entry.invoice_number
+              ? ' <a href="#" class="time-invoice-link" title="View the invoice this entry was billed on">' + escapeHtml(entry.invoice_number) + '</a>'
+              : '')
+          : '<span class="badge status-unbilled">Unbilled</span>';
+
+        tr.innerHTML =
+          '<td style="white-space: nowrap;">' + window.QuoteCraftUtils.formatDate(entry.date) + '</td>' +
+          '<td>' + escapeHtml(entry.client_name || '') + (entry.client_company ? ' <span class="time-entry-hint">(' + escapeHtml(entry.client_company) + ')</span>' : '') + '</td>' +
+          '<td>' + escapeHtml(entry.project_name || '—') + '</td>' +
+          '<td>' + escapeHtml(entry.description || '—') + '</td>' +
+          '<td style="text-align: right;">' + Number(entry.hours || 0).toFixed(2) + '</td>' +
+          '<td style="text-align: right;">' + formatCurrency(entry.hourly_rate) + '</td>' +
+          '<td style="text-align: right;">' + formatCurrency(entry.amount) + '</td>' +
+          '<td>' + statusCell + '</td>' +
+          '<td class="th-actions">' +
+          '  <div class="time-actions">' +
+          '    <button type="button" class="expense-action-btn edit-btn">Edit</button>' +
+          '    <button type="button" class="expense-action-btn delete delete-btn">Delete</button>' +
+          '  </div>' +
+          '</td>';
+
+        var invoiceLink = tr.querySelector('.time-invoice-link');
+        if (invoiceLink) {
+          invoiceLink.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            window.QuoteCraftUtils.goToPage('invoices');
+            setTimeout(function () {
+              window.dispatchEvent(new CustomEvent('qc-open-invoice', { detail: entry.invoice_id }));
+            }, 50);
+          });
+        }
+
+        var editBtn = tr.querySelector('.edit-btn');
+        editBtn.addEventListener('click', function () {
+          openEntryModal(entry);
+        });
+
+        var deleteBtn = tr.querySelector('.delete-btn');
+        deleteBtn.addEventListener('click', function () {
+          handleDelete(entry);
+        });
+
+        tbody.appendChild(tr);
+      });
+
+      if (window.QuoteCraftUtils) {
+        window.QuoteCraftUtils.addTableKeyNav(tbody);
+      }
+
+      weeklyViewContainer.appendChild(weekEl);
+    });
+  }
+
+  function renderCurrentView() {
+    if (viewMode === 'weekly') {
+      if (entriesCard) entriesCard.classList.add('hidden');
+      if (weeklyViewContainer) weeklyViewContainer.classList.remove('hidden');
+      renderWeeklyView(lastEntries);
+    } else {
+      if (weeklyViewContainer) weeklyViewContainer.classList.add('hidden');
+      if (entriesCard) entriesCard.classList.remove('hidden');
+      renderTable(lastEntries);
+    }
+  }
+
   function renderSummary(summary) {
     if (!summary) return;
     baseCurrency = summary.baseCurrency || baseCurrency;
@@ -256,7 +427,8 @@
         window.electronAPI.getTimeEntriesSummary(getFilterPayload()),
       ]);
       if (listRes.ok) {
-        renderTable(listRes.entries || []);
+        lastEntries = listRes.entries || [];
+        renderCurrentView();
       }
       if (summaryRes.ok) {
         renderSummary(summaryRes.summary);
@@ -531,6 +703,26 @@
   });
   form.addEventListener('submit', handleSubmit);
 
+  if (listViewBtn) {
+    listViewBtn.addEventListener('click', function () {
+      if (viewMode === 'list') return;
+      viewMode = 'list';
+      listViewBtn.classList.add('active');
+      if (weeklyViewBtn) weeklyViewBtn.classList.remove('active');
+      renderCurrentView();
+    });
+  }
+
+  if (weeklyViewBtn) {
+    weeklyViewBtn.addEventListener('click', function () {
+      if (viewMode === 'weekly') return;
+      viewMode = 'weekly';
+      weeklyViewBtn.classList.add('active');
+      if (listViewBtn) listViewBtn.classList.remove('active');
+      renderCurrentView();
+    });
+  }
+
   document.addEventListener('pagechange', function (e) {
     if (e.detail === 'time-entries') {
       if (!loaded) {
@@ -542,4 +734,9 @@
       }
     }
   });
+
+  // Keyboard navigation
+  if (window.QuoteCraftUtils && tableBody) {
+    window.QuoteCraftUtils.addTableKeyNav(tableBody);
+  }
 })();

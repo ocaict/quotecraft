@@ -1043,6 +1043,68 @@ body.table-density-compact .badge-status {
 .budget-remaining { }
 .over-budget-text { color: var(--error, #ef4444); font-weight: 600; }
 
+/* Multi-tax Breakdown Editor */
+.multi-tax-container {
+  margin-top: 14px;
+}
+
+.multi-tax-box {
+  background: var(--bg-secondary, #161b22);
+  border: 1px solid var(--border, #30363d);
+  border-radius: var(--radius-md, 6px);
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.tax-lines-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tax-line-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tax-line-row input[type="text"] {
+  flex: 2;
+}
+
+.tax-line-row .tax-line-rate-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.tax-line-row .tax-line-amount {
+  min-width: 80px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-muted, #8b949e);
+  font-family: var(--font-mono, monospace);
+}
+
+.tax-line-row .tax-line-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #8b949e);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.tax-line-row .tax-line-remove:hover {
+  color: #f85149;
+  background: rgba(248, 81, 73, 0.1);
+}
+
+
 
 
 

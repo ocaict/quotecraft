@@ -106,6 +106,8 @@
       default_currency: 'USD',
       reporting_currency: 'USD',
       pdf_theme: 'classic',
+      number_padding: 4,
+      number_include_year: 1,
     };
     const data = Object.assign({}, defaults, profile || {});
     if (!data.reporting_currency) {
@@ -122,7 +124,11 @@
         el.type !== 'radio' &&
         !isRadioGroup(el)
       ) {
-        el.value = data[el.name] !== undefined && data[el.name] !== null ? data[el.name] : '';
+        if (el.type === 'checkbox') {
+          el.checked = Boolean(Number(data[el.name]));
+        } else {
+          el.value = data[el.name] !== undefined && data[el.name] !== null ? data[el.name] : '';
+        }
       }
     }
     if (window.QuoteCraftTheme) {
@@ -176,7 +182,11 @@
         el.type !== 'radio' &&
         !isRadioGroup(el)
       ) {
-        data[el.name] = el.value;
+        if (el.type === 'checkbox') {
+          data[el.name] = el.checked ? 1 : 0;
+        } else {
+          data[el.name] = el.value;
+        }
       }
     }
     const selectedPdfTheme = document.querySelector('input[name="pdf_theme"]:checked');
@@ -187,6 +197,7 @@
     data.invoice_start_number = data.invoice_start_number === '' ? '' : Number(data.invoice_start_number);
     data.quote_start_number = data.quote_start_number === '' ? '' : Number(data.quote_start_number);
     data.credit_note_start_number = data.credit_note_start_number === '' ? '' : Number(data.credit_note_start_number);
+    data.number_padding = data.number_padding === '' ? 4 : Number(data.number_padding);
     return data;
   }
 

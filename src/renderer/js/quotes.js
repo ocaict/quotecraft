@@ -28,6 +28,65 @@
   const totalsTaxBreakdown = document.getElementById('totalsTaxBreakdown');
   const totalsGrand = document.getElementById('totalsGrand');
 
+  const quoteTaxLinesEnabled = document.getElementById('quoteTaxLinesEnabled');
+  const quoteTaxLinesSection = document.getElementById('quoteTaxLinesSection');
+  const quoteTaxLinesList = document.getElementById('quoteTaxLinesList');
+  const quoteAddTaxLineBtn = document.getElementById('quoteAddTaxLineBtn');
+
+  function addQuoteTaxLineRow(name = '', rate = '') {
+    if (!quoteTaxLinesList) return null;
+    const row = document.createElement('div');
+    row.className = 'tax-line-row';
+    row.innerHTML = `
+      <input type="text" class="tax-line-name" placeholder="Tax name (e.g. GST)" value="${escapeHtml(name)}">
+      <div class="tax-line-rate-wrap">
+        <input type="number" class="tax-line-rate" placeholder="0" min="0" max="100" step="0.01" value="${rate !== '' && rate !== null && !isNaN(rate) ? rate : ''}">
+        <span style="color: var(--text-muted); font-size: 13px;">%</span>
+      </div>
+      <span class="tax-line-amount">$0.00</span>
+      <button type="button" class="tax-line-remove" title="Remove tax line">✕</button>
+    `;
+
+    row.querySelector('.tax-line-remove').addEventListener('click', () => {
+      row.remove();
+      recalcTotals();
+    });
+
+    row.querySelector('.tax-line-name').addEventListener('input', () => {
+      recalcTotals();
+    });
+
+    row.querySelector('.tax-line-rate').addEventListener('input', () => {
+      recalcTotals();
+    });
+
+    quoteTaxLinesList.appendChild(row);
+    recalcTotals();
+    return row;
+  }
+
+  function collectQuoteTaxLines() {
+    if (!quoteTaxLinesEnabled || !quoteTaxLinesEnabled.checked) return null;
+    const rows = quoteTaxLinesList ? quoteTaxLinesList.querySelectorAll('.tax-line-row') : [];
+    const lines = [];
+    const subtotalCents = totalCentsOfCurrentRows();
+    const discountCents = docDiscountCentsOfCurrentRows();
+    const taxableBasisCents = Math.max(0, subtotalCents - discountCents);
+
+    rows.forEach((row) => {
+      const name = (row.querySelector('.tax-line-name')?.value || '').trim() || 'Tax';
+      const rate = Number(row.querySelector('.tax-line-rate')?.value) || 0;
+      const taxCents = rate > 0 ? Math.round(taxableBasisCents * rate / 100) : 0;
+      lines.push({
+        name,
+        label: name,
+        rate,
+        amount: taxCents / 100,
+      });
+    });
+    return lines.length > 0 ? lines : null;
+  }
+
   const newQuoteBtn = document.getElementById('newQuoteBtn');
   const quotesBackBtn = document.getElementById('quotesBackBtn');
   const quoteList = document.getElementById('quoteList');
@@ -344,12 +403,56 @@
     }
     const subtotalCents = totalCentsOfCurrentRows();
     const discountCents = docDiscountCentsOfCurrentRows();
-    const { list, totalTaxCents } = taxBreakdownOfCurrentRows();
+
+    let totalTaxCents = 0;
+    const multiTaxActive = quoteTaxLinesEnabled && quoteTaxLinesEnabled.checked;
+
+    if (multiTaxActive) {
+      const taxableBasisCents = Math.max(0, subtotalCents - discountCents);
+      const rows = quoteTaxLinesList ? quoteTaxLinesList.querySelectorAll('.tax-line-row') : [];
+      const lines = [];
+      rows.forEach((row) => {
+        const name = (row.querySelector('.tax-line-name')?.value || '').trim() || 'Tax';
+        const rate = Number(row.querySelector('.tax-line-rate')?.value) || 0;
+        const taxCents = rate > 0 ? Math.round(taxableBasisCents * rate / 100) : 0;
+        totalTaxCents += taxCents;
+        const amtSpan = row.querySelector('.tax-line-amount');
+        if (amtSpan) {
+          amtSpan.textContent = window.QuoteCraftUtils.formatCurrency(taxCents / 100, currencyCode);
+        }
+        lines.push({
+          label: `${name} (${rate}%)`,
+          taxCents,
+        });
+      });
+
+      totalsTaxBreakdown.innerHTML = '';
+      lines.forEach((l) => {
+        const row = document.createElement('div');
+        row.className = 'tax-breakdown-row';
+        row.innerHTML = `<span class="tax-label">${escapeHtml(l.label)}</span><span class="tax-val">${window.QuoteCraftUtils.formatCurrency(l.taxCents / 100, currencyCode)}</span>`;
+        totalsTaxBreakdown.appendChild(row);
+      });
+      if (lines.length > 1) {
+        const totalRow = document.createElement('div');
+        totalRow.className = 'tax-breakdown-row';
+        totalRow.style.fontWeight = '600';
+        totalRow.style.borderTop = '1px dashed var(--border)';
+        totalRow.style.paddingTop = '4px';
+        totalRow.style.marginTop = '2px';
+        totalRow.innerHTML = `<span class="tax-label">Total Tax</span><span class="tax-val">${window.QuoteCraftUtils.formatCurrency(totalTaxCents / 100, currencyCode)}</span>`;
+        totalsTaxBreakdown.appendChild(totalRow);
+      }
+    } else {
+      const { list, totalTaxCents: regularTaxCents } = taxBreakdownOfCurrentRows();
+      totalTaxCents = regularTaxCents;
+      renderTaxBreakdown(totalsTaxBreakdown, list, totalTaxCents, currencyCode);
+    }
+
     const grandCents = subtotalCents - discountCents + totalTaxCents;
 
     totalsSubtotal.textContent = centsToFormatted(subtotalCents);
     totalsDiscount.textContent = centsToFormatted(discountCents);
-    renderTaxBreakdown(totalsTaxBreakdown, list, totalTaxCents, currencyCode);
     totalsGrand.textContent = centsToFormatted(grandCents);
   }
 
@@ -746,6 +849,9 @@
     discountTypeSelect.value = 'none';
     updateDiscountControls();
     taxRateInput.value = '';
+    if (quoteTaxLinesEnabled) quoteTaxLinesEnabled.checked = false;
+    if (quoteTaxLinesSection) quoteTaxLinesSection.classList.add('hidden');
+    if (quoteTaxLinesList) quoteTaxLinesList.innerHTML = '';
     termsArea.value = '';
     itemsBody.innerHTML = '';
     currencyCode = defaultCurrencyCode;
@@ -813,6 +919,27 @@
       }));
     }
     if (!itemsBody.children.length) addEmptyRow();
+
+    if (quote.tax_lines) {
+      let lines = quote.tax_lines;
+      if (typeof lines === 'string') {
+        try { lines = JSON.parse(lines); } catch (_) { lines = null; }
+      }
+      if (Array.isArray(lines) && lines.length > 0) {
+        if (quoteTaxLinesEnabled) quoteTaxLinesEnabled.checked = true;
+        if (quoteTaxLinesSection) quoteTaxLinesSection.classList.remove('hidden');
+        if (quoteTaxLinesList) quoteTaxLinesList.innerHTML = '';
+        lines.forEach((l) => addQuoteTaxLineRow(l.name || l.label, l.rate));
+      } else {
+        if (quoteTaxLinesEnabled) quoteTaxLinesEnabled.checked = false;
+        if (quoteTaxLinesSection) quoteTaxLinesSection.classList.add('hidden');
+        if (quoteTaxLinesList) quoteTaxLinesList.innerHTML = '';
+      }
+    } else {
+      if (quoteTaxLinesEnabled) quoteTaxLinesEnabled.checked = false;
+      if (quoteTaxLinesSection) quoteTaxLinesSection.classList.add('hidden');
+      if (quoteTaxLinesList) quoteTaxLinesList.innerHTML = '';
+    }
 
     updateDiscountControls();
     recalcTotals();
@@ -948,6 +1075,7 @@
         discount_type: discountTypeSelect.value,
         discount_value: discountTypeSelect.value === 'none' ? 0 : Number(discountValueInput.value),
         tax_rate: Number(taxRateInput.value) || 0,
+        tax_lines: collectQuoteTaxLines(),
         subtotal: centsToValue(subtotalCents),
         discount: centsToValue(discountCents),
         tax: centsToValue(totalTaxCents),
@@ -1451,8 +1579,42 @@
 
     // Render detail tax breakdown
     const detailBreakdownEl = document.getElementById('detailTaxBreakdown');
-    const { list: detailList, totalTaxCents: detailTaxTotal } = computeTaxBreakdown(q.line_items, q.subtotal, q.discount_amount);
-    renderTaxBreakdown(detailBreakdownEl, detailList, detailTaxTotal, currency);
+    let qTaxLines = q.tax_lines;
+    if (typeof qTaxLines === 'string') {
+      try { qTaxLines = JSON.parse(qTaxLines); } catch (_) { qTaxLines = null; }
+    }
+    if (Array.isArray(qTaxLines) && qTaxLines.length > 0) {
+      detailBreakdownEl.innerHTML = '';
+      let totalTax = 0;
+      qTaxLines.forEach((tl) => {
+        const name = tl.name || tl.label || 'Tax';
+        const rateStr = tl.rate !== undefined && tl.rate !== null && !isNaN(Number(tl.rate)) ? `${tl.rate}%` : '';
+        const label = rateStr ? `${name} (${rateStr})` : name;
+        let amt = Number(tl.amount);
+        if (isNaN(amt) || amt === 0) {
+          const taxableBase = Math.max(0, (Number(q.subtotal) || 0) - (Number(q.discount_amount) || 0));
+          amt = Math.round(taxableBase * (Number(tl.rate) || 0)) / 100;
+        }
+        totalTax += amt;
+        const row = document.createElement('div');
+        row.className = 'tax-breakdown-row';
+        row.innerHTML = `<span class="tax-label">${escapeHtml(label)}</span><span class="tax-val">${window.QuoteCraftUtils.formatCurrency(amt, currency)}</span>`;
+        detailBreakdownEl.appendChild(row);
+      });
+      if (qTaxLines.length > 1) {
+        const totalRow = document.createElement('div');
+        totalRow.className = 'tax-breakdown-row';
+        totalRow.style.fontWeight = '600';
+        totalRow.style.borderTop = '1px dashed var(--border)';
+        totalRow.style.paddingTop = '4px';
+        totalRow.style.marginTop = '2px';
+        totalRow.innerHTML = `<span class="tax-label">Total Tax</span><span class="tax-val">${window.QuoteCraftUtils.formatCurrency(totalTax, currency)}</span>`;
+        detailBreakdownEl.appendChild(totalRow);
+      }
+    } else {
+      const { list: detailList, totalTaxCents: detailTaxTotal } = computeTaxBreakdown(q.line_items, q.subtotal, q.discount_amount);
+      renderTaxBreakdown(detailBreakdownEl, detailList, detailTaxTotal, currency);
+    }
 
     document.getElementById('detailTotal').textContent = window.QuoteCraftUtils.formatCurrency(q.total, currency);
     document.getElementById('detailTerms').textContent = q.terms || '—';
@@ -1776,6 +1938,27 @@
     recalcTotals();
     clearFieldError('tax_rate');
   });
+
+  if (quoteTaxLinesEnabled) {
+    quoteTaxLinesEnabled.addEventListener('change', () => {
+      if (quoteTaxLinesSection) {
+        quoteTaxLinesSection.classList.toggle('hidden', !quoteTaxLinesEnabled.checked);
+      }
+      if (quoteTaxLinesEnabled.checked && quoteTaxLinesList && quoteTaxLinesList.children.length === 0) {
+        addQuoteTaxLineRow('GST', 5);
+        addQuoteTaxLineRow('PST', 7);
+      }
+      recalcTotals();
+    });
+  }
+
+  if (quoteAddTaxLineBtn) {
+    quoteAddTaxLineBtn.addEventListener('click', () => {
+      const row = addQuoteTaxLineRow('', '');
+      if (row) row.querySelector('.tax-line-name')?.focus();
+    });
+  }
+
   form.elements['date_created'].addEventListener('input', () => clearFieldError('date_created'));
   form.elements['valid_until'].addEventListener('input', () => clearFieldError('valid_until'));
   saveQuoteBtn.addEventListener('click', handleSave);

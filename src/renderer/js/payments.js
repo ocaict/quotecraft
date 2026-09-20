@@ -359,4 +359,9 @@
 
   // Initial setup
   applyPreset('all');
+
+  // Keyboard navigation
+  if (window.QuoteCraftUtils && tableBodyEl) {
+    window.QuoteCraftUtils.addTableKeyNav(tableBodyEl);
+  }
 })();

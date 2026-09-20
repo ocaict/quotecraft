@@ -1,4 +1,4 @@
-﻿// Expenses Tracker Controller
+// Expenses Tracker Controller
 (function () {
   'use strict';
 
@@ -982,4 +982,9 @@
 
   // Initial preset
   applyPreset('all');
+
+  // Keyboard navigation
+  if (window.QuoteCraftUtils && tableBodyEl) {
+    window.QuoteCraftUtils.addTableKeyNav(tableBodyEl);
+  }
 })();
