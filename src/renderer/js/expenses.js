@@ -146,6 +146,33 @@
     return 'default';
   }
 
+  let currentSummary = null;
+  let expenseSortField = 'date';
+  let expenseSortDirection = 'desc';
+
+  function sortExpenses(list) {
+    return list.slice().sort((a, b) => {
+      let res = 0;
+      switch (expenseSortField) {
+        case 'date':
+          res = new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
+          break;
+        case 'category':
+          res = (a.category || '').localeCompare(b.category || '');
+          break;
+        case 'notes':
+          res = (a.notes || '').localeCompare(b.notes || '');
+          break;
+        case 'amount':
+          res = (Number(a.amount) || 0) - (Number(b.amount) || 0);
+          break;
+        default:
+          res = 0;
+      }
+      return expenseSortDirection === 'asc' ? res : -res;
+    });
+  }
+
   async function loadExpenses() {
     await loadBaseCurrency();
     try {
@@ -156,6 +183,7 @@
         return;
       }
 
+      currentSummary = res.summary;
       allExpenses = res.summary.expenses || [];
       renderExpensesSummary(res.summary);
     } catch (err) {
@@ -233,7 +261,8 @@
       return;
     }
 
-    summary.expenses.forEach((exp) => {
+    const listToRender = sortExpenses(summary.expenses || []);
+    listToRender.forEach((exp) => {
       const tr = document.createElement('tr');
       const slug = getCategorySlug(exp.category);
       const isMultiCurrency = exp.currency && exp.currency !== baseCurr && Number(exp.exchange_rate) !== 1.0;
@@ -487,6 +516,31 @@
       applyPreset(e.detail);
       loadExpenses();
     }
+  });
+
+  // Column header sorting
+  document.querySelectorAll('.expenses-table thead th.sortable').forEach((th) => {
+    th.addEventListener('click', () => {
+      const field = th.dataset.sort;
+      if (expenseSortField === field) {
+        expenseSortDirection = expenseSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        expenseSortField = field;
+        expenseSortDirection = (field === 'date' || field === 'amount') ? 'desc' : 'asc';
+      }
+      document.querySelectorAll('.expenses-table thead th.sortable').forEach((h) => {
+        const isCurrent = h.dataset.sort === expenseSortField;
+        h.classList.toggle('sorted-asc', isCurrent && expenseSortDirection === 'asc');
+        h.classList.toggle('sorted-desc', isCurrent && expenseSortDirection === 'desc');
+        const indicator = h.querySelector('.sort-indicator');
+        if (indicator) {
+          indicator.textContent = isCurrent ? (expenseSortDirection === 'asc' ? '▲' : '▼') : '▲';
+        }
+      });
+      if (currentSummary) {
+        renderExpensesSummary(currentSummary);
+      }
+    });
   });
 
   // Initial preset

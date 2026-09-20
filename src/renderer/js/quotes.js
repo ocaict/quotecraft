@@ -1067,11 +1067,50 @@
       });
     }
 
-    if (sortBy === 'total') {
-      filtered.sort((a, b) => Number(b.total) - Number(a.total));
-    } else {
-      filtered.sort((a, b) => new Date(b.date_created) - new Date(a.date_created));
+  let sortField = 'date';
+  let sortDirection = 'desc';
+
+  function sortQuotesList(list) {
+    return list.slice().sort((a, b) => {
+      let res = 0;
+      switch (sortField) {
+        case 'number':
+          res = (a.quote_number || '').localeCompare(b.quote_number || '', undefined, { numeric: true });
+          break;
+        case 'client':
+          res = clientDisplayName(a.client).localeCompare(clientDisplayName(b.client));
+          break;
+        case 'date':
+          res = new Date(a.date_created || 0).getTime() - new Date(b.date_created || 0).getTime();
+          break;
+        case 'total':
+          res = (Number(a.total) || 0) - (Number(b.total) || 0);
+          break;
+        case 'status':
+          res = effectiveStatus(a).localeCompare(effectiveStatus(b));
+          break;
+        default:
+          res = 0;
+      }
+      return sortDirection === 'asc' ? res : -res;
+    });
+  }
+
+  function renderQuoteList() {
+    let filtered = quotes.slice();
+
+    const q = searchTerm.trim().toLowerCase();
+    if (q || statusFilter !== 'all') {
+      filtered = filtered.filter((quote) => {
+        if (q && !matchesSearch(quote, q)) return false;
+        if (statusFilter !== 'all') {
+          if (effectiveStatus(quote) !== statusFilter) return false;
+        }
+        return true;
+      });
     }
+
+    filtered = sortQuotesList(filtered);
 
     if (filtered.length === 0) {
       if (quotes.length === 0) {
@@ -1104,19 +1143,39 @@
       return;
     }
 
+    function makeQuoteTh(label, field, extraClass = '') {
+      const isCurrent = sortField === field;
+      const indicator = isCurrent ? (sortDirection === 'asc' ? '▲' : '▼') : '▲';
+      const sortedClass = isCurrent ? ` sorted-${sortDirection}` : '';
+      return `<th class="sortable${sortedClass} ${extraClass}" data-sort="${field}" title="Sort by ${label}">${label}<span class="sort-indicator">${indicator}</span></th>`;
+    }
+
     const table = document.createElement('table');
     table.className = 'data-table';
 
     const thead = document.createElement('thead');
     thead.innerHTML = '<tr>' +
-      '<th>Number</th>' +
-      '<th>Client</th>' +
-      '<th>Date</th>' +
-      '<th>Total</th>' +
-      '<th>Status</th>' +
+      makeQuoteTh('Number', 'number') +
+      makeQuoteTh('Client', 'client') +
+      makeQuoteTh('Date', 'date') +
+      makeQuoteTh('Total', 'total') +
+      makeQuoteTh('Status', 'status') +
       '<th class="th-actions">Actions</th>' +
       '</tr>';
     table.appendChild(thead);
+
+    thead.querySelectorAll('th.sortable').forEach((th) => {
+      th.addEventListener('click', () => {
+        const field = th.dataset.sort;
+        if (sortField === field) {
+          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortField = field;
+          sortDirection = (field === 'date' || field === 'total') ? 'desc' : 'asc';
+        }
+        renderQuoteList();
+      });
+    });
 
     const tbody = document.createElement('tbody');
     for (const q of filtered) {
@@ -1145,13 +1204,102 @@
       viewBtn.className = 'btn btn-small btn-secondary';
       viewBtn.textContent = 'View';
       viewBtn.addEventListener('click', () => openDetail(q.id));
-      const duplicateBtn = document.createElement('button');
-      duplicateBtn.type = 'button';
-      duplicateBtn.className = 'btn btn-small btn-secondary';
-      duplicateBtn.textContent = 'Duplicate';
-      duplicateBtn.addEventListener('click', () => runDuplicateQuote(q.id, false));
+
+      // Row Actions Dropdown (···)
+      const dropdownWrap = document.createElement('div');
+      dropdownWrap.className = 'row-actions-dropdown';
+
+      const triggerBtn = document.createElement('button');
+      triggerBtn.type = 'button';
+      triggerBtn.className = 'row-actions-trigger';
+      triggerBtn.title = 'More actions';
+      triggerBtn.innerHTML = '•••';
+
+      const menu = document.createElement('div');
+      menu.className = 'row-actions-menu hidden';
+
+      const convItem = document.createElement('button');
+      convItem.type = 'button';
+      convItem.className = 'row-action-item';
+      convItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/></svg> Convert to Invoice';
+      convItem.addEventListener('click', () => {
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        openDetail(q.id);
+        setTimeout(handleOpenConvertModal, 150);
+      });
+
+      const pdfItem = document.createElement('button');
+      pdfItem.type = 'button';
+      pdfItem.className = 'row-action-item';
+      pdfItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download PDF';
+      pdfItem.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        try {
+          window.QuoteCraftUtils.showBusy('Generating PDF…');
+          const res = await window.electronAPI.exportQuotePdf(q.id);
+          if (res && res.ok && !res.cancelled && res.savedPath) {
+            toast('PDF saved to ' + res.savedPath, 'success');
+          }
+        } catch (err) {
+          toast('Failed to export PDF: ' + err.message, 'error');
+        } finally {
+          window.QuoteCraftUtils.hideBusy();
+        }
+      });
+
+      const dupItem = document.createElement('button');
+      dupItem.type = 'button';
+      dupItem.className = 'row-action-item';
+      dupItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Duplicate';
+      dupItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        runDuplicateQuote(q.id, false);
+      });
+
+      const emailItem = document.createElement('button');
+      emailItem.type = 'button';
+      emailItem.className = 'row-action-item';
+      emailItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email';
+      emailItem.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        if (window.QuoteCraftDocumentEmail) {
+          window.QuoteCraftDocumentEmail.openSendModal({
+            documentType: 'quote',
+            documentId: q.id,
+            doc: q,
+            onSuccess: async () => { await loadQuotes(); }
+          });
+        }
+      });
+
+      menu.appendChild(convItem);
+      menu.appendChild(pdfItem);
+      menu.appendChild(dupItem);
+      menu.appendChild(emailItem);
+
+      triggerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = !menu.classList.contains('hidden');
+        document.querySelectorAll('.row-actions-menu:not(.hidden)').forEach((m) => m.classList.add('hidden'));
+        document.querySelectorAll('.row-actions-trigger.active').forEach((t) => t.classList.remove('active'));
+        if (!isOpen) {
+          menu.classList.remove('hidden');
+          triggerBtn.classList.add('active');
+        }
+      });
+
+      dropdownWrap.appendChild(triggerBtn);
+      dropdownWrap.appendChild(menu);
+
       actionsTd.appendChild(viewBtn);
-      actionsTd.appendChild(duplicateBtn);
+      actionsTd.appendChild(dropdownWrap);
 
       tr.appendChild(numTd);
       tr.appendChild(clientTd);

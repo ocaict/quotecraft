@@ -734,6 +734,10 @@
               <option value="total">Total</option>
             </select>
           </div>
+          <button type="button" class="density-toggle-btn" title="Toggle table density (Comfortable / Compact)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span>Density</span>
+          </button>
         </div>
 
         <div class="card quotes-list-card">
@@ -1101,6 +1105,10 @@
               <option value="overdue">Overdue</option>
             </select>
           </div>
+          <button type="button" class="density-toggle-btn" title="Toggle table density (Comfortable / Compact)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span>Density</span>
+          </button>
         </div>
 
         <div id="invoiceBulkBar" class="bulk-actions-bar hidden">
@@ -1481,6 +1489,10 @@
 
         <div class="toolbar-actions">
           <button type="button" id="expensesResetBtn" class="btn btn-ghost">Reset Filters</button>
+          <button type="button" class="density-toggle-btn" title="Toggle table density (Comfortable / Compact)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span>Density</span>
+          </button>
         </div>
       </div>
 
@@ -1511,10 +1523,10 @@
         <table class="expenses-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Category</th>
-              <th>Notes / Description</th>
-              <th>Amount</th>
+              <th class="sortable sorted-desc" data-sort="date" title="Sort by Date">Date<span class="sort-indicator">▼</span></th>
+              <th class="sortable" data-sort="category" title="Sort by Category">Category<span class="sort-indicator">▲</span></th>
+              <th class="sortable" data-sort="notes" title="Sort by Notes">Notes / Description<span class="sort-indicator">▲</span></th>
+              <th class="sortable" data-sort="amount" title="Sort by Amount">Amount<span class="sort-indicator">▲</span></th>
               <th style="text-align: right;">Actions</th>
             </tr>
           </thead>

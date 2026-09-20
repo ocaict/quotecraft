@@ -234,8 +234,46 @@
     return filtered;
   }
 
+  let sortField = 'date';
+  let sortDirection = 'desc';
+
+  function sortInvoices(list) {
+    return list.slice().sort((a, b) => {
+      let res = 0;
+      switch (sortField) {
+        case 'number':
+          res = (a.invoice_number || '').localeCompare(b.invoice_number || '', undefined, { numeric: true });
+          break;
+        case 'client':
+          res = clientDisplayName(a.client).localeCompare(clientDisplayName(b.client));
+          break;
+        case 'date':
+          res = new Date(a.date_created || 0).getTime() - new Date(b.date_created || 0).getTime();
+          break;
+        case 'due_date':
+          res = new Date(a.date_due || '9999-12-31').getTime() - new Date(b.date_due || '9999-12-31').getTime();
+          break;
+        case 'total':
+          res = (Number(a.total) || 0) - (Number(b.total) || 0);
+          break;
+        case 'paid':
+          res = (Number(a.amount_paid) || 0) - (Number(b.amount_paid) || 0);
+          break;
+        case 'balance':
+          res = (Number(a.balance_due) || 0) - (Number(b.balance_due) || 0);
+          break;
+        case 'status':
+          res = effectiveInvoiceStatus(a).localeCompare(effectiveInvoiceStatus(b));
+          break;
+        default:
+          res = 0;
+      }
+      return sortDirection === 'asc' ? res : -res;
+    });
+  }
+
   function renderList() {
-    const filtered = filterInvoices();
+    const filtered = sortInvoices(filterInvoices());
 
     if (filtered.length === 0) {
       if (invoices.length === 0) {
@@ -270,22 +308,42 @@
       return;
     }
 
+    function makeTh(label, field, extraClass = '') {
+      const isCurrent = sortField === field;
+      const indicator = isCurrent ? (sortDirection === 'asc' ? '▲' : '▼') : '▲';
+      const sortedClass = isCurrent ? ` sorted-${sortDirection}` : '';
+      return `<th class="sortable${sortedClass} ${extraClass}" data-sort="${field}" title="Sort by ${label}">${label}<span class="sort-indicator">${indicator}</span></th>`;
+    }
+
     const table = document.createElement('table');
     table.className = 'data-table';
     const thead = document.createElement('thead');
     thead.innerHTML = '<tr>' +
       '<th class="th-select"><input type="checkbox" id="invoiceSelectAll" title="Select all invoices"></th>' +
-      '<th>Number</th>' +
-      '<th>Client</th>' +
-      '<th>Date</th>' +
-      '<th>Due date</th>' +
-      '<th>Total</th>' +
-      '<th>Paid</th>' +
-      '<th>Balance</th>' +
-      '<th>Status</th>' +
+      makeTh('Number', 'number') +
+      makeTh('Client', 'client') +
+      makeTh('Date', 'date') +
+      makeTh('Due date', 'due_date') +
+      makeTh('Total', 'total') +
+      makeTh('Paid', 'paid') +
+      makeTh('Balance', 'balance') +
+      makeTh('Status', 'status') +
       '<th class="th-actions">Actions</th>' +
       '</tr>';
     table.appendChild(thead);
+
+    thead.querySelectorAll('th.sortable').forEach((th) => {
+      th.addEventListener('click', () => {
+        const field = th.dataset.sort;
+        if (sortField === field) {
+          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortField = field;
+          sortDirection = (field === 'date' || field === 'due_date' || field === 'total' || field === 'paid' || field === 'balance') ? 'desc' : 'asc';
+        }
+        renderList();
+      });
+    });
 
     const tbody = document.createElement('tbody');
     for (const inv of filtered) {
@@ -357,19 +415,102 @@
       viewBtn.className = 'btn btn-small btn-secondary';
       viewBtn.textContent = 'View';
       viewBtn.addEventListener('click', () => openDetail(inv.id));
-      const dupBtn = document.createElement('button');
-      dupBtn.type = 'button';
-      dupBtn.className = 'btn btn-small btn-secondary';
-      dupBtn.textContent = 'Duplicate';
-      dupBtn.addEventListener('click', () => runDuplicateInvoice(inv.id, false));
-      const payBtn = document.createElement('button');
-      payBtn.type = 'button';
-      payBtn.className = 'btn btn-small btn-secondary';
-      payBtn.textContent = 'Record Payment';
-      payBtn.addEventListener('click', () => openPaymentModal(inv.id));
+
+      // Row Actions Dropdown (···)
+      const dropdownWrap = document.createElement('div');
+      dropdownWrap.className = 'row-actions-dropdown';
+
+      const triggerBtn = document.createElement('button');
+      triggerBtn.type = 'button';
+      triggerBtn.className = 'row-actions-trigger';
+      triggerBtn.title = 'More actions';
+      triggerBtn.innerHTML = '•••';
+
+      const menu = document.createElement('div');
+      menu.className = 'row-actions-menu hidden';
+
+      const payItem = document.createElement('button');
+      payItem.type = 'button';
+      payItem.className = 'row-action-item';
+      payItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> Record Payment';
+      payItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        openPaymentModal(inv.id);
+      });
+
+      const pdfItem = document.createElement('button');
+      pdfItem.type = 'button';
+      pdfItem.className = 'row-action-item';
+      pdfItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download PDF';
+      pdfItem.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        try {
+          window.QuoteCraftUtils.showBusy('Generating PDF…');
+          const res = await window.electronAPI.exportInvoicePdf(inv.id);
+          if (res && res.ok && !res.cancelled && res.savedPath) {
+            window.QuoteCraftUtils.showToast('PDF saved to ' + res.savedPath, 'success');
+          }
+        } catch (err) {
+          window.QuoteCraftUtils.showToast('Failed to export PDF: ' + err.message, 'error');
+        } finally {
+          window.QuoteCraftUtils.hideBusy();
+        }
+      });
+
+      const dupItem = document.createElement('button');
+      dupItem.type = 'button';
+      dupItem.className = 'row-action-item';
+      dupItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Duplicate';
+      dupItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        runDuplicateInvoice(inv.id, false);
+      });
+
+      const emailItem = document.createElement('button');
+      emailItem.type = 'button';
+      emailItem.className = 'row-action-item';
+      emailItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email';
+      emailItem.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        if (window.QuoteCraftDocumentEmail) {
+          window.QuoteCraftDocumentEmail.openSendModal({
+            documentType: 'invoice',
+            documentId: inv.id,
+            doc: inv,
+            onSuccess: async () => { await loadInvoices(); }
+          });
+        }
+      });
+
+      menu.appendChild(payItem);
+      menu.appendChild(pdfItem);
+      menu.appendChild(dupItem);
+      menu.appendChild(emailItem);
+
+      triggerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = !menu.classList.contains('hidden');
+        document.querySelectorAll('.row-actions-menu:not(.hidden)').forEach((m) => m.classList.add('hidden'));
+        document.querySelectorAll('.row-actions-trigger.active').forEach((t) => t.classList.remove('active'));
+        if (!isOpen) {
+          menu.classList.remove('hidden');
+          triggerBtn.classList.add('active');
+        }
+      });
+
+      dropdownWrap.appendChild(triggerBtn);
+      dropdownWrap.appendChild(menu);
+
       actionsTd.appendChild(viewBtn);
-      actionsTd.appendChild(dupBtn);
-      actionsTd.appendChild(payBtn);
+      actionsTd.appendChild(dropdownWrap);
 
       tr.appendChild(selectTd);
       tr.appendChild(numTd);
