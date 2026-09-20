@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setQuoteStatus: (id, status) => ipcRenderer.invoke('quotes:setStatus', id, status),
   markQuoteAccepted: (id, data) => ipcRenderer.invoke('quotes:markAccepted', id, data),
   markQuoteDeclined: (id, data) => ipcRenderer.invoke('quotes:markDeclined', id, data),
+  checkExpiredQuotes: () => ipcRenderer.invoke('quotes:checkExpired'),
   exportQuotePdf: (quoteId) => ipcRenderer.invoke('quotes:exportPdf', quoteId),
   printQuote: (quoteId) => ipcRenderer.invoke('quotes:print', quoteId),
   exportShareableQuoteHtml: (quoteId) => ipcRenderer.invoke('quotes:exportShareableHtml', quoteId),
@@ -71,7 +72,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   convertQuoteToInvoice: (quoteId, overrides) => ipcRenderer.invoke('invoices:convertFromQuote', quoteId, overrides),
   createFinalInvoiceFromDeposit: (depositInvoiceId, overrides) => ipcRenderer.invoke('invoices:createFinalFromDeposit', depositInvoiceId, overrides),
   createInvoiceFromTimeEntries: (payload) => ipcRenderer.invoke('invoices:createFromTimeEntries', payload),
+  createInvoiceFromExpenses: (payload) => ipcRenderer.invoke('invoices:createFromExpenses', payload),
   duplicateInvoice: (id) => ipcRenderer.invoke('invoices:duplicate', id),
+  updateInvoice: (id, data, lineItems) => ipcRenderer.invoke('invoices:update', id, data, lineItems),
   getInvoiceByQuote: (quoteId) => ipcRenderer.invoke('invoices:getByQuote', quoteId),
   listInvoices: () => ipcRenderer.invoke('invoices:list'),
   getInvoice: (id) => ipcRenderer.invoke('invoices:get', id),
@@ -86,6 +89,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPaymentsReport: (filters) => ipcRenderer.invoke('reports:payments', filters),
   getProfitLossReport: (filter) => ipcRenderer.invoke('reports:profitLoss', filter),
   listExpenses: (filter) => ipcRenderer.invoke('expenses:list', filter),
+  getUnbilledExpenses: (clientId, projectId) => ipcRenderer.invoke('expenses:getUnbilled', clientId, projectId),
   getExpense: (id) => ipcRenderer.invoke('expenses:get', id),
   createExpense: (data) => ipcRenderer.invoke('expenses:create', data),
   updateExpense: (id, data) => ipcRenderer.invoke('expenses:update', id, data),
@@ -155,5 +159,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAppLockPin: (payload) => ipcRenderer.invoke('lock:setPin', payload),
   verifyAppLockPin: (pin) => ipcRenderer.invoke('lock:verify', { pin }),
   disableAppLock: (currentPin) => ipcRenderer.invoke('lock:disable', { currentPin }),
+
+  // Expenses & Billable Expenses
+  listExpenses: (filter) => ipcRenderer.invoke('expenses:list', filter),
+  getExpense: (id) => ipcRenderer.invoke('expenses:get', id),
+  createExpense: (data) => ipcRenderer.invoke('expenses:create', data),
+  updateExpense: (id, data) => ipcRenderer.invoke('expenses:update', id, data),
+  deleteExpense: (id) => ipcRenderer.invoke('expenses:delete', id),
+  getExpensesSummary: (filter) => ipcRenderer.invoke('expenses:summary', filter),
+  getExpenseCategories: () => ipcRenderer.invoke('expenses:categories'),
+  getUnbilledExpenses: (clientId, projectId) => ipcRenderer.invoke('expenses:getUnbilled', clientId, projectId),
+  createInvoiceFromExpenses: (payload) => ipcRenderer.invoke('invoices:createFromExpenses', payload),
 });
 

@@ -963,6 +963,7 @@
         </div>
 
         <div id="quoteOldVersionNotice" class="quote-old-version-notice hidden"></div>
+        <div id="quoteExpiryBanner" class="quote-expiry-banner hidden"></div>
         <div id="quoteVersionBanner" class="quote-version-banner hidden">
           <div class="version-banner-label">Version history:</div>
           <div id="quoteVersionList" class="version-pills-list"></div>
@@ -1142,6 +1143,177 @@
         </div>
       </div>
 
+      <!-- Invoice Form View (Edit Mode) -->
+      <div id="invoiceFormView" class="invoice-subview">
+        <div class="page-header quotes-header">
+          <div>
+            <h1 id="invoiceFormTitle">Edit Invoice</h1>
+            <p class="subtitle">Modify line items, dates, discounts, and payment terms.</p>
+          </div>
+          <button type="button" id="invoiceFormBackBtn" class="btn btn-secondary">Back to invoice</button>
+        </div>
+
+        <form id="invoiceForm" class="quote-form invoice-form" novalidate>
+          <input type="hidden" id="invoiceFormId" name="id">
+          <div class="card">
+            <h2>Invoice details</h2>
+
+            <div class="form-row">
+              <div class="field field-required">
+                <label for="invoiceFormClient">Client</label>
+                <select id="invoiceFormClient" name="client_id">
+                  <option value="">Select a client…</option>
+                </select>
+                <span class="field-error" data-error-for="client_id"></span>
+              </div>
+              <div class="field">
+                <label for="invoiceFormClientSearch">Search clients</label>
+                <input type="text" id="invoiceFormClientSearch" placeholder="Type to filter…" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="invoiceFormProject">Project / job (optional)</label>
+                <select id="invoiceFormProject" name="project_id">
+                  <option value="">No project / job</option>
+                </select>
+                <span class="hint">Groups this invoice under a project for the selected client.</span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="invoiceFormContact">Contact person (optional)</label>
+                <select id="invoiceFormContact" name="contact_id">
+                  <option value="">Default / No specific contact</option>
+                </select>
+                <span class="hint">Addresses this invoice to a specific person at the client.</span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="invoiceFormDate">Invoice date</label>
+                <input type="date" id="invoiceFormDate" name="date_created">
+                <span class="field-error" data-error-for="date_created"></span>
+              </div>
+              <div class="field">
+                <label for="invoiceFormDueDate">Due date</label>
+                <input type="date" id="invoiceFormDueDate" name="date_due">
+                <span class="field-error" data-error-for="date_due"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Currency &amp; Exchange Rate</h2>
+            <div class="form-row">
+              <div class="field">
+                <label for="invoiceFormCurrency">Currency</label>
+                <select id="invoiceFormCurrency" name="currency"></select>
+                <span class="hint">Document currency.</span>
+              </div>
+              <div class="field" id="invoiceFormExchangeRateField">
+                <label for="invoiceFormExchangeRate">Exchange rate (to base currency)</label>
+                <input type="number" id="invoiceFormExchangeRate" name="exchange_rate" min="0.0001" step="0.0001" value="1" placeholder="1.0000">
+                <span class="hint">Used for reporting. 1.0 if same as default currency.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="quote-items-header">
+              <h2>Line items</h2>
+              <div class="quote-items-actions">
+                <select id="invoiceFormLibrarySelect" class="select-library-item">
+                  <option value="">+ Add from Library…</option>
+                </select>
+                <button type="button" id="invoiceAddLineItemBtn" class="btn btn-secondary">Add Line Item</button>
+              </div>
+            </div>
+
+            <div class="items-table-wrap">
+              <table class="items-table" id="invoiceItemsTable">
+                <thead>
+                  <tr>
+                    <th class="col-description">Description</th>
+                    <th class="col-qty">Qty</th>
+                    <th class="col-price">Unit price</th>
+                    <th class="col-line-discount">Line discount</th>
+                    <th class="col-tax">Tax %</th>
+                    <th class="col-total">Line total</th>
+                    <th class="col-remove"></th>
+                  </tr>
+                </thead>
+                <tbody id="invoiceItemsBody">
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Document-level discount &amp; totals</h2>
+            <span class="hint" style="display:block;margin-bottom:8px">This discount applies to the net subtotal (after any individual line item discounts above).</span>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="invoiceDiscountType">Discount type</label>
+                <select id="invoiceDiscountType" name="discount_type">
+                  <option value="none">No discount</option>
+                  <option value="percent">Percentage (%)</option>
+                  <option value="fixed">Fixed amount</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="invoiceDiscountValue" id="invoiceDiscountLabel">Discount</label>
+                <input type="number" id="invoiceDiscountValue" name="discount_value" min="0" step="0.01" placeholder="0.00" disabled>
+                <span class="field-error" data-error-for="discount_value"></span>
+              </div>
+              <div class="field">
+                <label for="invoiceTaxRate">Default Tax rate (%)</label>
+                <input type="number" id="invoiceTaxRate" name="tax_rate" min="0" max="100" step="0.01" placeholder="0">
+                <span class="field-error" data-error-for="tax_rate"></span>
+                <span class="hint">Applied to new rows by default. Editable per line item.</span>
+              </div>
+            </div>
+
+            <div class="totals-panel">
+              <div class="total-row">
+                <span>Subtotal</span>
+                <span id="invoiceTotalsSubtotal" class="total-value">0.00</span>
+              </div>
+              <div class="total-row">
+                <span>Discount</span>
+                <span id="invoiceTotalsDiscount" class="total-value">0.00</span>
+              </div>
+              <div id="invoiceTotalsTaxBreakdown" class="tax-breakdown-list"></div>
+              <div class="total-row grand-total">
+                <span>Grand total</span>
+                <span id="invoiceTotalsGrand" class="total-value">0.00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Notes / terms</h2>
+            <div class="field field-span-2">
+              <label for="invoiceFormNotes">Notes</label>
+              <textarea id="invoiceFormNotes" name="notes" rows="2" placeholder="e.g. Thank you for your business"></textarea>
+            </div>
+            <div class="field field-span-2" style="margin-top:12px;">
+              <label for="invoiceFormTerms">Payment terms</label>
+              <textarea id="invoiceFormTerms" name="terms" rows="3" placeholder="e.g. Payment due within 14 days"></textarea>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" id="saveInvoiceBtn" class="btn btn-primary">Save Changes</button>
+            <button type="button" id="cancelInvoiceBtn" class="btn btn-secondary">Cancel</button>
+          </div>
+        </form>
+      </div>
+
       <div id="invoiceDetailView" class="invoice-subview">
         <div class="page-header quotes-header">
           <div>
@@ -1157,6 +1329,7 @@
                 <option value="sent">Sent</option>
               </select>
             </div>
+            <button type="button" id="invoiceEditBtn" class="btn btn-secondary" title="Edit line items, notes, terms, and invoice details">✏️ Edit Invoice</button>
             <button type="button" id="invoiceExportBtn" class="btn btn-secondary">Download PDF</button>
             <button type="button" id="invoicePrintBtn" class="btn btn-secondary" title="Open the system print dialog for this invoice">🖨 Print</button>
             <button type="button" id="invoiceDuplicateBtn" class="btn btn-secondary" title="Create a new Draft invoice with the same client and line items but a fresh number and today's date">Duplicate</button>
@@ -1461,6 +1634,7 @@
           <p class="subtitle">Log business expenses to measure real net profit and track overhead.</p>
         </div>
         <div class="detail-actions">
+          <button type="button" id="billExpensesToClientBtn" class="btn btn-secondary">📑 Bill to Client</button>
           <button type="button" id="newExpenseBtn" class="btn btn-primary">+ New Expense</button>
         </div>
       </div>
@@ -1496,6 +1670,23 @@
             <option value="Supplies">Supplies</option>
             <option value="Travel">Travel</option>
             <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="expensesClientFilter">Client</label>
+          <select id="expensesClientFilter">
+            <option value="">All Clients</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="expensesBillingFilter">Billing</label>
+          <select id="expensesBillingFilter">
+            <option value="all">All</option>
+            <option value="unbilled">Billable (Unbilled)</option>
+            <option value="billed">Billed</option>
+            <option value="non_billable">Non-billable</option>
           </select>
         </div>
 
@@ -1542,14 +1733,16 @@
             <tr>
               <th class="sortable sorted-desc" data-sort="date" title="Sort by Date">Date<span class="sort-indicator">▼</span></th>
               <th class="sortable" data-sort="category" title="Sort by Category">Category<span class="sort-indicator">▲</span></th>
+              <th>Client / Project</th>
               <th class="sortable" data-sort="notes" title="Sort by Notes">Notes / Description<span class="sort-indicator">▲</span></th>
+              <th>Status</th>
               <th class="sortable" data-sort="amount" title="Sort by Amount">Amount<span class="sort-indicator">▲</span></th>
               <th style="text-align: right;">Actions</th>
             </tr>
           </thead>
           <tbody id="expensesTableBody">
             <tr>
-              <td colspan="5" class="expenses-empty">
+              <td colspan="7" class="expenses-empty">
                 <p>Loading expenses…</p>
               </td>
             </tr>
@@ -3375,9 +3568,86 @@
           <textarea id="expenseNotes" name="notes" rows="3" placeholder="e.g. GitHub Copilot subscription, Flight to client office"></textarea>
         </div>
 
+        <div class="field" style="margin-top:12px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="expenseBillable" name="billable">
+            <span style="font-weight:600;">Billable to client</span>
+          </label>
+        </div>
+
+        <div id="expenseClientFields" class="hidden" style="margin-top:10px;margin-bottom:12px;">
+          <div class="form-row">
+            <div class="field field-required">
+              <label for="expenseClient">Client</label>
+              <select id="expenseClient" name="client_id">
+                <option value="">Select a client…</option>
+              </select>
+              <span class="field-error" data-error-for="client_id"></span>
+            </div>
+            <div class="field">
+              <label for="expenseProject">Project / Job (optional)</label>
+              <select id="expenseProject" name="project_id">
+                <option value="">No project</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" id="expenseCancelBtn">Cancel</button>
           <button type="submit" class="btn btn-primary" id="expenseSubmitBtn">Save Expense</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bill Expenses to Client Modal -->
+  <div id="billExpensesModal" class="modal-overlay hidden">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2>Generate Invoice from Expenses</h2>
+        <button type="button" class="modal-close" id="billExpensesModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="billExpensesForm" class="modal-form" novalidate>
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="billExpensesClient">Client</label>
+            <select id="billExpensesClient" required>
+              <option value="">Select a client…</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="billExpensesProject">Project (optional)</label>
+            <select id="billExpensesProject">
+              <option value="">All projects / unassigned</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:14px;">
+          <label style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Select Unbilled Expenses</span>
+            <span id="billExpensesSelectedCount" class="badge">0 selected</span>
+          </label>
+          <div id="billExpensesList" class="bill-expenses-picker-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--bg-card);">
+            <p class="placeholder" style="padding:16px;text-align:center;color:var(--text-muted);">Please select a client above to view unbilled expenses.</p>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:14px;">
+          <div class="field">
+            <label for="billExpensesDueDate">Due Date</label>
+            <input type="date" id="billExpensesDueDate">
+          </div>
+          <div class="field">
+            <label>Total to Bill</label>
+            <div id="billExpensesTotalDisplay" style="font-size:20px;font-weight:700;color:var(--accent);padding-top:6px;">$0.00</div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="billExpensesCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="billExpensesSubmitBtn" disabled>Generate Draft Invoice</button>
         </div>
       </form>
     </div>

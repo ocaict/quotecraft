@@ -5,15 +5,19 @@
   let baseCurrencyCode = 'USD';
   let debounceTimeout = null;
   let allExpenses = [];
+  let cachedClients = [];
 
   // Toolbar Elements
   const datePresetSelect = document.getElementById('expensesDatePreset');
   const startDateInput = document.getElementById('expensesStartDate');
   const endDateInput = document.getElementById('expensesEndDate');
   const categoryFilterSelect = document.getElementById('expensesCategoryFilter');
+  const clientFilterSelect = document.getElementById('expensesClientFilter');
+  const billingFilterSelect = document.getElementById('expensesBillingFilter');
   const searchInput = document.getElementById('expensesSearch');
   const resetBtn = document.getElementById('expensesResetBtn');
   const newExpenseBtn = document.getElementById('newExpenseBtn');
+  const billExpensesBtn = document.getElementById('billExpensesToClientBtn');
 
   // KPI & Table Elements
   const totalAmountEl = document.getElementById('expensesTotalAmount');
@@ -22,7 +26,7 @@
   const categoriesGridEl = document.getElementById('expensesCategoriesGrid');
   const tableBodyEl = document.getElementById('expensesTableBody');
 
-  // Modal Elements
+  // Modal Elements (Create / Edit)
   const modal = document.getElementById('expenseModal');
   const modalClose = document.getElementById('expenseModalClose');
   const modalTitle = document.getElementById('expenseModalTitle');
@@ -39,6 +43,25 @@
   const categorySelect = document.getElementById('expenseCategory');
   const customCategoryInput = document.getElementById('expenseCustomCategory');
   const notesInput = document.getElementById('expenseNotes');
+
+  // Billable in Modal
+  const billableCheckbox = document.getElementById('expenseBillable');
+  const clientFieldsDiv = document.getElementById('expenseClientFields');
+  const clientSelect = document.getElementById('expenseClient');
+  const projectSelect = document.getElementById('expenseProject');
+
+  // Bill to Client Modal Elements
+  const billModal = document.getElementById('billExpensesModal');
+  const billModalClose = document.getElementById('billExpensesModalClose');
+  const billForm = document.getElementById('billExpensesForm');
+  const billClientSelect = document.getElementById('billExpensesClient');
+  const billProjectSelect = document.getElementById('billExpensesProject');
+  const billSelectedCountEl = document.getElementById('billExpensesSelectedCount');
+  const billListEl = document.getElementById('billExpensesList');
+  const billDueDateInput = document.getElementById('billExpensesDueDate');
+  const billTotalDisplayEl = document.getElementById('billExpensesTotalDisplay');
+  const billCancelBtn = document.getElementById('billExpensesCancelBtn');
+  const billSubmitBtn = document.getElementById('billExpensesSubmitBtn');
 
   function getISODate(d) {
     const year = d.getFullYear();
@@ -93,6 +116,8 @@
       startDate: startDateInput.value || '',
       endDate: endDateInput.value || '',
       category: categoryFilterSelect.value || 'all',
+      client_id: clientFilterSelect ? clientFilterSelect.value : '',
+      billed: billingFilterSelect ? billingFilterSelect.value : 'all',
       search: searchInput.value ? searchInput.value.trim() : '',
     };
   }
@@ -102,6 +127,75 @@
       const res = await window.electronAPI.getCompanyProfile();
       if (res && res.ok && res.profile) {
         baseCurrencyCode = res.profile.reporting_currency || res.profile.default_currency || 'USD';
+      }
+    } catch (_) {}
+  }
+
+  async function loadClients() {
+    try {
+      const res = await window.electronAPI.listClients();
+      if (res && res.ok && Array.isArray(res.clients)) {
+        cachedClients = res.clients;
+        populateClientFilters();
+      }
+    } catch (_) {}
+  }
+
+  function populateClientFilters() {
+    // Toolbar client filter
+    if (clientFilterSelect) {
+      const currentVal = clientFilterSelect.value;
+      clientFilterSelect.innerHTML = '<option value="">All Clients</option>';
+      cachedClients.forEach((c) => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.company_name ? `${c.name} (${c.company_name})` : c.name;
+        clientFilterSelect.appendChild(opt);
+      });
+      clientFilterSelect.value = currentVal;
+    }
+
+    // Modal client select
+    if (clientSelect) {
+      const currentVal = clientSelect.value;
+      clientSelect.innerHTML = '<option value="">Select a client…</option>';
+      cachedClients.forEach((c) => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.company_name ? `${c.name} (${c.company_name})` : c.name;
+        clientSelect.appendChild(opt);
+      });
+      clientSelect.value = currentVal;
+    }
+
+    // Bill modal client select
+    if (billClientSelect) {
+      const currentVal = billClientSelect.value;
+      billClientSelect.innerHTML = '<option value="">Select a client…</option>';
+      cachedClients.forEach((c) => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.company_name ? `${c.name} (${c.company_name})` : c.name;
+        billClientSelect.appendChild(opt);
+      });
+      billClientSelect.value = currentVal;
+    }
+  }
+
+  async function loadProjectsForClient(clientId, targetSelectEl, defaultText = 'No project') {
+    if (!targetSelectEl) return;
+    targetSelectEl.innerHTML = `<option value="">${defaultText}</option>`;
+    if (!clientId) return;
+
+    try {
+      const res = await window.electronAPI.listProjects({ client_id: clientId });
+      if (res && res.ok && Array.isArray(res.projects)) {
+        res.projects.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = p.name;
+          targetSelectEl.appendChild(opt);
+        });
       }
     } catch (_) {}
   }
@@ -175,6 +269,7 @@
 
   async function loadExpenses() {
     await loadBaseCurrency();
+    await loadClients();
     try {
       const filter = getFilterPayload();
       const res = await window.electronAPI.getExpensesSummary(filter);
@@ -248,12 +343,12 @@
       });
     }
 
-    // 4. Render Table Body
+    // 4. Render Table Body (7 columns)
     tableBodyEl.innerHTML = '';
     if (!summary.expenses || summary.expenses.length === 0) {
       tableBodyEl.innerHTML = `
         <tr>
-          <td colspan="5" class="expenses-empty">
+          <td colspan="7" class="expenses-empty">
             <p>No expenses found matching the selected criteria.</p>
           </td>
         </tr>
@@ -273,39 +368,68 @@
         convertedSub = `<span class="expense-amount-original">≈ ${window.QuoteCraftUtils.formatCurrency(converted, baseCurr)} (${baseCurr})</span>`;
       }
 
+      // Status badge
+      let statusBadgeHtml = '<span class="badge-nonbillable">Non-billable</span>';
+      if (exp.billed) {
+        statusBadgeHtml = `<span class="badge-billed" title="Invoiced in ${escapeHtml(exp.invoice_number || '')}">Billed ${escapeHtml(exp.invoice_number ? '#' + exp.invoice_number : '')}</span>`;
+      } else if (exp.billable) {
+        statusBadgeHtml = `<span class="badge-billable">Billable</span>`;
+      }
+
+      // Client / Project
+      let clientProjectHtml = '<span class="text-muted">—</span>';
+      if (exp.client_name) {
+        clientProjectHtml = `<div><strong>${escapeHtml(exp.client_name)}</strong></div>`;
+        if (exp.project_name) {
+          clientProjectHtml += `<small class="text-muted">${escapeHtml(exp.project_name)}</small>`;
+        }
+      }
+
       tr.innerHTML = `
         <td style="white-space: nowrap;">${window.QuoteCraftUtils.formatDate(exp.date)}</td>
         <td>
           <span class="badge-category badge-cat-${slug}">${escapeHtml(exp.category || 'Other')}</span>
         </td>
+        <td>${clientProjectHtml}</td>
         <td>${escapeHtml(exp.notes || '—')}</td>
+        <td>${statusBadgeHtml}</td>
         <td class="expense-amount-cell">
           ${nativeAmountStr}
           ${convertedSub}
         </td>
         <td style="text-align: right;">
           <div class="expense-table-actions">
-            <button type="button" class="expense-action-btn edit-btn" data-id="${exp.id}">Edit</button>
-            <button type="button" class="expense-action-btn delete delete-btn" data-id="${exp.id}">Delete</button>
+            ${exp.billed
+              ? `<button type="button" class="expense-action-btn" disabled title="Billed expenses cannot be modified">Locked</button>`
+              : `<button type="button" class="expense-action-btn edit-btn" data-id="${exp.id}">Edit</button>
+                 <button type="button" class="expense-action-btn delete delete-btn" data-id="${exp.id}">Delete</button>`
+            }
           </div>
         </td>
       `;
 
-      const editBtn = tr.querySelector('.edit-btn');
-      editBtn.addEventListener('click', () => openExpenseModal(exp));
+      if (!exp.billed) {
+        const editBtn = tr.querySelector('.edit-btn');
+        if (editBtn) editBtn.addEventListener('click', () => openExpenseModal(exp));
 
-      const deleteBtn = tr.querySelector('.delete-btn');
-      deleteBtn.addEventListener('click', () => handleDeleteExpense(exp));
+        const deleteBtn = tr.querySelector('.delete-btn');
+        if (deleteBtn) deleteBtn.addEventListener('click', () => handleDeleteExpense(exp));
+      }
 
       tableBodyEl.appendChild(tr);
     });
   }
 
-  function openExpenseModal(exp = null) {
+  async function openExpenseModal(exp = null) {
     clearErrors();
     populateCurrencyOptions(exp ? exp.currency : baseCurrencyCode);
+    populateClientFilters();
 
     if (exp) {
+      if (exp.billed) {
+        window.QuoteCraftUtils.showToast('Billed expenses are locked and cannot be edited.', 'error');
+        return;
+      }
       modalTitle.textContent = 'Edit Expense';
       editIdInput.value = exp.id;
       amountInput.value = Number(exp.amount || 0).toFixed(2);
@@ -324,6 +448,20 @@
         customCategoryInput.style.display = '';
         customCategoryInput.value = exp.category || '';
       }
+
+      if (billableCheckbox) {
+        billableCheckbox.checked = !!exp.billable;
+        if (exp.billable) {
+          clientFieldsDiv.classList.remove('hidden');
+          clientSelect.value = exp.client_id || '';
+          await loadProjectsForClient(exp.client_id, projectSelect, 'No project');
+          projectSelect.value = exp.project_id || '';
+        } else {
+          clientFieldsDiv.classList.add('hidden');
+          clientSelect.value = '';
+          projectSelect.innerHTML = '<option value="">No project</option>';
+        }
+      }
     } else {
       modalTitle.textContent = 'New Expense';
       editIdInput.value = '';
@@ -335,6 +473,13 @@
       customCategoryInput.style.display = 'none';
       customCategoryInput.value = '';
       notesInput.value = '';
+
+      if (billableCheckbox) {
+        billableCheckbox.checked = false;
+        clientFieldsDiv.classList.add('hidden');
+        clientSelect.value = '';
+        projectSelect.innerHTML = '<option value="">No project</option>';
+      }
     }
 
     updateExchangeRateVisibility();
@@ -381,6 +526,15 @@
     const exchangeRate = Number(exchangeRateInput.value) > 0 ? Number(exchangeRateInput.value) : 1.0;
     const notes = (notesInput.value || '').trim();
 
+    const isBillable = billableCheckbox && billableCheckbox.checked ? 1 : 0;
+    const clientId = isBillable && clientSelect.value ? Number(clientSelect.value) : null;
+    const projectId = isBillable && projectSelect.value ? Number(projectSelect.value) : null;
+
+    if (isBillable && !clientId) {
+      showFieldError('client_id', 'Please select a client for billable expenses.');
+      return;
+    }
+
     const payload = {
       amount,
       date,
@@ -388,6 +542,9 @@
       notes,
       currency,
       exchange_rate: exchangeRate,
+      billable: isBillable,
+      client_id: clientId,
+      project_id: projectId,
     };
 
     const editId = editIdInput.value ? Number(editIdInput.value) : null;
@@ -439,6 +596,122 @@
     }
   }
 
+  // ---------- Bill Expenses to Client Modal Logic ----------
+  function openBillModal() {
+    populateClientFilters();
+    billClientSelect.value = '';
+    billProjectSelect.innerHTML = '<option value="">All projects / unassigned</option>';
+    billDueDateInput.value = '';
+    billListEl.innerHTML = '<p class="placeholder" style="padding:16px;text-align:center;color:var(--text-muted);">Please select a client above to view unbilled expenses.</p>';
+    billSelectedCountEl.textContent = '0 selected';
+    billTotalDisplayEl.textContent = window.QuoteCraftUtils.formatCurrency(0, baseCurrencyCode);
+    billSubmitBtn.disabled = true;
+    billModal.classList.remove('hidden');
+  }
+
+  function closeBillModal() {
+    billModal.classList.add('hidden');
+  }
+
+  async function refreshBillableList() {
+    const clientId = billClientSelect.value ? Number(billClientSelect.value) : null;
+    const projectId = billProjectSelect.value ? Number(billProjectSelect.value) : null;
+
+    if (!clientId) {
+      billListEl.innerHTML = '<p class="placeholder" style="padding:16px;text-align:center;color:var(--text-muted);">Please select a client above to view unbilled expenses.</p>';
+      updateBillModalTotals();
+      return;
+    }
+
+    billListEl.innerHTML = '<p class="placeholder" style="padding:16px;text-align:center;color:var(--text-muted);">Loading unbilled expenses…</p>';
+
+    try {
+      const res = await window.electronAPI.getUnbilledExpenses(clientId, projectId);
+      if (!res || !res.ok || !res.expenses || res.expenses.length === 0) {
+        billListEl.innerHTML = '<p class="placeholder" style="padding:16px;text-align:center;color:var(--text-muted);">No unbilled expenses found for this client.</p>';
+        updateBillModalTotals();
+        return;
+      }
+
+      billListEl.innerHTML = '';
+      res.expenses.forEach((exp) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'bill-expense-item';
+
+        const amtStr = window.QuoteCraftUtils.formatCurrency(exp.amount, exp.currency || baseCurrencyCode);
+        itemDiv.innerHTML = `
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
+            <input type="checkbox" class="bill-expense-chk" data-id="${exp.id}" data-amount="${exp.amount}" checked>
+            <div>
+              <div style="font-weight:600;font-size:13px;">${escapeHtml(exp.category)} — ${amtStr}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${window.QuoteCraftUtils.formatDate(exp.date)}${exp.notes ? ' · ' + escapeHtml(exp.notes) : ''}${exp.project_name ? ' · ' + escapeHtml(exp.project_name) : ''}</div>
+            </div>
+          </label>
+        `;
+
+        const chk = itemDiv.querySelector('.bill-expense-chk');
+        chk.addEventListener('change', updateBillModalTotals);
+        billListEl.appendChild(itemDiv);
+      });
+
+      updateBillModalTotals();
+    } catch (err) {
+      billListEl.innerHTML = `<p class="placeholder" style="padding:16px;text-align:center;color:var(--error);">Failed to load unbilled expenses: ${err.message}</p>`;
+      updateBillModalTotals();
+    }
+  }
+
+  function updateBillModalTotals() {
+    const checked = billListEl.querySelectorAll('.bill-expense-chk:checked');
+    let sum = 0;
+    checked.forEach((chk) => {
+      sum += Number(chk.dataset.amount) || 0;
+    });
+
+    billSelectedCountEl.textContent = `${checked.length} selected`;
+    billTotalDisplayEl.textContent = window.QuoteCraftUtils.formatCurrency(sum, baseCurrencyCode);
+    billSubmitBtn.disabled = checked.length === 0;
+  }
+
+  async function handleBillExpensesSubmit(e) {
+    e.preventDefault();
+    const clientId = billClientSelect.value ? Number(billClientSelect.value) : null;
+    const projectId = billProjectSelect.value ? Number(billProjectSelect.value) : null;
+    const checkedBoxes = billListEl.querySelectorAll('.bill-expense-chk:checked');
+    const expenseIds = Array.from(checkedBoxes).map((chk) => Number(chk.dataset.id));
+
+    if (!clientId || expenseIds.length === 0) {
+      window.QuoteCraftUtils.showToast('Select a client and at least one expense.', 'error');
+      return;
+    }
+
+    const dueDate = billDueDateInput.value || undefined;
+
+    try {
+      billSubmitBtn.disabled = true;
+      const res = await window.electronAPI.createInvoiceFromExpenses({
+        client_id: clientId,
+        project_id: projectId || null,
+        expense_ids: expenseIds,
+        date_due: dueDate,
+      });
+
+      if (res && res.ok && res.invoice) {
+        window.QuoteCraftUtils.showToast(`Invoice #${res.invoice.invoice_number} generated successfully.`, 'success');
+        closeBillModal();
+        loadExpenses();
+        window.dispatchEvent(new CustomEvent('qc-invoices-updated'));
+      } else {
+        const err = (res && res.errors && (res.errors.general || res.errors.client_id || res.errors.expense_ids)) || 'Failed to generate invoice.';
+        window.QuoteCraftUtils.showToast(err, 'error');
+      }
+    } catch (err) {
+      window.QuoteCraftUtils.showToast('Error generating invoice: ' + err.message, 'error');
+    } finally {
+      billSubmitBtn.disabled = false;
+    }
+  }
+
   function escapeHtml(str) {
     if (str == null) return '';
     return String(str)
@@ -470,6 +743,18 @@
     loadExpenses();
   });
 
+  if (clientFilterSelect) {
+    clientFilterSelect.addEventListener('change', () => {
+      loadExpenses();
+    });
+  }
+
+  if (billingFilterSelect) {
+    billingFilterSelect.addEventListener('change', () => {
+      loadExpenses();
+    });
+  }
+
   searchInput.addEventListener('input', () => {
     clearTimeout(debounceTimeout);
     debounceTimeout = setTimeout(() => {
@@ -482,6 +767,8 @@
     startDateInput.value = '';
     endDateInput.value = '';
     categoryFilterSelect.value = 'all';
+    if (clientFilterSelect) clientFilterSelect.value = '';
+    if (billingFilterSelect) billingFilterSelect.value = 'all';
     searchInput.value = '';
     applyPreset('all');
     loadExpenses();
@@ -491,6 +778,47 @@
   modalClose.addEventListener('click', closeExpenseModal);
   cancelBtn.addEventListener('click', closeExpenseModal);
   form.addEventListener('submit', handleSaveExpense);
+
+  if (billableCheckbox) {
+    billableCheckbox.addEventListener('change', () => {
+      if (billableCheckbox.checked) {
+        clientFieldsDiv.classList.remove('hidden');
+      } else {
+        clientFieldsDiv.classList.add('hidden');
+        clientSelect.value = '';
+        projectSelect.innerHTML = '<option value="">No project</option>';
+      }
+    });
+  }
+
+  if (clientSelect) {
+    clientSelect.addEventListener('change', () => {
+      loadProjectsForClient(clientSelect.value, projectSelect, 'No project');
+    });
+  }
+
+  // Bill modal wiring
+  if (billExpensesBtn) {
+    billExpensesBtn.addEventListener('click', openBillModal);
+  }
+  if (billModalClose) {
+    billModalClose.addEventListener('click', closeBillModal);
+  }
+  if (billCancelBtn) {
+    billCancelBtn.addEventListener('click', closeBillModal);
+  }
+  if (billForm) {
+    billForm.addEventListener('submit', handleBillExpensesSubmit);
+  }
+  if (billClientSelect) {
+    billClientSelect.addEventListener('change', async () => {
+      await loadProjectsForClient(billClientSelect.value, billProjectSelect, 'All projects / unassigned');
+      refreshBillableList();
+    });
+  }
+  if (billProjectSelect) {
+    billProjectSelect.addEventListener('change', refreshBillableList);
+  }
 
   currencySelect.addEventListener('change', updateExchangeRateVisibility);
 

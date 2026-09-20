@@ -1385,6 +1385,18 @@
       ? 'This quote has passed its expiry date and has not been accepted, so it is shown as Expired.'
       : '';
 
+    const expiryBanner = document.getElementById('quoteExpiryBanner');
+    if (expiryBanner) {
+      if (eff === 'expired') {
+        const expiryFormatted = q.valid_until ? window.QuoteCraftUtils.formatDate(q.valid_until) : 'specified date';
+        expiryBanner.innerHTML = `<span>⚠️</span> <div><strong>Quote Expired:</strong> This quote reached its valid-until date on ${expiryFormatted} without being accepted.</div>`;
+        expiryBanner.classList.remove('hidden');
+      } else {
+        expiryBanner.classList.add('hidden');
+        expiryBanner.textContent = '';
+      }
+    }
+
     document.getElementById('detailClient').textContent = clientDisplayName(q.client);
     const contactEl = document.getElementById('detailContact');
     if (contactEl) {
@@ -2123,15 +2135,26 @@
     await populateProjectsForClient(targetClientId, projectId ? Number(projectId) : null);
   };
 
-  document.addEventListener('pagechange', (e) => {
+  document.addEventListener('pagechange', async (e) => {
     if (e.detail === 'quotes') {
+      try {
+        if (window.electronAPI && window.electronAPI.checkExpiredQuotes) {
+          await window.electronAPI.checkExpiredQuotes();
+        }
+      } catch (_) {}
       loadLibraryItems();
       loadClients();
+      loadQuotes();
     }
   });
 
   // ---------- Init ----------
   async function init() {
+    try {
+      if (window.electronAPI && window.electronAPI.checkExpiredQuotes) {
+        await window.electronAPI.checkExpiredQuotes();
+      }
+    } catch (_) {}
     await Promise.all([loadClients(), loadQuotes(), loadLibraryItems()]);
     prefillFromSettings();
     showListView();

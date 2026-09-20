@@ -28,12 +28,16 @@ const {
   getQuoteVersionHistory,
   listQuotes,
   setQuoteStatus,
+  checkExpiredQuotes,
   markQuoteAccepted,
   markQuoteDeclined,
   convertQuoteToInvoice,
   createFinalInvoiceFromDeposit,
   createInvoiceFromTimeEntries,
+  createInvoiceFromExpenses,
+  unbillExpensesForInvoice,
   duplicateInvoice,
+  updateInvoice,
   getInvoice,
   getInvoiceByQuote,
   listInvoices,
@@ -92,6 +96,7 @@ const {
   deleteExpense,
   getExpense,
   listExpenses,
+  getUnbilledExpenses,
   getExpensesSummary,
   resolveTimeEntryRate,
   getTimeEntry,
@@ -992,6 +997,15 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('quotes:checkExpired', async () => {
+    try {
+      const result = checkExpiredQuotes();
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to check expired quotes: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('quotes:exportShareableHtml', async (event, quoteId) => {
     try {
       const quote = getQuote(quoteId);
@@ -1045,6 +1059,15 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('invoices:createFromExpenses', async (event, payload) => {
+    try {
+      const result = createInvoiceFromExpenses(payload);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to create invoice from expenses: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('invoices:getByQuote', async (event, quoteId) => {
     const invoice = getInvoiceByQuote(quoteId);
     return { ok: true, invoice };
@@ -1067,6 +1090,15 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       return { ok: false, errors: { general: `Failed to duplicate invoice: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('invoices:update', async (event, id, data, lineItems) => {
+    try {
+      const result = updateInvoice(id, data, lineItems);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to update invoice: ${err.message}` } };
     }
   });
 
@@ -1209,6 +1241,15 @@ function registerIpcHandlers() {
   });
 
   // ---------- Expenses ----------
+  ipcMain.handle('expenses:getUnbilled', async (event, clientId, projectId) => {
+    try {
+      const expenses = getUnbilledExpenses(clientId, projectId);
+      return { ok: true, expenses };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to get unbilled expenses: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('expenses:list', async (event, filter) => {
     try {
       const expenses = listExpenses(filter);

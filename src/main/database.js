@@ -163,7 +163,7 @@ function createTables() {
       client_id       INTEGER NOT NULL REFERENCES clients(id),
       contact_id      INTEGER DEFAULT NULL,
       status          TEXT NOT NULL DEFAULT 'draft'
-                        CHECK (status IN ('draft','sent','accepted','declined')),
+                        CHECK (status IN ('draft','sent','accepted','declined','expired')),
       date_created    TEXT NOT NULL,
       date_sent       TEXT DEFAULT NULL,
       date_accepted   TEXT DEFAULT NULL,
@@ -172,6 +172,9 @@ function createTables() {
       tax_amount      REAL NOT NULL DEFAULT 0,
       discount_amount REAL NOT NULL DEFAULT 0,
       total           REAL NOT NULL DEFAULT 0,
+      discount_type   TEXT NOT NULL DEFAULT 'none',
+      discount_value  REAL NOT NULL DEFAULT 0,
+      tax_rate        REAL NOT NULL DEFAULT 0,
       quote_number_root TEXT DEFAULT NULL,
       version         INTEGER NOT NULL DEFAULT 1,
       is_latest       INTEGER NOT NULL DEFAULT 1,
@@ -223,6 +226,11 @@ function createTables() {
       total           REAL NOT NULL DEFAULT 0,
       amount_paid     REAL NOT NULL DEFAULT 0,
       balance_due     REAL NOT NULL DEFAULT 0,
+      discount_type   TEXT NOT NULL DEFAULT 'none',
+      discount_value  REAL NOT NULL DEFAULT 0,
+      tax_rate        REAL NOT NULL DEFAULT 0,
+      amount_credited REAL NOT NULL DEFAULT 0,
+      edit_locked     INTEGER NOT NULL DEFAULT 0,
       recurring_profile_id INTEGER DEFAULT NULL,
       is_recurring    INTEGER NOT NULL DEFAULT 0,
       notes           TEXT DEFAULT '',
@@ -336,10 +344,17 @@ function createTables() {
       notes           TEXT DEFAULT '',
       currency        TEXT DEFAULT 'USD',
       exchange_rate   REAL DEFAULT 1.0,
+      client_id       INTEGER DEFAULT NULL REFERENCES clients(id),
+      project_id      INTEGER DEFAULT NULL REFERENCES projects(id),
+      billable        INTEGER NOT NULL DEFAULT 0,
+      billed          INTEGER NOT NULL DEFAULT 0,
+      invoice_id      INTEGER DEFAULT NULL REFERENCES invoices(id),
       created_at      TEXT NOT NULL,
       updated_at      TEXT NOT NULL
     );
   `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_invoice_id ON expenses(invoice_id);`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_client_id ON expenses(client_id);`);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS time_entries (
@@ -1014,6 +1029,68 @@ const MIGRATIONS = [
         );
       `);
       db.run(`CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id);`);
+    },
+  },
+  {
+    version: 29,
+    up: () => {
+      const invCols = new Set(db.exec(`PRAGMA table_info(invoices)`)[0].values.map((v) => v[1]));
+      if (!invCols.has('edit_locked')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN edit_locked INTEGER NOT NULL DEFAULT 0`);
+      }
+    },
+  },
+  {
+    version: 30,
+    up: () => {
+      const expCols = new Set(db.exec(`PRAGMA table_info(expenses)`)[0].values.map((v) => v[1]));
+      if (!expCols.has('client_id')) {
+        db.run(`ALTER TABLE expenses ADD COLUMN client_id INTEGER DEFAULT NULL`);
+      }
+      if (!expCols.has('project_id')) {
+        db.run(`ALTER TABLE expenses ADD COLUMN project_id INTEGER DEFAULT NULL`);
+      }
+      if (!expCols.has('billable')) {
+        db.run(`ALTER TABLE expenses ADD COLUMN billable INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!expCols.has('billed')) {
+        db.run(`ALTER TABLE expenses ADD COLUMN billed INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!expCols.has('invoice_id')) {
+        db.run(`ALTER TABLE expenses ADD COLUMN invoice_id INTEGER DEFAULT NULL`);
+      }
+      db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_invoice_id ON expenses(invoice_id);`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_client_id ON expenses(client_id);`);
+    },
+  },
+  {
+    version: 31,
+    up: () => {
+      const qCols = db.exec(`PRAGMA table_info(quotes)`)[0].values.map((v) => ({
+        name: v[1],
+        type: v[2],
+        notnull: v[3],
+        dflt_value: v[4],
+        pk: v[5],
+      }));
+      const colDefs = qCols.map((col) => {
+        if (col.name === 'id') return 'id INTEGER PRIMARY KEY AUTOINCREMENT';
+        if (col.name === 'status') {
+          return "status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','sent','accepted','declined','expired'))";
+        }
+        let def = `${col.name} ${col.type || 'TEXT'}`;
+        if (col.notnull) def += ' NOT NULL';
+        if (col.dflt_value !== null && col.dflt_value !== undefined) def += ` DEFAULT ${col.dflt_value}`;
+        return def;
+      }).join(',\n          ');
+
+      db.run(`CREATE TABLE IF NOT EXISTS quotes_v31 (\n          ${colDefs}\n        );`);
+      const colNames = qCols.map((c) => c.name).join(', ');
+      db.run(`INSERT INTO quotes_v31 (${colNames}) SELECT ${colNames} FROM quotes`);
+      db.run('DROP TABLE quotes');
+      db.run('ALTER TABLE quotes_v31 RENAME TO quotes');
+      db.run('CREATE INDEX IF NOT EXISTS idx_quotes_client_id ON quotes(client_id)');
+      db.run('CREATE INDEX IF NOT EXISTS idx_quotes_project_id ON quotes(project_id)');
     },
   },
 ];
@@ -2486,6 +2563,14 @@ function validateExpenseInput(input) {
   const exchangeRate = Number(input.exchange_rate) > 0 ? Number(input.exchange_rate) : 1.0;
   const currency = (input.currency || '').trim() || 'USD';
 
+  const billable = input.billable ? 1 : 0;
+  const clientId = input.client_id ? Number(input.client_id) : null;
+  const projectId = input.project_id ? Number(input.project_id) : null;
+
+  if (billable === 1 && (!clientId || clientId <= 0)) {
+    errors.client_id = 'Please select a client for billable expenses.';
+  }
+
   return {
     valid: Object.keys(errors).length === 0,
     errors,
@@ -2496,12 +2581,22 @@ function validateExpenseInput(input) {
       notes: (input.notes || '').trim(),
       currency,
       exchange_rate: exchangeRate,
+      billable,
+      client_id: clientId,
+      project_id: projectId,
     },
   };
 }
 
 function getExpense(id) {
-  const res = db.exec('SELECT * FROM expenses WHERE id = ?', [id]);
+  const res = db.exec(`
+    SELECT e.*, i.invoice_number, c.name AS client_name, p.name AS project_name
+    FROM expenses e
+    LEFT JOIN invoices i ON e.invoice_id = i.id
+    LEFT JOIN clients c ON e.client_id = c.id
+    LEFT JOIN projects p ON e.project_id = p.id
+    WHERE e.id = ?
+  `, [id]);
   return rowToObject(res);
 }
 
@@ -2511,14 +2606,14 @@ function createExpense(input) {
     return { ok: false, errors: validation.errors };
   }
 
-  const { amount, date, category, notes, currency, exchange_rate } = validation.data;
+  const { amount, date, category, notes, currency, exchange_rate, billable, client_id, project_id } = validation.data;
   const now = new Date().toISOString();
 
   try {
     db.run(
-      `INSERT INTO expenses (amount, date, category, notes, currency, exchange_rate, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [amount, date, category, notes, currency, exchange_rate, now, now]
+      `INSERT INTO expenses (amount, date, category, notes, currency, exchange_rate, billable, billed, client_id, project_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+      [amount, date, category, notes, currency, exchange_rate, billable, client_id, project_id, now, now]
     );
 
     const idRes = db.exec('SELECT last_insert_rowid() AS id');
@@ -2536,20 +2631,25 @@ function updateExpense(id, input) {
     return { ok: false, errors: { general: 'Expense not found.' } };
   }
 
+  if (existing.billed === 1 || existing.invoice_id) {
+    return { ok: false, locked: true, errors: { general: 'Billed expenses cannot be modified or deleted.' } };
+  }
+
   const validation = validateExpenseInput(input);
   if (!validation.valid) {
     return { ok: false, errors: validation.errors };
   }
 
-  const { amount, date, category, notes, currency, exchange_rate } = validation.data;
+  const { amount, date, category, notes, currency, exchange_rate, billable, client_id, project_id } = validation.data;
   const now = new Date().toISOString();
 
   try {
     db.run(
       `UPDATE expenses
-       SET amount = ?, date = ?, category = ?, notes = ?, currency = ?, exchange_rate = ?, updated_at = ?
+       SET amount = ?, date = ?, category = ?, notes = ?, currency = ?, exchange_rate = ?,
+           billable = ?, client_id = ?, project_id = ?, updated_at = ?
        WHERE id = ?`,
-      [amount, date, category, notes, currency, exchange_rate, now, id]
+      [amount, date, category, notes, currency, exchange_rate, billable, client_id, project_id, now, id]
     );
     saveToDisk();
     return { ok: true, expense: getExpense(id) };
@@ -2564,6 +2664,10 @@ function deleteExpense(id) {
     return { ok: false, errors: { general: 'Expense not found.' } };
   }
 
+  if (existing.billed === 1 || existing.invoice_id) {
+    return { ok: false, locked: true, errors: { general: 'Billed expenses cannot be modified or deleted.' } };
+  }
+
   try {
     db.run('DELETE FROM expenses WHERE id = ?', [id]);
     saveToDisk();
@@ -2574,34 +2678,226 @@ function deleteExpense(id) {
 }
 
 function listExpenses(filter = {}) {
-  const { startDate, endDate, category, search } = filter;
+  const { startDate, endDate, category, search, clientId, billing } = filter;
   const conditions = [];
   const params = [];
 
   if (startDate && startDate.trim()) {
-    conditions.push('date >= ?');
+    conditions.push('e.date >= ?');
     params.push(startDate.trim());
   }
 
   if (endDate && endDate.trim()) {
-    conditions.push('date <= ?');
+    conditions.push('e.date <= ?');
     params.push(endDate.trim());
   }
 
   if (category && category !== 'all') {
-    conditions.push('category = ?');
+    conditions.push('e.category = ?');
     params.push(category.trim());
+  }
+
+  if (clientId) {
+    conditions.push('e.client_id = ?');
+    params.push(Number(clientId));
+  }
+
+  if (billing === 'billable') {
+    conditions.push('e.billable = 1');
+  } else if (billing === 'billed') {
+    conditions.push('e.billed = 1');
+  } else if (billing === 'unbilled') {
+    conditions.push('e.billable = 1 AND e.billed = 0');
   }
 
   if (search && search.trim()) {
     const q = `%${search.trim()}%`;
-    conditions.push('(category LIKE ? OR notes LIKE ?)');
+    conditions.push('(e.category LIKE ? OR e.notes LIKE ?)');
     params.push(q, q);
   }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const sql = `SELECT * FROM expenses ${whereClause} ORDER BY date DESC, id DESC`;
+  const sql = `
+    SELECT e.*, i.invoice_number, c.name AS client_name, p.name AS project_name
+    FROM expenses e
+    LEFT JOIN invoices i ON e.invoice_id = i.id
+    LEFT JOIN clients c ON e.client_id = c.id
+    LEFT JOIN projects p ON e.project_id = p.id
+    ${whereClause}
+    ORDER BY e.date DESC, e.id DESC
+  `;
   return rowsToArray(db.exec(sql, params));
+}
+
+function getUnbilledExpenses(clientId, projectId) {
+  let sql = `
+    SELECT e.*, c.name AS client_name, p.name AS project_name
+    FROM expenses e
+    LEFT JOIN clients c ON e.client_id = c.id
+    LEFT JOIN projects p ON e.project_id = p.id
+    WHERE e.billable = 1 AND e.billed = 0 AND e.client_id = ?
+  `;
+  const params = [Number(clientId)];
+  if (projectId) {
+    sql += ` AND e.project_id = ?`;
+    params.push(Number(projectId));
+  }
+  sql += ` ORDER BY e.date ASC, e.id ASC`;
+  return rowsToArray(db.exec(sql, params));
+}
+
+function unbillExpensesForInvoice(invoiceId) {
+  const id = Number(invoiceId);
+  if (!Number.isInteger(id) || id <= 0) {
+    return { ok: false, errors: { general: 'Invoice not found.' } };
+  }
+  db.run(
+    `UPDATE expenses SET billed = 0, invoice_id = NULL, updated_at = ? WHERE invoice_id = ?`,
+    [new Date().toISOString(), id]
+  );
+  const count = db.getRowsModified();
+  saveToDisk();
+  return { ok: true, count };
+}
+
+function createInvoiceFromExpenses(payload) {
+  const clientId = Number(payload.client_id);
+  const projectId = payload.project_id ? Number(payload.project_id) : null;
+  const expenseIds = Array.isArray(payload.expense_ids) ? payload.expense_ids.map(Number) : [];
+
+  if (!clientId || clientId <= 0) {
+    return { ok: false, errors: { client_id: 'Client is required.' } };
+  }
+  if (expenseIds.length === 0) {
+    return { ok: false, errors: { expense_ids: 'At least one expense must be selected.' } };
+  }
+
+  const client = getClient(clientId);
+  if (!client) {
+    return { ok: false, errors: { client_id: 'Selected client does not exist.' } };
+  }
+
+  // Load and check each expense
+  const placeholders = expenseIds.map(() => '?').join(',');
+  const expenses = rowsToArray(db.exec(`SELECT * FROM expenses WHERE id IN (${placeholders})`, expenseIds));
+
+  if (expenses.length !== expenseIds.length) {
+    return { ok: false, errors: { general: 'One or more selected expenses could not be found.' } };
+  }
+
+  for (const exp of expenses) {
+    if (exp.billed === 1 || exp.invoice_id) {
+      return { ok: false, errors: { general: `Expense #${exp.id} has already been billed.` } };
+    }
+  }
+
+  const profile = getCompanyProfile();
+  const currency = client.currency || (profile && profile.default_currency) || 'USD';
+  const today = toDateString(new Date());
+  let dueDate = payload.date_due;
+  if (!dueDate || !isValidDateString(dueDate)) {
+    const days = parsePaymentTermsDays(client.payment_terms || (profile && profile.default_terms)) || 14;
+    const dueD = new Date();
+    dueD.setDate(dueD.getDate() + days);
+    dueDate = toDateString(dueD);
+  }
+
+  let subtotal = 0;
+  const lineItems = expenses.map((exp, idx) => {
+    const amt = Number(exp.amount) || 0;
+    subtotal += amt;
+    const desc = exp.notes ? `${exp.category} - ${exp.notes}` : exp.category;
+    return {
+      description: desc,
+      quantity: 1,
+      unit_price: amt,
+      tax_rate: 0,
+      discount_type: 'none',
+      discount_value: 0,
+      discount_amount: 0,
+      amount: amt,
+      sort_order: idx,
+    };
+  });
+
+  subtotal = Math.round(subtotal * 100) / 100;
+  const total = subtotal;
+  const invoiceNumber = nextInvoiceNumber();
+  const now = new Date().toISOString();
+
+  let invoiceId = null;
+  db.run('BEGIN');
+  try {
+    db.run(
+      `INSERT INTO invoices (
+        invoice_number, client_id, project_id, status,
+        date_created, date_due,
+        subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
+        currency, exchange_rate, notes, terms, invoice_type, created_at, updated_at
+      ) VALUES (?, ?, ?, 'draft', ?, ?, ?, 0, 0, ?, 0, ?, ?, 1.0, ?, ?, 'standard', ?, ?)`,
+      [
+        invoiceNumber,
+        clientId,
+        projectId,
+        today,
+        dueDate,
+        subtotal,
+        total,
+        total,
+        currency,
+        payload.notes || '',
+        payload.terms || (profile && profile.default_terms) || '',
+        now,
+        now,
+      ]
+    );
+
+    const idRes = db.exec('SELECT last_insert_rowid() AS id');
+    invoiceId = idRes[0].values[0][0];
+
+    lineItems.forEach((item) => {
+      db.run(
+        `INSERT INTO invoice_line_items (
+          invoice_id, description, quantity, unit_price, tax_rate,
+          discount_type, discount_value, discount_amount, discount_percent, amount, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        [
+          invoiceId,
+          item.description,
+          item.quantity,
+          item.unit_price,
+          item.tax_rate,
+          item.discount_type,
+          item.discount_value,
+          item.discount_amount,
+          item.amount,
+          item.sort_order,
+        ]
+      );
+    });
+
+    // Mark expenses as billed
+    db.run(
+      `UPDATE expenses SET billed = 1, invoice_id = ?, updated_at = ? WHERE id IN (${placeholders})`,
+      [invoiceId, now, ...expenseIds]
+    );
+
+    db.run('COMMIT');
+  } catch (err) {
+    db.run('ROLLBACK');
+    return { ok: false, errors: { general: `Failed to create invoice from expenses: ${err.message}` } };
+  }
+
+  saveToDisk();
+  const invoice = getInvoice(invoiceId);
+  addAuditEntry({
+    entityType: 'invoice',
+    entityRef: invoiceNumber,
+    action: 'created',
+    description: `Generated invoice ${invoiceNumber} from ${expenses.length} expense(s) for ${currency} ${total.toFixed(2)}`,
+  });
+
+  return { ok: true, invoice };
 }
 
 function getExpensesSummary(filter = {}) {
@@ -3615,7 +3911,27 @@ function projectSummary(projectId) {
     : null;
 }
 
-const ALLOWED_QUOTE_STATUSES = ['draft', 'sent', 'accepted', 'declined'];
+const ALLOWED_QUOTE_STATUSES = ['draft', 'sent', 'accepted', 'declined', 'expired'];
+
+
+function checkExpiredQuotes() {
+  const today = toDateString(new Date());
+  const now = new Date().toISOString();
+  db.run(
+    `UPDATE quotes
+     SET status = 'expired', updated_at = ?
+     WHERE status IN ('draft', 'sent')
+       AND valid_until IS NOT NULL
+       AND valid_until != ''
+       AND valid_until < ?`,
+    [now, today]
+  );
+  const count = db.getRowsModified();
+  if (count > 0) {
+    saveToDisk();
+  }
+  return { ok: true, count };
+}
 
 function setQuoteStatus(id, status) {
   if (!ALLOWED_QUOTE_STATUSES.includes(status)) {
@@ -4004,6 +4320,195 @@ function getInvoiceByQuote(quoteId) {
 // normal numbering/status pipeline (draft, invoice_type 'standard') like any
 // other invoice. The included entries are marked Billed and linked to the new
 // invoice in the same transaction, so they cannot be double-billed.
+function validateInvoiceInput(data, lineItems) {
+  const errors = {};
+  if (!data.client_id) {
+    errors.client_id = 'Please select a client.';
+  }
+
+  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+    errors.general = 'Invoice must have at least one line item.';
+    return errors;
+  }
+
+  for (let i = 0; i < lineItems.length; i++) {
+    const item = lineItems[i];
+    if (!item.description || !String(item.description).trim()) {
+      errors.general = `Line item ${i + 1} is missing a description.`;
+      return errors;
+    }
+    if (!(Number(item.quantity) > 0)) {
+      errors.general = `Line item ${i + 1} must have a quantity greater than zero.`;
+      return errors;
+    }
+    if (!(Number(item.unit_price) > 0)) {
+      errors.general = `Line item ${i + 1} must have a unit price greater than zero.`;
+      return errors;
+    }
+    if (hasMoreThanTwoDecimals(item.unit_price)) {
+      errors.general = `Line item ${i + 1} unit price may only have up to 2 decimal places.`;
+      return errors;
+    }
+  }
+
+  const dateCreated = data.date_created === undefined || data.date_created === null ? '' : String(data.date_created);
+  if (!isValidDateString(dateCreated)) {
+    errors.date_created = 'Invoice date is required and must be a valid date.';
+    return errors;
+  }
+  const dateDue = data.date_due === undefined || data.date_due === null ? '' : String(data.date_due);
+  if (dateDue !== '' && !isValidDateString(dateDue)) {
+    errors.date_due = 'Due date must be a valid date.';
+    return errors;
+  }
+  if (dateDue !== '' && dateDue < dateCreated) {
+    errors.date_due = 'Due date cannot be before the invoice date.';
+    return errors;
+  }
+
+  const taxRateStr = data.tax_rate === undefined || data.tax_rate === null ? '' : String(data.tax_rate);
+  if (taxRateStr !== '') {
+    const tr = Number(data.tax_rate);
+    if (Number.isNaN(tr) || tr < 0 || tr > 100) {
+      errors.tax_rate = 'Tax rate must be a number between 0 and 100.';
+      return errors;
+    }
+  }
+
+  const discountType = data.discount_type || 'none';
+  if (!['none', 'percent', 'fixed'].includes(discountType)) {
+    errors.discount_value = 'Invalid discount type.';
+    return errors;
+  }
+  if (discountType !== 'none') {
+    const dvStr = data.discount_value === undefined || data.discount_value === null ? '' : String(data.discount_value);
+    const dv = Number(data.discount_value);
+    if (dvStr === '' || Number.isNaN(dv) || dv < 0 || (discountType === 'percent' && dv > 100)) {
+      errors.discount_value = discountType === 'percent'
+        ? 'Percentage discount must be between 0 and 100.'
+        : 'Discount cannot be negative.';
+      return errors;
+    }
+    if (discountType === 'fixed' && hasMoreThanTwoDecimals(dvStr)) {
+      errors.discount_value = 'Discount amount may only have up to 2 decimal places.';
+      return errors;
+    }
+  }
+
+  return errors;
+}
+
+function updateInvoice(id, data, lineItems) {
+  const errors = validateInvoiceInput(data, lineItems);
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+  checkProjectBelongsToClient(data, errors);
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  const existing = getInvoice(id);
+  if (!existing) {
+    return { ok: false, errors: { general: 'Invoice not found.' } };
+  }
+
+  const hasPayments = (existing.payments && existing.payments.length > 0) || Number(existing.amount_paid) > 0 || existing.edit_locked === 1;
+  if (hasPayments) {
+    return { ok: false, errors: { general: 'Invoice has recorded payments and cannot be edited.' } };
+  }
+
+  const now = new Date().toISOString();
+  const profile = getCompanyProfile();
+  const currency = data.currency || existing.currency || (profile && profile.default_currency) || 'USD';
+  const exchangeRate = data.exchange_rate !== undefined ? (Number(data.exchange_rate) || 1.0) : (Number(existing.exchange_rate) || 1.0);
+
+  const dateCreatedVal = data.date_created === undefined || data.date_created === null
+    ? existing.date_created
+    : (String(data.date_created) || existing.date_created);
+  const dateDueVal = data.date_due === undefined || data.date_due === null
+    ? existing.date_due
+    : (String(data.date_due) || null);
+
+  const total = Number(data.total) || 0;
+  const credited = computeCreditedTotal(id);
+  const balanceDue = Math.max(0, Math.round((total + credited) * 100) / 100);
+
+  db.run('BEGIN');
+  try {
+    db.run(
+      `UPDATE invoices SET
+        client_id = ?, contact_id = ?, project_id = ?, date_created = ?, date_due = ?,
+        subtotal = ?, discount_amount = ?, discount_type = ?,
+        discount_value = ?, tax_rate = ?, tax_amount = ?, total = ?, balance_due = ?,
+        currency = ?, exchange_rate = ?, notes = ?, terms = ?, updated_at = ?
+       WHERE id = ?`,
+      [
+        data.client_id,
+        data.contact_id !== undefined ? (data.contact_id || null) : existing.contact_id,
+        data.project_id !== undefined ? (data.project_id || null) : existing.project_id,
+        dateCreatedVal,
+        dateDueVal,
+        Number(data.subtotal) || 0,
+        Number(data.discount !== undefined ? data.discount : data.discount_amount) || 0,
+        data.discount_type || 'none',
+        Number(data.discount_value) || 0,
+        Number(data.tax_rate) || 0,
+        Number(data.tax !== undefined ? data.tax : data.tax_amount) || 0,
+        total,
+        balanceDue,
+        currency,
+        exchangeRate,
+        data.notes !== undefined ? data.notes : (existing.notes || ''),
+        data.terms !== undefined ? data.terms : (existing.terms || ''),
+        now,
+        id,
+      ]
+    );
+
+    db.run(`DELETE FROM invoice_line_items WHERE invoice_id = ?`, [id]);
+    lineItems.forEach((item, idx) => {
+      db.run(
+        `INSERT INTO invoice_line_items (
+          invoice_id, description, quantity, unit_price,
+          tax_rate, discount_type, discount_value, discount_amount,
+          discount_percent, amount, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          String(item.description).trim(),
+          Number(item.quantity),
+          Number(item.unit_price),
+          item.tax_rate !== undefined && item.tax_rate !== null && !isNaN(Number(item.tax_rate))
+            ? Number(item.tax_rate)
+            : (Number(data.tax_rate) || 0),
+          item.discount_type || 'none',
+          Number(item.discount_value) || 0,
+          Number(item.discount_amount) || 0,
+          0,
+          Number(item.amount) || 0,
+          idx,
+        ]
+      );
+    });
+
+    db.run('COMMIT');
+  } catch (err) {
+    db.run('ROLLBACK');
+    return { ok: false, errors: { general: `Failed to update invoice: ${err.message}` } };
+  }
+
+  saveToDisk();
+  const updatedInvoice = getInvoice(id);
+  addAuditEntry({
+    entityType: 'invoice',
+    entityRef: updatedInvoice.invoice_number || 'Invoice #' + id,
+    action: 'updated',
+    description: 'Updated invoice ' + (updatedInvoice.invoice_number || '') + ' to ' + (updatedInvoice.currency || '$') + ' ' + (Number(updatedInvoice.total) || 0).toFixed(2),
+  });
+  return { ok: true, invoice: updatedInvoice };
+}
+
 function createInvoiceFromTimeEntries(input) {
   const over = input || {};
   const clientId = Number(over.client_id);
@@ -4909,7 +5414,7 @@ function addPayment(invoiceId, input) {
     const b = computeInvoiceBalance(invoiceId);
     const newStatus = b.balance <= 0.0001 ? 'paid' : (b.paid > 0 ? 'partially_paid' : existing.status);
     db.run(
-      `UPDATE invoices SET amount_paid = ?, balance_due = ?, status = ?, updated_at = ? WHERE id = ?`,
+      `UPDATE invoices SET amount_paid = ?, balance_due = ?, status = ?, edit_locked = 1, updated_at = ? WHERE id = ?`,
       [b.paid, b.balance, newStatus, now, invoiceId]
     );
 
@@ -7302,6 +7807,7 @@ module.exports = {
   getQuoteVersionHistory,
   listQuotes,
   setQuoteStatus,
+  checkExpiredQuotes,
   markQuoteAccepted,
   markQuoteDeclined,
   parsePaymentTermsDays,
@@ -7309,7 +7815,10 @@ module.exports = {
   createFinalInvoiceFromDeposit,
   createInvoiceFromTimeEntries,
   unbillTimeEntriesForInvoice,
+  createInvoiceFromExpenses,
+  unbillExpensesForInvoice,
   duplicateInvoice,
+  updateInvoice,
   getInvoice,
   getInvoiceByQuote,
   listInvoices,
@@ -7343,6 +7852,7 @@ module.exports = {
   deleteExpense,
   getExpense,
   listExpenses,
+  getUnbilledExpenses,
   getExpensesSummary,
   resolveTimeEntryRate,
   getTimeEntry,

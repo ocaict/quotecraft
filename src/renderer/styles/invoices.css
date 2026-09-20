@@ -73,3 +73,16 @@
   color: var(--text);
 }
 
+/* ---------- Invoice Edit Form ---------- */
+.invoice-form {
+  margin-top: 16px;
+}
+
+.invoice-form .form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  margin-bottom: 40px;
+}
+
+

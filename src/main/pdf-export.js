@@ -23,6 +23,7 @@ const QUOTE_STATUS_LABELS = {
   sent: 'Sent',
   accepted: 'Accepted',
   declined: 'Declined',
+  expired: 'Expired',
 };
 
 const INVOICE_STATUS_LABELS = {
