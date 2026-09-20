@@ -73,6 +73,9 @@
     } else if (preset === 'this_month') {
       rrStartDate.value = getISODate(new Date(y, m, 1));
       rrEndDate.value   = getISODate(new Date(y, m + 1, 0));
+    } else if (preset === 'last_month') {
+      rrStartDate.value = getISODate(new Date(y, m - 1, 1));
+      rrEndDate.value   = getISODate(new Date(y, m, 0));
     } else if (preset === 'all_time') {
       rrStartDate.value = '';
       rrEndDate.value   = '';
@@ -440,6 +443,11 @@
 
     if (rrExportCsvBtn) rrExportCsvBtn.addEventListener('click', exportCsv);
     if (rrPrintBtn)     rrPrintBtn.addEventListener('click', () => window.print());
+
+    const rrChipBar = document.getElementById('rrChipBar');
+    if (rrChipBar && rrPresetSelect && window.QuoteCraftUtils && window.QuoteCraftUtils.initDateChips) {
+      window.QuoteCraftUtils.initDateChips(rrChipBar, rrPresetSelect);
+    }
 
     loadReport();
   }

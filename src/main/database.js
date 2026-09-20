@@ -6178,6 +6178,23 @@ function getDashboardStats() {
   const profitMonth = Math.round((paidMonth - expensesMonth) * 100) / 100;
   const profitYear = Math.round((paidYear - expensesYear) * 100) / 100;
 
+  // Previous month comparisons (for MoM trend badges)
+  const invoicedPrevMonth = scalar(`SELECT COALESCE(SUM(total * COALESCE(exchange_rate, 1.0)), 0) FROM invoices WHERE strftime('%Y-%m', date_created) = strftime('%Y-%m', 'now', 'start of month', '-1 month')`);
+  const grossPaidPrevMonth = scalar(`SELECT COALESCE(SUM(p.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM payments p JOIN invoices i ON p.invoice_id = i.id WHERE strftime('%Y-%m', p.payment_date) = strftime('%Y-%m', 'now', 'start of month', '-1 month')`);
+  const creditedPrevMonth = scalar(`SELECT COALESCE(SUM(cn.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM credit_notes cn JOIN invoices i ON cn.invoice_id = i.id WHERE strftime('%Y-%m', cn.date_created) = strftime('%Y-%m', 'now', 'start of month', '-1 month')`);
+  const paidPrevMonth = Math.max(0, Math.round((grossPaidPrevMonth - creditedPrevMonth) * 100) / 100);
+
+  // 6-month sparkline data points
+  const sparklineData = [];
+  for (let m = 5; m >= 0; m--) {
+    const shift = m === 0 ? `'now', 'start of month'` : `'now', 'start of month', '-${m} month'`;
+    const invVal = scalar(`SELECT COALESCE(SUM(total * COALESCE(exchange_rate, 1.0)), 0) FROM invoices WHERE strftime('%Y-%m', date_created) = strftime('%Y-%m', ${shift})`);
+    const paidGrossVal = scalar(`SELECT COALESCE(SUM(p.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM payments p JOIN invoices i ON p.invoice_id = i.id WHERE strftime('%Y-%m', p.payment_date) = strftime('%Y-%m', ${shift})`);
+    const creditedVal = scalar(`SELECT COALESCE(SUM(cn.amount * COALESCE(i.exchange_rate, 1.0)), 0) FROM credit_notes cn JOIN invoices i ON cn.invoice_id = i.id WHERE strftime('%Y-%m', cn.date_created) = strftime('%Y-%m', ${shift})`);
+    const paidNetVal = Math.max(0, Math.round((paidGrossVal - creditedVal) * 100) / 100);
+    sparklineData.push({ invoiced: invVal, paid: paidNetVal });
+  }
+
   const quoteActivity = rowsToArray(db.exec(
     `SELECT id, quote_number AS number, client_id, status, total, currency,
             COALESCE(updated_at, created_at) AS ts
@@ -6190,7 +6207,12 @@ function getDashboardStats() {
        FROM invoices`
   )).map((r) => Object.assign({ kind: 'invoice' }, r));
 
-  const activity = quoteActivity.concat(invoiceActivity);
+  const paymentActivity = rowsToArray(db.exec(
+    `SELECT p.id, p.amount AS total, p.payment_date AS ts, p.invoice_id, i.invoice_number AS number, i.client_id, i.currency
+       FROM payments p JOIN invoices i ON p.invoice_id = i.id`
+  )).map((r) => Object.assign({ kind: 'payment', status: 'paid' }, r));
+
+  const activity = quoteActivity.concat(invoiceActivity).concat(paymentActivity);
   activity.sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
   activity.splice(10);
 
@@ -6206,13 +6228,16 @@ function getDashboardStats() {
     overdue_count: overdueCount,
     overdue_balance: overdueBalance,
     invoiced_month: invoicedMonth,
+    invoiced_prev_month: invoicedPrevMonth,
     invoiced_year: invoicedYear,
     paid_month: paidMonth,
+    paid_prev_month: paidPrevMonth,
     paid_year: paidYear,
     expenses_month: expensesMonth,
     expenses_year: expensesYear,
     profit_month: profitMonth,
     profit_year: profitYear,
+    sparkline_data: sparklineData,
     activity,
   };
 }

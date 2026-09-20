@@ -161,3 +161,20 @@
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
+
+/* ─── Print ───────────────────────────────────────────────── */
+@media print {
+  #page-audit-log .detail-actions,
+  #page-audit-log .audit-filter-card {
+    display: none !important;
+  }
+
+  .audit-table-card {
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .audit-table th { color: #333 !important; }
+  .audit-table td { color: #111 !important; }
+}

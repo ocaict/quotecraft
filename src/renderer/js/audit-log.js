@@ -9,6 +9,11 @@
   const auditRefreshBtn   = document.getElementById('auditRefreshBtn');
   const auditTableCount   = document.getElementById('auditTableCount');
   const auditTableBody    = document.getElementById('auditTableBody');
+  const auditExportCsvBtn = document.getElementById('auditExportCsvBtn');
+  const auditPrintBtn     = document.getElementById('auditPrintBtn');
+  const auditChipBar      = document.getElementById('auditChipBar');
+
+  let currentEntries = [];
 
   const TYPE_LABELS = {
     client: 'Client',
@@ -65,6 +70,17 @@
     } else if (preset === 'this_month') {
       auditStartDate.value = `${y}-${String(m + 1).padStart(2, '0')}-01`;
       auditEndDate.value = iso(dayStart);
+    } else if (preset === 'last_month') {
+      const s = new Date(y, m - 1, 1);
+      const e = new Date(y, m, 0);
+      auditStartDate.value = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}-01`;
+      auditEndDate.value   = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
+    } else if (preset === 'this_quarter') {
+      const qm = Math.floor(m / 3) * 3;
+      const s = new Date(y, qm, 1);
+      const e = new Date(y, qm + 3, 0);
+      auditStartDate.value = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}-${String(s.getDate()).padStart(2, '0')}`;
+      auditEndDate.value   = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
     } else if (preset === 'this_year') {
       auditStartDate.value = `${y}-01-01`;
       auditEndDate.value = iso(dayStart);
@@ -76,9 +92,11 @@
 
   async function loadEntries() {
     const filter = {};
-    if (auditTypeSelect.value && auditTypeSelect.value !== 'all') filter.recordType = auditTypeSelect.value;
-    if (auditStartDate.value) filter.from = auditStartDate.value;
-    if (auditEndDate.value) filter.to = auditEndDate.value;
+    if (auditTypeSelect && auditTypeSelect.value && auditTypeSelect.value !== 'all') {
+      filter.recordType = auditTypeSelect.value;
+    }
+    if (auditStartDate && auditStartDate.value) filter.from = auditStartDate.value;
+    if (auditEndDate && auditEndDate.value) filter.to = auditEndDate.value;
 
     let entries = [];
     try {
@@ -89,6 +107,7 @@
       return;
     }
 
+    currentEntries = entries;
     auditTableCount.textContent = entries.length + (entries.length === 1 ? ' entry' : ' entries');
 
     if (entries.length === 0) {
@@ -117,12 +136,61 @@
       .join('');
   }
 
+  // ── CSV Export ───────────────────────────────────────────────
+  function exportCsv() {
+    if (!currentEntries || currentEntries.length === 0) {
+      window.QuoteCraftUtils.showToast('No audit entries to export.', 'info');
+      return;
+    }
+
+    const rows = [
+      ['Audit Log Export'],
+      ['Exported: ' + new Date().toLocaleString()],
+      ['Filter Record Type: ' + (auditTypeSelect && auditTypeSelect.value !== 'all' ? auditTypeSelect.value : 'All types')],
+      ['Date Range: ' + (auditStartDate.value || 'Beginning') + ' to ' + (auditEndDate.value || 'Present')],
+      [],
+      ['Timestamp', 'Entity Type', 'Action', 'Record / Ref', 'Details'],
+      ...currentEntries.map((e) => [
+        e.created_at || '',
+        TYPE_LABELS[e.entity_type] || e.entity_type || '',
+        ACTION_LABELS[e.action] || e.action || '',
+        e.entity_ref || '',
+        e.description || '',
+      ]),
+    ];
+
+    const csv = rows.map((r) => r.map((v) => `"${String(v || '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    window.QuoteCraftUtils.showToast('Audit log CSV exported.', 'success');
+  }
+
   if (auditRefreshBtn) {
     auditRefreshBtn.addEventListener('click', loadEntries);
   }
 
+  if (auditExportCsvBtn) {
+    auditExportCsvBtn.addEventListener('click', exportCsv);
+  }
+
+  if (auditPrintBtn) {
+    auditPrintBtn.addEventListener('click', () => window.print());
+  }
+
   if (auditPresetSelect) {
-    auditPresetSelect.addEventListener('change', () => applyPreset(auditPresetSelect.value));
+    auditPresetSelect.addEventListener('change', () => {
+      applyPreset(auditPresetSelect.value);
+      loadEntries();
+    });
+  }
+
+  if (auditTypeSelect) {
+    auditTypeSelect.addEventListener('change', loadEntries);
   }
 
   [auditStartDate, auditEndDate].forEach((el) => {
@@ -130,10 +198,18 @@
       el.addEventListener('change', () => {
         if (auditPresetSelect.value && auditPresetSelect.value !== 'custom') {
           auditPresetSelect.value = 'custom';
+          if (auditPresetSelect.dispatchEvent) {
+            auditPresetSelect.dispatchEvent(new Event('change'));
+          }
         }
+        loadEntries();
       });
     }
   });
+
+  if (auditChipBar && auditPresetSelect && window.QuoteCraftUtils && window.QuoteCraftUtils.initDateChips) {
+    window.QuoteCraftUtils.initDateChips(auditChipBar, auditPresetSelect, () => loadEntries());
+  }
 
   document.addEventListener('pagechange', (e) => {
     if (e.detail === 'audit-log') {

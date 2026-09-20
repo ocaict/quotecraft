@@ -1692,6 +1692,17 @@
 
       <!-- Filters Toolbar -->
       <div class="pl-toolbar">
+        <div class="report-chip-row">
+          <span class="report-chip-label">Quick Range:</span>
+          <div class="date-chip-bar" id="plChipBar">
+            <button type="button" class="date-chip" data-preset="this_month">This Month</button>
+            <button type="button" class="date-chip" data-preset="last_month">Last Month</button>
+            <button type="button" class="date-chip" data-preset="this_quarter">This Quarter</button>
+            <button type="button" class="date-chip" data-preset="this_year">YTD</button>
+            <button type="button" class="date-chip" data-preset="all">All Time</button>
+          </div>
+        </div>
+
         <div class="filter-group">
           <label for="plDatePreset">Period</label>
           <select id="plDatePreset">
@@ -1700,6 +1711,7 @@
             <option value="last_12_months">Last 12 Months</option>
             <option value="this_quarter">This Quarter</option>
             <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
             <option value="all">All Time</option>
             <option value="custom">Custom Range</option>
           </select>
@@ -1830,6 +1842,17 @@
 
       <!-- Filter Bar -->
       <div class="rr-filter-card">
+        <div class="report-chip-row">
+          <span class="report-chip-label">Quick Range:</span>
+          <div class="date-chip-bar" id="rrChipBar">
+            <button type="button" class="date-chip" data-preset="this_month">This Month</button>
+            <button type="button" class="date-chip" data-preset="last_month">Last Month</button>
+            <button type="button" class="date-chip" data-preset="this_quarter">This Quarter</button>
+            <button type="button" class="date-chip" data-preset="this_year">YTD</button>
+            <button type="button" class="date-chip" data-preset="all_time">All Time</button>
+          </div>
+        </div>
+
         <div class="rr-filter-group">
           <label>Group by Period</label>
           <div class="rr-period-pills">
@@ -1847,6 +1870,7 @@
             <option value="last_12_months">Last 12 Months</option>
             <option value="this_quarter">This Quarter</option>
             <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
             <option value="all_time">All Time</option>
             <option value="custom">Custom Range…</option>
           </select>
@@ -1950,6 +1974,17 @@
 
       <!-- Filter Bar -->
       <div class="cp-filter-card">
+        <div class="report-chip-row">
+          <span class="report-chip-label">Quick Range:</span>
+          <div class="date-chip-bar" id="cpChipBar">
+            <button type="button" class="date-chip" data-preset="this_month">This Month</button>
+            <button type="button" class="date-chip" data-preset="last_month">Last Month</button>
+            <button type="button" class="date-chip" data-preset="this_quarter">This Quarter</button>
+            <button type="button" class="date-chip" data-preset="this_year">YTD</button>
+            <button type="button" class="date-chip" data-preset="all_time">All Time</button>
+          </div>
+        </div>
+
         <div class="cp-filter-group">
           <label for="cpPresetSelect">Date Range</label>
           <select id="cpPresetSelect" class="cp-preset-select">
@@ -1958,6 +1993,7 @@
             <option value="last_12_months">Last 12 Months</option>
             <option value="this_quarter">This Quarter</option>
             <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
             <option value="all_time">All Time</option>
             <option value="custom">Custom Range</option>
           </select>
@@ -2781,16 +2817,33 @@
           <h1>Audit Log</h1>
           <p class="subtitle">Chronological, read-only record of changes to your data.</p>
         </div>
+        <div class="detail-actions">
+          <button type="button" class="btn btn-secondary btn-small" id="auditExportCsvBtn">📊 Export CSV</button>
+          <button type="button" class="btn btn-secondary btn-small" id="auditPrintBtn">🖨️ Print / PDF</button>
+        </div>
       </div>
 
       <!-- Filter Bar -->
       <div class="audit-filter-card">
+        <div class="report-chip-row">
+          <span class="report-chip-label">Quick Range:</span>
+          <div class="date-chip-bar" id="auditChipBar">
+            <button type="button" class="date-chip" data-preset="this_month">This Month</button>
+            <button type="button" class="date-chip" data-preset="last_month">Last Month</button>
+            <button type="button" class="date-chip" data-preset="this_quarter">This Quarter</button>
+            <button type="button" class="date-chip" data-preset="this_year">YTD</button>
+            <button type="button" class="date-chip" data-preset="all_time">All Time</button>
+          </div>
+        </div>
+
         <div class="audit-filter-group">
           <label for="auditPresetSelect">Date Range</label>
           <select id="auditPresetSelect" class="audit-preset-select">
             <option value="today">Today</option>
             <option value="this_week" selected>This Week</option>
             <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
+            <option value="this_quarter">This Quarter</option>
             <option value="this_year">This Year</option>
             <option value="all_time">All Time</option>
             <option value="custom">Custom Range</option>

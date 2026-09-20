@@ -361,4 +361,35 @@ window.QuoteCraftUtils = {
     reload();
     return { reload };
   },
+
+  // Initializes quick date preset chip bar associated with a preset <select> element
+  initDateChips(chipBarEl, selectEl, onSelect) {
+    if (!chipBarEl || !selectEl) return null;
+    const chips = chipBarEl.querySelectorAll('.date-chip');
+
+    function sync() {
+      const val = selectEl.value;
+      chips.forEach((c) => {
+        c.classList.toggle('active', c.dataset.preset === val);
+      });
+    }
+
+    chips.forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const preset = chip.dataset.preset;
+        if (!preset) return;
+        selectEl.value = preset;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        sync();
+        if (typeof onSelect === 'function') {
+          onSelect(preset);
+        }
+      });
+    });
+
+    selectEl.addEventListener('change', sync);
+    sync();
+
+    return { sync };
+  },
 };

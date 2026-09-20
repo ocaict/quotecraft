@@ -84,6 +84,11 @@
       const end = new Date(year, month + 1, 0);
       startDateInput.value = getISODate(start);
       endDateInput.value = getISODate(end);
+    } else if (preset === 'last_month') {
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month, 0);
+      startDateInput.value = getISODate(start);
+      endDateInput.value = getISODate(end);
     } else if (preset === 'all') {
       startDateInput.value = '';
       endDateInput.value = '';
@@ -386,4 +391,9 @@
 
   // Initial preset
   applyPreset('this_year');
+
+  const plChipBar = document.getElementById('plChipBar');
+  if (plChipBar && datePresetSelect && window.QuoteCraftUtils && window.QuoteCraftUtils.initDateChips) {
+    window.QuoteCraftUtils.initDateChips(plChipBar, datePresetSelect);
+  }
 })();

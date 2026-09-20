@@ -79,6 +79,11 @@
     } else if (preset === 'this_month') {
       cpStartDate.value = getISODate(new Date(y, m, 1));
       cpEndDate.value   = getISODate(new Date(y, m + 1, 0));
+    } else if (preset === 'last_month') {
+      const s = new Date(y, m - 1, 1);
+      const e = new Date(y, m, 0);
+      cpStartDate.value = getISODate(s);
+      cpEndDate.value   = getISODate(e);
     } else if (preset === 'all_time') {
       cpStartDate.value = '';
       cpEndDate.value   = '';
@@ -457,6 +462,11 @@
     if (cpPresetSelect) {
       cpPresetSelect.value = 'this_year';
       applyPreset('this_year');
+    }
+
+    const cpChipBar = document.getElementById('cpChipBar');
+    if (cpChipBar && cpPresetSelect && window.QuoteCraftUtils && window.QuoteCraftUtils.initDateChips) {
+      window.QuoteCraftUtils.initDateChips(cpChipBar, cpPresetSelect);
     }
 
     // Lazy load on navigation
