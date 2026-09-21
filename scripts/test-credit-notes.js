@@ -1,5 +1,13 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+
+// Isolated temp DB — MUST be set BEFORE require('../src/main/database')
+const testDbPath = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'qc-credit-notes-')),
+  'test.db'
+);
+process.env.TEST_DB_PATH = testDbPath;
 
 async function runTests() {
   console.log('--- Starting Credit Notes Comprehensive Verification ---');

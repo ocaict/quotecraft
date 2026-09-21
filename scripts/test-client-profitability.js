@@ -1,7 +1,16 @@
 // Automated Verification Suite for Client Profitability Report
+const fs = require('fs');
+const path = require('path');
+
+// Isolated temp DB — MUST be set BEFORE require('../src/main/database')
+const testDbPath = path.join(__dirname, 'test-client-profitability.sqlite');
+if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+process.env.TEST_DB_PATH = testDbPath;
+
 const {
   initializeDatabase,
   getDb,
+  closeDatabase,
   saveToDisk,
   getClientProfitabilityReport,
   addClient,

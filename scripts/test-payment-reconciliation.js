@@ -1,7 +1,19 @@
 // Automated Verification Suite for Payment Method Reconciliation
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+
+// Isolated temp DB — MUST be set BEFORE require('../src/main/database')
+const testDbPath = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'qc-payment-recon-')),
+  'test.db'
+);
+process.env.TEST_DB_PATH = testDbPath;
+
 const {
   initializeDatabase,
   getDb,
+  closeDatabase,
   addClient,
   convertQuoteToInvoice,
   createQuote,

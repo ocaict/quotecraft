@@ -1,7 +1,19 @@
 // Automated Verification Suite for Expense Tracking & Dashboard Real Profit
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+
+// Isolated temp DB — MUST be set BEFORE require('../src/main/database')
+const testDbPath = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'qc-expenses-')),
+  'test.db'
+);
+process.env.TEST_DB_PATH = testDbPath;
+
 const {
   initializeDatabase,
   getDb,
+  closeDatabase,
   createExpense,
   updateExpense,
   deleteExpense,
@@ -190,7 +202,12 @@ async function runTests() {
   console.log('======================================================\n');
 }
 
-runTests().catch((err) => {
-  console.error('Fatal error running tests:', err);
-  process.exit(1);
-});
+runTests()
+  .catch((err) => {
+    console.error('Fatal error running tests:', err);
+    process.exit(1);
+  })
+  .finally(() => {
+    closeDatabase();
+    fs.rmSync(path.dirname(testDbPath), { recursive: true, force: true });
+  });

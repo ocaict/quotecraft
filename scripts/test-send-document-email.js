@@ -1,8 +1,16 @@
 const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-// Use an in-memory or isolated database for tests
+// Isolated temp DB — MUST be set BEFORE require('../src/main/database')
+const testDbPath = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'qc-send-email-')),
+  'test.db'
+);
+process.env.TEST_DB_PATH = testDbPath;
+
+// Use an isolated database for tests
 process.env.NODE_ENV = 'test';
 const dbModule = require('../src/main/database');
 const { renderQuotePdf, renderInvoicePdf } = require('../src/main/pdf-export');

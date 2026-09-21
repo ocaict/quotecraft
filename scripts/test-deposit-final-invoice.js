@@ -1,7 +1,19 @@
 // Verification script for Deposit Invoice -> Final Remainder Invoice Generation
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+
+// Isolated temp DB — MUST be set BEFORE require('../src/main/database')
+const testDbPath = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'qc-deposit-final-')),
+  'test.db'
+);
+process.env.TEST_DB_PATH = testDbPath;
+
 const {
   initializeDatabase,
   getDb,
+  closeDatabase,
   saveToDisk,
   addClient,
   saveCompanyProfile,
