@@ -33,7 +33,8 @@
   let tooltip = null;
 
   // ── Currency Formatting ─────────────────────────────────────
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', CAD: 'C$', AUD: 'A$', CHF: 'Fr', CNY: '¥', INR: '₹', MXN: '$', BRL: 'R$', KRW: '₩', NGN: '₦', ZAR: 'R', TRY: '₺', SEK: 'kr', NOK: 'kr', DKK: 'kr', NZD: 'NZ$', HKD: 'HK$', SGD: 'S$' };
+  const CURRENCY_SYMBOLS = {};
+  for (const c of (window.CURRENCIES || [])) CURRENCY_SYMBOLS[c.code] = c.symbol;
 
   function fmtCurrency(amount, currency) {
     const sym = CURRENCY_SYMBOLS[currency] || currency + ' ';
