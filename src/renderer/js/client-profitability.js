@@ -448,6 +448,23 @@
       cpExportCsvBtn.addEventListener('click', exportCsv);
     }
 
+    const cpExportPdfBtn = document.getElementById('cpExportPdfBtn');
+    if (cpExportPdfBtn) {
+      cpExportPdfBtn.addEventListener('click', async () => {
+        try {
+          const filter = {
+            startDate: cpStartDate.value || undefined,
+            endDate:   cpEndDate.value   || undefined,
+            sort:      currentSort,
+            includeInactive: cpIncludeInactive ? cpIncludeInactive.checked : false,
+          };
+          await window.electronAPI.exportClientProfitabilityPdf(filter);
+        } catch (err) {
+          console.error('Failed to export client profitability PDF:', err);
+        }
+      });
+    }
+
     if (cpPrintBtn) {
       cpPrintBtn.addEventListener('click', () => window.print());
     }

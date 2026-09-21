@@ -378,6 +378,18 @@
     exportCsvBtn.addEventListener('click', exportCsv);
   }
 
+  const plExportPdfBtn = document.getElementById('plExportPdfBtn');
+  if (plExportPdfBtn) {
+    plExportPdfBtn.addEventListener('click', async () => {
+      try {
+        const filter = getFilterPayload();
+        await window.electronAPI.exportProfitLossPdf(filter);
+      } catch (err) {
+        console.error('Failed to export profit & loss PDF:', err);
+      }
+    });
+  }
+
   if (printBtn) {
     printBtn.addEventListener('click', () => window.print());
   }

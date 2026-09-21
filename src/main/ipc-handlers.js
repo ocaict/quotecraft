@@ -7,6 +7,9 @@ const {
   renderCreditNotePdf,
   renderClientStatementPdf,
   renderPaymentsPdf,
+  renderRevenueReportPdf,
+  renderProfitLossPdf,
+  renderClientProfitabilityReportPdf,
   renderQuoteHtml,
   renderInvoiceHtml,
   renderQuotePrintHtml,
@@ -2217,6 +2220,87 @@ function registerIpcHandlers() {
       const result = await dialog.showSaveDialog({
         title: 'Save Client Statement PDF',
         defaultPath: `Statement - ${safeName} - ${statement.startDate} to ${statement.endDate}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { ok: true, cancelled: true };
+      }
+      fs.writeFileSync(result.filePath, buffer);
+      return { ok: true, savedPath: result.filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not export PDF: ${err.message}` } };
+    }
+  });
+
+  // ---------- Revenue Report PDF Export ----------
+  ipcMain.handle('reports:exportRevenuePdf', async (event, filter) => {
+    try {
+      const report = getRevenueReport(filter || {});
+      if (!report) {
+        return { ok: false, errors: { general: 'No revenue report data available.' } };
+      }
+      const profile = getCompanyProfile();
+      const buffer = await renderRevenueReportPdf(report, profile);
+
+      const start = (filter && filter.startDate) ? filter.startDate : 'all';
+      const end = (filter && filter.endDate) ? filter.endDate : 'all';
+      const result = await dialog.showSaveDialog({
+        title: 'Save Revenue Report PDF',
+        defaultPath: `Revenue Report - ${start} to ${end}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { ok: true, cancelled: true };
+      }
+      fs.writeFileSync(result.filePath, buffer);
+      return { ok: true, savedPath: result.filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not export PDF: ${err.message}` } };
+    }
+  });
+
+  // ---------- Profit & Loss PDF Export ----------
+  ipcMain.handle('reports:exportProfitLossPdf', async (event, filter) => {
+    try {
+      const report = getProfitLossReport(filter || {});
+      if (!report) {
+        return { ok: false, errors: { general: 'No profit & loss data available.' } };
+      }
+      const profile = getCompanyProfile();
+      const buffer = await renderProfitLossPdf(report, profile);
+
+      const start = (filter && filter.startDate) ? filter.startDate : 'all';
+      const end = (filter && filter.endDate) ? filter.endDate : 'all';
+      const result = await dialog.showSaveDialog({
+        title: 'Save Profit & Loss PDF',
+        defaultPath: `Profit and Loss - ${start} to ${end}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { ok: true, cancelled: true };
+      }
+      fs.writeFileSync(result.filePath, buffer);
+      return { ok: true, savedPath: result.filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not export PDF: ${err.message}` } };
+    }
+  });
+
+  // ---------- Client Profitability PDF Export ----------
+  ipcMain.handle('reports:exportClientProfitabilityPdf', async (event, filter) => {
+    try {
+      const report = getClientProfitabilityReport(filter || {});
+      if (!report) {
+        return { ok: false, errors: { general: 'No client profitability data available.' } };
+      }
+      const profile = getCompanyProfile();
+      const buffer = await renderClientProfitabilityReportPdf(report, profile);
+
+      const start = (filter && filter.startDate) ? filter.startDate : 'all';
+      const end = (filter && filter.endDate) ? filter.endDate : 'all';
+      const result = await dialog.showSaveDialog({
+        title: 'Save Client Profitability PDF',
+        defaultPath: `Client Profitability - ${start} to ${end}.pdf`,
         filters: [{ name: 'PDF', extensions: ['pdf'] }],
       });
       if (result.canceled || !result.filePath) {

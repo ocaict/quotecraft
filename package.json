@@ -1,7 +1,7 @@
 {
   "name": "quotecraft",
   "productName": "QuoteCraft",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Professional quote and invoice management for freelancers and small businesses",
   "main": "src/main/main.js",
   "scripts": {

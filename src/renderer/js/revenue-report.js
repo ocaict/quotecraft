@@ -443,6 +443,18 @@
     });
 
     if (rrExportCsvBtn) rrExportCsvBtn.addEventListener('click', exportCsv);
+
+    const rrExportPdfBtn = document.getElementById('rrExportPdfBtn');
+    if (rrExportPdfBtn) {
+      rrExportPdfBtn.addEventListener('click', async () => {
+        try {
+          const filter = getFilterPayload();
+          await window.electronAPI.exportRevenueReportPdf(filter);
+        } catch (err) {
+          console.error('Failed to export revenue PDF:', err);
+        }
+      });
+    }
     if (rrPrintBtn)     rrPrintBtn.addEventListener('click', () => window.print());
 
     const rrChipBar = document.getElementById('rrChipBar');
