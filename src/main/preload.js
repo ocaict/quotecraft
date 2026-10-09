@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   markQuoteDeclined: (id, data) => ipcRenderer.invoke('quotes:markDeclined', id, data),
   checkExpiredQuotes: () => ipcRenderer.invoke('quotes:checkExpired'),
   exportQuotePdf: (quoteId) => ipcRenderer.invoke('quotes:exportPdf', quoteId),
+  previewQuotePdf: (quoteId) => ipcRenderer.invoke('quotes:previewPdf', quoteId),
   printQuote: (quoteId) => ipcRenderer.invoke('quotes:print', quoteId),
   exportShareableQuoteHtml: (quoteId) => ipcRenderer.invoke('quotes:exportShareableHtml', quoteId),
 
@@ -80,6 +81,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listInvoices: () => ipcRenderer.invoke('invoices:list'),
   getInvoice: (id) => ipcRenderer.invoke('invoices:get', id),
   exportInvoicePdf: (invoiceId) => ipcRenderer.invoke('invoices:exportPdf', invoiceId),
+  previewInvoicePdf: (invoiceId) => ipcRenderer.invoke('invoices:previewPdf', invoiceId),
   printInvoice: (invoiceId) => ipcRenderer.invoke('invoices:print', invoiceId),
   exportInvoicesPdfBatch: (ids) => ipcRenderer.invoke('invoices:exportPdfBatch', ids),
   setInvoiceStatus: (id, status) => ipcRenderer.invoke('invoices:setStatus', id, status),
@@ -178,5 +180,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getUnbilledExpenses: (clientId, projectId) => ipcRenderer.invoke('expenses:getUnbilled', clientId, projectId),
   createInvoiceFromExpenses: (payload) => ipcRenderer.invoke('invoices:createFromExpenses', payload),
   bulkDeleteExpenses: (ids) => ipcRenderer.invoke('expenses:bulkDelete', ids),
+
+  // Diagnostics & System Health
+  getDiagnostics: () => ipcRenderer.invoke('diagnostics:get'),
+  exportDiagnostics: () => ipcRenderer.invoke('diagnostics:export'),
 });
 

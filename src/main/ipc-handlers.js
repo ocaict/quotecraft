@@ -144,6 +144,8 @@ const {
   addAuditEntry,
   getAuditLogEntries,
   getRecurringSummary,
+  checkIntegrity,
+  getDbPath,
 } = require('./database');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
 const {
@@ -972,6 +974,20 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('quotes:previewPdf', async (event, quoteId) => {
+    try {
+      const quote = getQuote(quoteId);
+      if (!quote) return { ok: false, errors: { general: 'Quote not found.' } };
+      const client = getClient(quote.client_id);
+      const profile = getCompanyProfile();
+      const buffer = await renderQuotePdf(quote, client, profile);
+      const dataUrl = `data:application/pdf;base64,${buffer.toString('base64')}`;
+      return { ok: true, dataUrl, filename: `Quote ${quote.quote_number || ''}.pdf` };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not preview PDF: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('quotes:print', async (event, quoteId) => {
     try {
       const quote = getQuote(quoteId);
@@ -1142,6 +1158,20 @@ function registerIpcHandlers() {
       return { ok: true, savedPath: result.filePath };
     } catch (err) {
       return { ok: false, errors: { general: `Could not export PDF: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('invoices:previewPdf', async (event, invoiceId) => {
+    try {
+      const invoice = getInvoice(invoiceId);
+      if (!invoice) return { ok: false, errors: { general: 'Invoice not found.' } };
+      const client = getClient(invoice.client_id);
+      const profile = getCompanyProfile();
+      const buffer = await renderInvoicePdf(invoice, client, profile);
+      const dataUrl = `data:application/pdf;base64,${buffer.toString('base64')}`;
+      return { ok: true, dataUrl, filename: `Invoice ${invoice.invoice_number || ''}.pdf` };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not preview PDF: ${err.message}` } };
     }
   });
 
@@ -2367,6 +2397,92 @@ function registerIpcHandlers() {
       return res.ok ? { ok: true, settings: res.settings } : { ok: false, error: res.error };
     } catch (err) {
       return { ok: false, error: err.message };
+    }
+  });
+
+  // ---------- Diagnostics & Troubleshooting ----------
+  ipcMain.handle('diagnostics:get', async () => {
+    try {
+      const os = require('os');
+      const profile = getCompanyProfile();
+      const totals = getAttachmentTotals();
+      const backupSettings = getAutoBackupSettings();
+      const integrity = checkIntegrity();
+      const dbPath = getDbPath();
+      const dbStats = fs.existsSync(dbPath) ? fs.statSync(dbPath) : null;
+
+      const data = {
+        appVersion: app.getVersion(),
+        nodeVersion: process.versions.node,
+        electronVersion: process.versions.electron,
+        chromeVersion: process.versions.chrome,
+        platform: process.platform,
+        arch: process.arch,
+        osType: os.type(),
+        osRelease: os.release(),
+        uptimeSecs: Math.round(process.uptime()),
+        memoryUsageMB: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+        databasePath: dbPath,
+        databaseSizeMB: dbStats ? (dbStats.size / (1024 * 1024)).toFixed(2) : '0',
+        databaseIntegrity: integrity.ok ? 'Healthy (ok)' : `Warning: ${integrity.status || integrity.error}`,
+        attachmentsCount: totals.count,
+        attachmentsSizeMB: (totals.totalSize / (1024 * 1024)).toFixed(2),
+        autoBackupEnabled: Boolean(backupSettings && backupSettings.enabled),
+        backupSchedule: backupSettings ? backupSettings.schedule : 'daily',
+        companyProfileSet: Boolean(profile && profile.business_name),
+      };
+      return { ok: true, diagnostics: data };
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to load diagnostics: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('diagnostics:export', async () => {
+    try {
+      const os = require('os');
+      const profile = getCompanyProfile();
+      const totals = getAttachmentTotals();
+      const backupSettings = getAutoBackupSettings();
+      const integrity = checkIntegrity();
+      const dbPath = getDbPath();
+      const dbStats = fs.existsSync(dbPath) ? fs.statSync(dbPath) : null;
+
+      const report = {
+        exportedAt: new Date().toISOString(),
+        system: {
+          appVersion: app.getVersion(),
+          nodeVersion: process.versions.node,
+          electronVersion: process.versions.electron,
+          chromeVersion: process.versions.chrome,
+          platform: process.platform,
+          osType: os.type(),
+          osRelease: os.release(),
+          arch: process.arch,
+          memoryRSS: process.memoryUsage().rss,
+          uptime: process.uptime(),
+        },
+        database: {
+          path: dbPath,
+          sizeBytes: dbStats ? dbStats.size : 0,
+          integrityCheck: integrity,
+        },
+        storage: {
+          attachmentsCount: totals.count,
+          attachmentsSizeBytes: totals.totalSize,
+          autoBackup: backupSettings,
+        },
+      };
+
+      const result = await dialog.showSaveDialog({
+        title: 'Save Diagnostics Report',
+        defaultPath: `QuoteCraft_Diagnostics_${new Date().toISOString().slice(0, 10)}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (result.canceled || !result.filePath) return { ok: true, cancelled: true };
+      fs.writeFileSync(result.filePath, JSON.stringify(report, null, 2), 'utf8');
+      return { ok: true, savedPath: result.filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not export diagnostics: ${err.message}` } };
     }
   });
 }

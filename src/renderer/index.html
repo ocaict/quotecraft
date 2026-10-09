@@ -1013,6 +1013,7 @@
             <button type="button" id="detailShareQuoteBtn" class="btn btn-secondary" title="Share PDF or standalone HTML quote with acceptance instructions">📤 Share Quote</button>
             <button type="button" id="detailEditBtn" class="btn btn-secondary">Edit</button>
             <button type="button" id="detailDuplicateBtn" class="btn btn-secondary" title="Create a new Draft quote with the same client and line items but a fresh number and today's date">Duplicate</button>
+            <button type="button" id="detailPreviewBtn" class="btn btn-secondary" title="Preview quote PDF in-app">👁 Preview PDF</button>
             <button type="button" id="detailExportBtn" class="btn btn-secondary">Download PDF</button>
             <button type="button" id="detailPrintBtn" class="btn btn-secondary" title="Open the system print dialog for this quote">🖨 Print</button>
             <button type="button" id="detailSendEmailBtn" class="btn btn-secondary">✉️ Send by Email</button>
@@ -1406,6 +1407,7 @@
               </select>
             </div>
             <button type="button" id="invoiceEditBtn" class="btn btn-secondary" title="Edit line items, notes, terms, and invoice details">✏️ Edit Invoice</button>
+            <button type="button" id="invoicePreviewBtn" class="btn btn-secondary" title="Preview invoice PDF in-app">👁 Preview PDF</button>
             <button type="button" id="invoiceExportBtn" class="btn btn-secondary">Download PDF</button>
             <button type="button" id="invoiceShareHtmlBtn" class="btn btn-secondary" title="Export a standalone, responsive HTML invoice document">Share HTML</button>
             <button type="button" id="invoicePrintBtn" class="btn btn-secondary" title="Open the system print dialog for this invoice">🖨 Print</button>
@@ -3024,6 +3026,33 @@
             <div id="autobackupRecent" class="backup-recent hidden"></div>
             <div class="app-lock-msg" id="autobackupMsg"></div>
           </div>
+        <div class="card" id="diagnosticsCard">
+          <h2>System Diagnostics & Health</h2>
+          <p class="subtitle">Diagnostic information for troubleshooting, data health, and technical support.</p>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:16px;">
+            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
+              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">App Version</div>
+              <div id="diagAppVersion" style="font-size:14px; font-weight:600;">—</div>
+            </div>
+            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
+              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">Database Integrity</div>
+              <div id="diagDbIntegrity" style="font-size:14px; font-weight:600; color:#3fb950;">—</div>
+            </div>
+            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
+              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">Database Size</div>
+              <div id="diagDbSize" style="font-size:14px; font-weight:600;">—</div>
+            </div>
+            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
+              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">Attachments Storage</div>
+              <div id="diagAttachmentsSize" style="font-size:14px; font-weight:600;">—</div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button type="button" id="exportDiagnosticsBtn" class="btn btn-secondary">Export Diagnostic Report (.json)</button>
+            <span class="hint">Includes non-sensitive system specs, database health, and logs.</span>
+          </div>
         </div>
 
         <div class="form-actions">
@@ -4355,7 +4384,21 @@
       <button type="button" id="notifViewInvoicesBtn" class="btn btn-small btn-secondary">View Invoices &rarr;</button>
     </div>
   </div>
-  <div id="notifBackdrop" class="notif-backdrop hidden"></div>
+  <!-- In-App PDF Preview Modal -->
+  <div id="pdfPreviewModal" class="modal-overlay hidden" style="z-index: 10000;">
+    <div class="modal-content" style="max-width: 900px; width: 95vw; height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px;">
+        <h2 id="pdfPreviewTitle" style="margin: 0; font-size: 1.2rem;">PDF Preview</h2>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button type="button" id="pdfPreviewDownloadBtn" class="btn btn-small btn-primary">Download PDF</button>
+          <button type="button" id="pdfPreviewCloseBtn" class="modal-close" aria-label="Close">&times;</button>
+        </div>
+      </div>
+      <div style="flex: 1; position: relative; background: #2a2e3d; border-radius: 6px; overflow: hidden;">
+        <iframe id="pdfPreviewIframe" style="width: 100%; height: 100%; border: none;"></iframe>
+      </div>
+    </div>
+  </div>
 
   <script src="js/currencies.js"></script>
   <script src="js/utils.js"></script>

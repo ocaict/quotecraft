@@ -105,6 +105,7 @@
   const detailMarkAcceptedBtn = document.getElementById('detailMarkAcceptedBtn');
   const detailShareQuoteBtn = document.getElementById('detailShareQuoteBtn');
   const detailDuplicateBtn = document.getElementById('detailDuplicateBtn');
+  const detailPreviewBtn = document.getElementById('detailPreviewBtn');
 
   // Acceptance Paper Trail elements
   const quoteAcceptanceCard = document.getElementById('quoteAcceptanceCard');
@@ -2347,6 +2348,31 @@
       detailExportBtn.disabled = false;
     }
   });
+
+  if (detailPreviewBtn) {
+    detailPreviewBtn.addEventListener('click', async () => {
+      if (!currentDetailId) return;
+      detailPreviewBtn.disabled = true;
+      window.QuoteCraftUtils.showBusy('Generating PDF preview\u2026');
+      try {
+        const res = await window.electronAPI.previewQuotePdf(currentDetailId);
+        if (!res.ok) {
+          toast(res.errors && res.errors.general ? res.errors.general : 'Could not generate PDF preview.', 'error');
+          return;
+        }
+        window.QuoteCraftUtils.openPdfPreview({
+          title: res.filename || 'Quote Preview',
+          dataUrl: res.dataUrl,
+          onDownload: () => detailExportBtn && detailExportBtn.click(),
+        });
+      } catch (e) {
+        toast('Could not preview PDF: ' + e.message, 'error');
+      } finally {
+        window.QuoteCraftUtils.hideBusy();
+        detailPreviewBtn.disabled = false;
+      }
+    });
+  }
 
   if (detailPrintBtn) {
     detailPrintBtn.addEventListener('click', async () => {

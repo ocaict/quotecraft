@@ -757,4 +757,48 @@
   }
 
   timerLoad();
+
+  // ---------- Diagnostics & System Health ----------
+  const exportDiagnosticsBtn = document.getElementById('exportDiagnosticsBtn');
+  const diagAppVersion = document.getElementById('diagAppVersion');
+  const diagDbIntegrity = document.getElementById('diagDbIntegrity');
+  const diagDbSize = document.getElementById('diagDbSize');
+  const diagAttachmentsSize = document.getElementById('diagAttachmentsSize');
+
+  async function loadDiagnostics() {
+    try {
+      const res = await window.electronAPI.getDiagnostics();
+      if (!res || !res.ok) return;
+      const d = res.diagnostics;
+      if (diagAppVersion) diagAppVersion.textContent = `v${d.appVersion}`;
+      if (diagDbIntegrity) {
+        diagDbIntegrity.textContent = d.databaseIntegrity;
+        diagDbIntegrity.style.color = d.databaseIntegrity.startsWith('Healthy') ? '#3fb950' : '#f85149';
+      }
+      if (diagDbSize) diagDbSize.textContent = `${d.databaseSizeMB} MB`;
+      if (diagAttachmentsSize) diagAttachmentsSize.textContent = `${d.attachmentsSizeMB} MB (${d.attachmentsCount} file${d.attachmentsCount !== 1 ? 's' : ''})`;
+    } catch (e) {
+      /* silently ignore – non-critical */
+    }
+  }
+
+  if (exportDiagnosticsBtn) {
+    exportDiagnosticsBtn.addEventListener('click', async () => {
+      exportDiagnosticsBtn.disabled = true;
+      try {
+        const res = await window.electronAPI.exportDiagnostics();
+        if (res && res.ok && !res.cancelled) {
+          window.QuoteCraftUtils.showToast('Diagnostics report saved to ' + res.savedPath, 'success');
+        } else if (res && !res.ok) {
+          window.QuoteCraftUtils.showToast((res.errors && res.errors.general) || 'Could not export diagnostics.', 'error');
+        }
+      } catch (e) {
+        window.QuoteCraftUtils.showToast('Could not export diagnostics: ' + e.message, 'error');
+      } finally {
+        exportDiagnosticsBtn.disabled = false;
+      }
+    });
+  }
+
+  loadDiagnostics();
 })();

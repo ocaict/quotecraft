@@ -25,6 +25,7 @@
   const invoiceDetailStatusSelect = document.getElementById('invoiceDetailStatusSelect');
   const invoiceIssueCreditBtn = document.getElementById('invoiceIssueCreditBtn');
   const invoiceDuplicateBtn = document.getElementById('invoiceDuplicateBtn');
+  const invoicePreviewBtn = document.getElementById('invoicePreviewBtn');
 
   const creditNoteModal = document.getElementById('creditNoteModal');
   const creditNoteForm = document.getElementById('creditNoteForm');
@@ -1735,6 +1736,31 @@
       invoiceExportBtn.disabled = false;
     }
   });
+
+  if (invoicePreviewBtn) {
+    invoicePreviewBtn.addEventListener('click', async () => {
+      if (!currentInvoiceId) return;
+      invoicePreviewBtn.disabled = true;
+      window.QuoteCraftUtils.showBusy('Generating PDF preview\u2026');
+      try {
+        const res = await window.electronAPI.previewInvoicePdf(currentInvoiceId);
+        if (!res.ok) {
+          toast(res.errors && res.errors.general ? res.errors.general : 'Could not generate PDF preview.', 'error');
+          return;
+        }
+        window.QuoteCraftUtils.openPdfPreview({
+          title: res.filename || 'Invoice Preview',
+          dataUrl: res.dataUrl,
+          onDownload: () => invoiceExportBtn && invoiceExportBtn.click(),
+        });
+      } catch (e) {
+        toast('Could not preview PDF: ' + e.message, 'error');
+      } finally {
+        window.QuoteCraftUtils.hideBusy();
+        invoicePreviewBtn.disabled = false;
+      }
+    });
+  }
 
   if (invoiceShareHtmlBtn) {
     invoiceShareHtmlBtn.addEventListener('click', async () => {

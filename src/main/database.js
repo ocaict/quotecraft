@@ -24,7 +24,27 @@ function saveToDisk() {
   if (!db) throw new Error('Database not initialized');
   const data = db.export();
   const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_FILE, buffer);
+  const dir = path.dirname(DB_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmpFile = path.join(dir, `.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  fs.writeFileSync(tmpFile, buffer);
+  try {
+    fs.renameSync(tmpFile, DB_FILE);
+  } catch (err) {
+    fs.copyFileSync(tmpFile, DB_FILE);
+    try { fs.unlinkSync(tmpFile); } catch (e) { /* ignore */ }
+  }
+}
+
+function checkIntegrity() {
+  if (!db) return { ok: false, error: 'Database not initialized' };
+  try {
+    const res = db.exec('PRAGMA integrity_check');
+    const status = res && res[0] && res[0].values && res[0].values[0] && res[0].values[0][0];
+    return { ok: status === 'ok', status: String(status || 'unknown') };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 }
 
 function getDb() {
@@ -40,6 +60,10 @@ async function initializeDatabase() {
   if (fileExists) {
     const fileBuffer = fs.readFileSync(DB_FILE);
     db = new SQL.Database(fileBuffer);
+    const integrity = checkIntegrity();
+    if (!integrity.ok) {
+      console.warn('[QuoteCraft] Database integrity check warning:', integrity.status);
+    }
   } else {
     db = new SQL.Database();
   }
@@ -8385,5 +8409,7 @@ module.exports = {
   addAuditEntry,
   getAuditLogEntries,
   getRecurringSummary,
+  checkIntegrity,
+  getDbPath,
 };
 

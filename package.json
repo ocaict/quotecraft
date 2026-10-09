@@ -6,6 +6,7 @@
   "main": "src/main/main.js",
   "scripts": {
     "dev": "electron .",
+    "test": "node scripts/run-all-tests.js",
     "dist": "electron-builder --win nsis",
     "dist:dir": "electron-builder --win nsis --dir"
   },

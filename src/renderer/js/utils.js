@@ -174,6 +174,43 @@ window.QuoteCraftUtils = {
     overlay.classList.add('hidden');
   },
 
+  openPdfPreview(options) {
+    const opts = options || {};
+    const modal = document.getElementById('pdfPreviewModal');
+    const titleEl = document.getElementById('pdfPreviewTitle');
+    const iframe = document.getElementById('pdfPreviewIframe');
+    const dlBtn = document.getElementById('pdfPreviewDownloadBtn');
+    const closeBtn = document.getElementById('pdfPreviewCloseBtn');
+    if (!modal || !iframe) return;
+
+    if (titleEl) titleEl.textContent = opts.title || 'PDF Preview';
+    iframe.src = opts.dataUrl || 'about:blank';
+
+    function close() {
+      modal.classList.add('hidden');
+      iframe.src = 'about:blank';
+      modal.removeEventListener('click', onBackdrop);
+      if (closeBtn) closeBtn.removeEventListener('click', close);
+      if (dlBtn) dlBtn.onclick = null;
+    }
+
+    function onBackdrop(e) {
+      if (e.target === modal) close();
+    }
+
+    modal.classList.remove('hidden');
+    modal.addEventListener('click', onBackdrop);
+    if (closeBtn) closeBtn.addEventListener('click', close, { once: true });
+
+    if (dlBtn) {
+      dlBtn.onclick = () => {
+        if (typeof opts.onDownload === 'function') {
+          opts.onDownload();
+        }
+      };
+    }
+  },
+
   // Mounts the "Unbilled Time" card used by the client and project overview
   // screens: lists unbilled time entries in the given scope with per-row
   // checkboxes, then creates one standard draft invoice (one grouped line per
