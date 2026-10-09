@@ -55,14 +55,30 @@
 
   function clearFieldError(field) {
     const el = form.elements[field];
-    if (el) el.classList.remove('invalid');
+    if (el) {
+      if (el.classList) {
+        el.classList.remove('invalid');
+      } else if (typeof el.length === 'number') {
+        for (let i = 0; i < el.length; i++) {
+          if (el[i] && el[i].classList) el[i].classList.remove('invalid');
+        }
+      }
+    }
     const errEl = document.querySelector(`[data-error-for="${field}"]`);
     if (errEl) errEl.textContent = '';
   }
 
   function showFieldError(field, message) {
     const el = form.elements[field];
-    if (el) el.classList.add('invalid');
+    if (el) {
+      if (el.classList) {
+        el.classList.add('invalid');
+      } else if (typeof el.length === 'number') {
+        for (let i = 0; i < el.length; i++) {
+          if (el[i] && el[i].classList) el[i].classList.add('invalid');
+        }
+      }
+    }
     const errEl = document.querySelector(`[data-error-for="${field}"]`);
     if (errEl) errEl.textContent = message || '';
   }
@@ -225,9 +241,13 @@
     data.logo_path = currentLogoPath;
 
     let valid = true;
+    const cleared = new Set();
     for (const key of Object.keys(form.elements)) {
       const el = form.elements[key];
-      if (el && el.name) clearFieldError(el.name);
+      if (el && el.name && !cleared.has(el.name)) {
+        cleared.add(el.name);
+        clearFieldError(el.name);
+      }
     }
 
     try {
@@ -311,14 +331,18 @@
         ? window.QuoteCraftUtils.formatDate(new Date(res.createdAt))
         : 'unknown date';
       const counts = res.counts || {};
-      document.getElementById('restoreFileInfo').textContent =
-        res.fileName +
-        '\nCreated: ' + created +
-        '\nContents: ' +
+      let contentsSummary =
         counts.clients + ' client(s), ' +
         counts.quotes + ' quote(s), ' +
         counts.invoices + ' invoice(s), ' +
         counts.payments + ' payment(s)';
+      if (counts.attachments) {
+        contentsSummary += ', ' + counts.attachments + ' attachment(s)';
+      }
+      document.getElementById('restoreFileInfo').textContent =
+        res.fileName +
+        '\nCreated: ' + created +
+        '\nContents: ' + contentsSummary;
       openRestoreModal();
     } catch (e) {
       window.QuoteCraftUtils.showToast('Could not read backup: ' + e.message, 'error');
