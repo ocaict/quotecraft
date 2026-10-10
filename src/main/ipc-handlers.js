@@ -164,9 +164,11 @@ const {
   getAttachmentPath,
   deleteAttachmentFile,
   restoreAttachments,
+  restoreAttachmentsFromZip,
 } = require('./attachments');
 const {
   createBackupPayload,
+  createBackupZip,
   runNow: runAutoBackupNow,
   listAutoBackups,
   getDefaultBackupsFolder,
@@ -1608,17 +1610,25 @@ function registerIpcHandlers() {
 
   ipcMain.handle('backup:export', async () => {
     try {
-      const payload = createBackupPayload(getCompanyProfile());
       const stamp = new Date().toISOString().slice(0, 10);
       const result = await dialog.showSaveDialog({
         title: 'Export QuoteCraft Backup',
-        defaultPath: `QuoteCraft-Backup-${stamp}.json`,
-        filters: [{ name: 'QuoteCraft Backup', extensions: ['json', 'qcbackup'] }],
+        defaultPath: `QuoteCraft-Backup-${stamp}.qcbackup`,
+        filters: [
+          { name: 'QuoteCraft Backup (*.qcbackup, *.zip)', extensions: ['qcbackup', 'zip'] },
+          { name: 'Legacy QuoteCraft Backup (*.json)', extensions: ['json'] },
+        ],
       });
       if (result.canceled || !result.filePath) {
         return { ok: true, cancelled: true };
       }
-      fs.writeFileSync(result.filePath, JSON.stringify(payload, null, 2));
+      if (result.filePath.toLowerCase().endsWith('.json')) {
+        const payload = createBackupPayload(getCompanyProfile());
+        fs.writeFileSync(result.filePath, JSON.stringify(payload, null, 2));
+      } else {
+        const zip = createBackupZip(getCompanyProfile());
+        zip.writeZip(result.filePath);
+      }
       return { ok: true, savedPath: result.filePath };
     } catch (err) {
       return { ok: false, errors: { general: `Could not export backup: ${err.message}` } };
@@ -1630,7 +1640,7 @@ function registerIpcHandlers() {
       const result = await dialog.showOpenDialog({
         title: 'Select a QuoteCraft backup to restore',
         properties: ['openFile'],
-        filters: [{ name: 'QuoteCraft Backup', extensions: ['json', 'qcbackup'] }],
+        filters: [{ name: 'QuoteCraft Backup (*.qcbackup, *.zip, *.json)', extensions: ['qcbackup', 'zip', 'json'] }],
       });
       if (result.canceled || result.filePaths.length === 0) {
         return { ok: true, cancelled: true };
@@ -1669,8 +1679,9 @@ function registerIpcHandlers() {
       // Timestamped pre-restore copy of current data, so the restore can be undone.
       fs.mkdirSync(BACKUPS_DIR(), { recursive: true });
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const autoPath = path.join(BACKUPS_DIR(), `pre-restore-${stamp}.json`);
-      fs.writeFileSync(autoPath, JSON.stringify(createBackupPayload(getCompanyProfile()), null, 2));
+      const autoPath = path.join(BACKUPS_DIR(), `pre-restore-${stamp}.qcbackup`);
+      const preZip = createBackupZip(getCompanyProfile());
+      preZip.writeZip(autoPath);
 
       await restoreDatabaseFromBuffer(v.dbBytes);
 
@@ -1685,7 +1696,12 @@ function registerIpcHandlers() {
 
       // Restore attachment files next to the (now replaced) database. The DB
       // rows already point at these stored filenames; we only write the bytes.
-      const attachmentRestore = restoreAttachments(v.attachments || []);
+      let attachmentRestore = { ok: true, restored: 0, skipped: 0 };
+      if (v.isZip && v.zip) {
+        attachmentRestore = restoreAttachmentsFromZip(v.zip);
+      } else {
+        attachmentRestore = restoreAttachments(v.attachments || []);
+      }
 
       const restoredProfile = getCompanyProfile();
       if (restoredProfile) {

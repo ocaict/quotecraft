@@ -7526,11 +7526,104 @@ function getDatabaseBuffer() {
 
 
 async function validateBackupBuffer(buffer) {
+  if (!buffer || buffer.length < 4) {
+    return { ok: false, error: 'The backup file is empty or too small to be valid.' };
+  }
+
+  // 1. Support modern standard ZIP backup archives (.qcbackup / .zip)
+  if (buffer[0] === 0x50 && buffer[1] === 0x4B) {
+    let zip = null;
+    try {
+      const AdmZip = require('adm-zip');
+      zip = new AdmZip(buffer);
+    } catch (e) {
+      return { ok: false, error: 'The backup archive could not be opened as a valid ZIP archive.' };
+    }
+
+    const manifestEntry = zip.getEntry('manifest.json');
+    if (!manifestEntry) {
+      return { ok: false, error: 'The backup archive is missing manifest.json.' };
+    }
+
+    let payload = null;
+    try {
+      payload = JSON.parse(manifestEntry.getData().toString('utf8'));
+    } catch (e) {
+      return { ok: false, error: 'The backup manifest.json is malformed or invalid JSON.' };
+    }
+
+    if (!payload || payload.app !== 'QuoteCraft' || payload.magic !== 'QUOTECRAFT_BACKUP') {
+      return { ok: false, error: 'This archive is not a valid QuoteCraft backup.' };
+    }
+
+    const dbEntry = zip.getEntry('database.sqlite') || zip.getEntry('database.db');
+    if (!dbEntry) {
+      return { ok: false, error: 'The backup archive contains no database file (database.sqlite).' };
+    }
+
+    const dbBytes = dbEntry.getData();
+    if (dbBytes.length < 16 || dbBytes.slice(0, 16).toString('latin1') !== 'SQLite format 3\u0000') {
+      return { ok: false, error: 'The backup database is not a valid SQLite database.' };
+    }
+
+    // Logo extraction if in zip
+    let logo = null;
+    if (payload.logoFileName) {
+      const logoEntry = zip.getEntry(payload.logoFileName) || zip.getEntry(`logo${path.extname(payload.logoFileName)}`);
+      if (logoEntry) {
+        logo = logoEntry.getData().toString('base64');
+      }
+    }
+    payload.logo = logo;
+
+    // Attachments in ZIP
+    const attachmentEntries = zip.getEntries().filter((e) => !e.isDirectory && e.entryName.replace(/\\/g, '/').startsWith('attachments/'));
+
+    let counts = { clients: 0, quotes: 0, invoices: 0, payments: 0, attachments: attachmentEntries.length };
+    try {
+      const SQL = await loadSqlJs();
+      const trial = new SQL.Database(dbBytes);
+      const integrity = trial.exec('PRAGMA integrity_check');
+      const status =
+        integrity && integrity.length && integrity[0].values.length
+          ? String(integrity[0].values[0][0])
+          : 'error';
+      if (status !== 'ok') {
+        trial.close();
+        return { ok: false, error: `The backup database failed its integrity check (${status}).` };
+      }
+      const table = (name) => {
+        try {
+          const r = trial.exec(`SELECT COUNT(*) FROM ${name}`);
+          return r && r.length && r[0].values.length ? Number(r[0].values[0][0]) : 0;
+        } catch (e) {
+          return 0;
+        }
+      };
+      counts = {
+        clients: table('clients'),
+        contacts: table('client_contacts'),
+        notes: table('client_notes'),
+        items: table('line_item_templates'),
+        quotes: table('quotes'),
+        invoices: table('invoices'),
+        payments: table('payments'),
+        attachments: attachmentEntries.length || table('attachments'),
+      };
+      trial.close();
+    } catch (e) {
+      return { ok: false, error: `The backup database could not be opened: ${e.message}` };
+    }
+
+    return { ok: true, isZip: true, payload, dbBytes, counts, attachments: [], zip };
+  }
+
+  // 2. Legacy JSON backup format (versions 1 and 2)
   let payload = null;
   try {
     payload = JSON.parse(buffer.toString('utf8'));
   } catch (e) {
-    return { ok: false, error: 'This file is not a valid QuoteCraft backup (it could not be read as JSON).' };
+    return { ok: false, error: 'This file is not a valid QuoteCraft backup (it could not be read as JSON or ZIP).' };
   }
 
   const SUPPORTED_BACKUP_VERSIONS = [1, 2];

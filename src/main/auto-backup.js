@@ -7,10 +7,12 @@ const {
   getAutoBackupSettings,
   saveAutoBackupSettings,
 } = require('./database');
-const { buildBackupAttachments } = require('./attachments');
+const { buildBackupAttachments, addAttachmentsToZip } = require('./attachments');
+const AdmZip = require('adm-zip');
 
 const AUTO_PREFIX = 'quoteCraft-auto-';
 const AUTO_EXT = '.json';
+const ZIP_EXT = '.qcbackup';
 const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const BACKUP_VERSION = 2;
 
@@ -57,7 +59,44 @@ function createBackupPayload(profile) {
   };
 }
 
-function buildAutoBackupFilename(now) {
+// Modern standard ZIP backup archive creation
+function createBackupZip(profile) {
+  const zip = new AdmZip();
+  const dbBytes = getDatabaseBuffer();
+  zip.addFile('database.sqlite', dbBytes);
+
+  let logoFileName = null;
+  if (profile && profile.logo_path) {
+    const lp = profile.logo_path;
+    if (fs.existsSync(lp)) {
+      try {
+        logoFileName = path.basename(lp);
+        const logoBuffer = fs.readFileSync(lp);
+        zip.addFile(logoFileName, logoBuffer);
+      } catch (e) {
+        /* skip logo if unreadable */
+      }
+    }
+  }
+
+  const { added, missing } = addAttachmentsToZip(zip);
+
+  const manifest = {
+    app: 'QuoteCraft',
+    magic: 'QUOTECRAFT_BACKUP',
+    version: 3,
+    format: 'zip',
+    createdAt: new Date().toISOString(),
+    logoFileName,
+    attachmentCount: added,
+    attachmentsMissing: missing,
+  };
+
+  zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'));
+  return zip;
+}
+
+function buildAutoBackupFilename(now, ext = AUTO_EXT) {
   const p = (n, len) => String(n).padStart(len, '0');
   const stamp =
     p(now.getFullYear(), 4) +
@@ -68,11 +107,11 @@ function buildAutoBackupFilename(now) {
     p(now.getMinutes(), 2) +
     p(now.getSeconds(), 2) +
     p(now.getMilliseconds(), 3);
-  return AUTO_PREFIX + stamp + AUTO_EXT;
+  return AUTO_PREFIX + stamp + ext;
 }
 
 function isAutoBackupName(name) {
-  return name.startsWith(AUTO_PREFIX) && name.endsWith(AUTO_EXT);
+  return name.startsWith(AUTO_PREFIX) && (name.endsWith('.json') || name.endsWith('.qcbackup') || name.endsWith('.zip'));
 }
 
 function listAutoBackups(folder) {
@@ -117,15 +156,22 @@ function pruneAutoBackups(folder, retainCount) {
   return deleted;
 }
 
-function writeAutoBackup({ folder, retainCount, now }) {
+function writeAutoBackup({ folder, retainCount, now, format = 'json' }) {
   if (!folder || !String(folder).trim()) {
     return { ok: false, error: 'No backup folder is configured.' };
   }
   try {
     fs.mkdirSync(folder, { recursive: true });
-    const payload = createBackupPayload(getCompanyProfile());
-    const filePath = path.join(folder, buildAutoBackupFilename(now || new Date()));
-    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
+    let filePath;
+    if (format === 'zip') {
+      const zip = createBackupZip(getCompanyProfile());
+      filePath = path.join(folder, buildAutoBackupFilename(now || new Date(), ZIP_EXT));
+      zip.writeZip(filePath);
+    } else {
+      const payload = createBackupPayload(getCompanyProfile());
+      filePath = path.join(folder, buildAutoBackupFilename(now || new Date(), AUTO_EXT));
+      fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
+    }
     pruneAutoBackups(folder, retainCount);
     return { ok: true, path: filePath };
   } catch (err) {
@@ -211,7 +257,10 @@ function stopAutoBackupScheduler() {
 
 module.exports = {
   AUTO_PREFIX,
+  AUTO_EXT,
+  ZIP_EXT,
   createBackupPayload,
+  createBackupZip,
   buildAutoBackupFilename,
   listAutoBackups,
   pruneAutoBackups,

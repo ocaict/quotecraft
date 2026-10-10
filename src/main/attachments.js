@@ -237,6 +237,58 @@ function restoreAttachments(attachments) {
   return { ok: true, restored, skipped };
 }
 
+// ZIP Backup section: adds all attachment binary files directly to AdmZip under attachments/
+function addAttachmentsToZip(zip) {
+  const rows = listAllAttachments();
+  let added = 0;
+  const missing = [];
+  for (const row of rows) {
+    const safe = sanitizeStoredName(row.stored_filename);
+    if (!safe) continue;
+    const fullPath = path.join(getAttachmentsDir(), safe);
+    if (fs.existsSync(fullPath)) {
+      try {
+        const fileBuffer = fs.readFileSync(fullPath);
+        zip.addFile(`attachments/${safe}`, fileBuffer);
+        added++;
+      } catch (e) {
+        missing.push(row.stored_filename);
+      }
+    } else {
+      missing.push(row.stored_filename);
+    }
+  }
+  return { added, missing };
+}
+
+// Restores attachment files from an AdmZip instance
+function restoreAttachmentsFromZip(zip) {
+  if (!zip) return { ok: true, restored: 0, skipped: 0 };
+  ensureAttachmentsDir();
+  const entries = zip.getEntries();
+  let restored = 0;
+  let skipped = 0;
+  for (const entry of entries) {
+    if (entry.isDirectory) continue;
+    const entryName = entry.entryName.replace(/\\/g, '/');
+    if (!entryName.startsWith('attachments/')) continue;
+    const filename = path.basename(entryName);
+    const safe = sanitizeStoredName(filename);
+    if (!safe) {
+      skipped++;
+      continue;
+    }
+    try {
+      const buffer = entry.getData();
+      fs.writeFileSync(path.join(getAttachmentsDir(), safe), buffer);
+      restored++;
+    } catch (e) {
+      skipped++;
+    }
+  }
+  return { ok: true, restored, skipped };
+}
+
 module.exports = {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_LABEL,
@@ -256,4 +308,6 @@ module.exports = {
   writeAttachmentFromBase64,
   buildBackupAttachments,
   restoreAttachments,
+  addAttachmentsToZip,
+  restoreAttachmentsFromZip,
 };
