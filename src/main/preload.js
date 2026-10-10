@@ -208,5 +208,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('updater:status', handler);
     return () => ipcRenderer.removeListener('updater:status', handler);
   },
+
+  // Data Portability / GDPR Export
+  exportAllData: () => ipcRenderer.invoke('data:exportAll'),
 });
 

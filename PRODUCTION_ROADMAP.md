@@ -12,8 +12,8 @@ A step-by-step implementation guide to transition QuoteCraft from active develop
 | **Stage 2** | PDF Engine & Universal Typography | ✅ Completed | Low |
 | **Stage 3** | Table Performance & Pagination | ✅ Completed | Medium |
 | **Stage 4** | Backup Architecture Modernization | ✅ Completed | Medium |
-| **Stage 5** | First-Run Onboarding & Multi-Currency Polish | 🟢 High UX | Low-Medium |
-| **Stage 6** | Cross-Platform Distribution & Release QA | 🟢 Final Polish | Low |
+| **Stage 5** | First-Run Onboarding & Multi-Currency Polish | ✅ Completed | Low-Medium |
+| **Stage 6** | Cross-Platform Distribution & Release QA | ✅ Configured / QA Ready | Low |
 
 ---
 
@@ -170,7 +170,7 @@ Ensure backups scale safely when users accumulate large attachments.
 
 ---
 
-## Stage 5: First-Run Onboarding & Multi-Currency Polish
+## Stage 5: First-Run Onboarding & Multi-Currency Polish (✅ COMPLETED)
 
 Make the initial experience intuitive and reduce friction for new users.
 

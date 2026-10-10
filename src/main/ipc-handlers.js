@@ -2623,6 +2623,57 @@ function registerIpcHandlers() {
       return { ok: false, error: err.message };
     }
   });
+
+  ipcMain.handle('data:exportAll', async () => {
+    try {
+      const result = await dialog.showSaveDialog({
+        title: 'Export All Business Data',
+        defaultPath: `quotecraft-data-export-${new Date().toISOString().slice(0, 10)}.zip`,
+        filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+      });
+      if (result.canceled || !result.filePath) return { ok: true, cancelled: true };
+
+      const AdmZip = require('adm-zip');
+      const zip = new AdmZip();
+
+      function objsToCSV(rows) {
+        if (!rows || rows.length === 0) return '';
+        const headers = Object.keys(rows[0]);
+        const escape = (v) => {
+          if (v == null) return '';
+          const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+          return s.includes(',') || s.includes('"') || s.includes('\n')
+            ? '"' + s.replace(/"/g, '""') + '"'
+            : s;
+        };
+        return [
+          headers.join(','),
+          ...rows.map((r) => headers.map((h) => escape(r[h])).join(',')),
+        ].join('\n');
+      }
+
+      const clients = getClients() || [];
+      const invoices = listInvoices() || [];
+      const quotes = listQuotes() || [];
+      const paymentReport = getPaymentsReport({}) || {};
+      const payments = paymentReport.payments || [];
+      const expenses = listExpenses({}) || [];
+      const timeEntries = listTimeEntries({}) || [];
+
+      zip.addFile('clients.csv', Buffer.from(objsToCSV(clients), 'utf8'));
+      zip.addFile('invoices.csv', Buffer.from(objsToCSV(invoices), 'utf8'));
+      zip.addFile('quotes.csv', Buffer.from(objsToCSV(quotes), 'utf8'));
+      zip.addFile('payments.csv', Buffer.from(objsToCSV(payments), 'utf8'));
+      zip.addFile('expenses.csv', Buffer.from(objsToCSV(expenses), 'utf8'));
+      zip.addFile('time_entries.csv', Buffer.from(objsToCSV(timeEntries), 'utf8'));
+
+      zip.writeZip(result.filePath);
+      return { ok: true, cancelled: false, savedPath: result.filePath };
+    } catch (err) {
+      logger.error('[data:exportAll] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
 }
 
 module.exports = { registerIpcHandlers };

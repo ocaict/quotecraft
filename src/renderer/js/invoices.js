@@ -2839,6 +2839,15 @@
       const cId = Number(invoiceFormClient.value);
       await populateInvoiceContacts(cId, null);
       await populateInvoiceProjects(cId, null);
+      if (!invoiceFormId.value && cId) {
+        const chosenClient = invoiceFormClients.find((c) => Number(c.id) === cId);
+        if (chosenClient && chosenClient.default_currency && invoiceFormCurrency) {
+          invoiceFormCurrency.value = chosenClient.default_currency;
+          formCurrencyCode = chosenClient.default_currency;
+          updateInvoiceExchangeRateVisibility();
+          recalcInvoiceTotals();
+        }
+      }
     });
   }
   if (invoiceFormClientSearch) {

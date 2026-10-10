@@ -567,29 +567,229 @@
     });
   }
 
+  // ── Onboarding Wizard ─────────────────────────────────────────────────────
+  let wizardInitialized = false;
+
+  function initWizard() {
+    if (wizardInitialized) return;
+    wizardInitialized = true;
+
+    const wizard     = document.getElementById('onboardingWizard');
+    const progressBar = document.getElementById('wizardProgressBar');
+    const step1El    = document.getElementById('wizardStep1');
+    const step2El    = document.getElementById('wizardStep2');
+    const step3El    = document.getElementById('wizardStep3');
+    const stepDots   = document.querySelectorAll('.wizard-step');
+    const stepLines  = document.querySelectorAll('.wizard-step-line');
+
+    let wizardLogoPath = '';
+
+    function setStep(n) {
+      [step1El, step2El, step3El].forEach((el, i) => {
+        el && el.classList.toggle('hidden', i + 1 !== n);
+      });
+      // Progress bar
+      if (progressBar) progressBar.style.width = ((n / 3) * 100) + '%';
+      // Step dots
+      stepDots.forEach((dot, i) => {
+        dot.classList.remove('active', 'done');
+        if (i + 1 === n) dot.classList.add('active');
+        if (i + 1 < n)  dot.classList.add('done');
+      });
+      // Connector lines
+      stepLines.forEach((line, i) => {
+        line.classList.toggle('done', i + 1 < n);
+      });
+    }
+
+    function openWizard() {
+      if (!wizard) return;
+      // Populate currency select if not already done
+      const wizCurrSel = document.getElementById('wiz_currency');
+      if (wizCurrSel && wizCurrSel.options.length === 0 && window.prepareCurrencySelect) {
+        window.prepareCurrencySelect(wizCurrSel, 'USD');
+      }
+      setStep(1);
+      wizard.classList.remove('hidden');
+      const firstInput = document.getElementById('wiz_business_name');
+      if (firstInput) setTimeout(() => firstInput.focus(), 80);
+    }
+
+    function closeWizard() {
+      if (wizard) wizard.classList.add('hidden');
+      const banner = document.getElementById('onboardingBanner');
+      if (banner) banner.classList.add('hidden');
+      try { localStorage.setItem('qc-onboarding-dismissed', '1'); } catch (e) {}
+    }
+
+    // ── Logo picker ─────────────────────────────────────────────────────────
+    const wizPickLogoBtn   = document.getElementById('wizPickLogoBtn');
+    const wizRemoveLogoBtn = document.getElementById('wizRemoveLogoBtn');
+    const wizLogoName      = document.getElementById('wizLogoName');
+    const wizLogoPathIn    = document.getElementById('wiz_logo_path');
+
+    if (wizPickLogoBtn) {
+      wizPickLogoBtn.addEventListener('click', async () => {
+        try {
+          const res = await window.electronAPI.pickLogo();
+          if (res && res.ok && !res.cancelled) {
+            wizardLogoPath = res.logoPath;
+            if (wizLogoName)      wizLogoName.textContent = res.fileName || 'logo selected';
+            if (wizLogoPathIn)    wizLogoPathIn.value = res.logoPath;
+            if (wizRemoveLogoBtn) wizRemoveLogoBtn.classList.remove('hidden');
+          }
+        } catch (e) { /* ignore */ }
+      });
+    }
+    if (wizRemoveLogoBtn) {
+      wizRemoveLogoBtn.addEventListener('click', () => {
+        wizardLogoPath = '';
+        if (wizLogoName)      wizLogoName.textContent = 'No logo selected';
+        if (wizLogoPathIn)    wizLogoPathIn.value = '';
+        wizRemoveLogoBtn.classList.add('hidden');
+      });
+    }
+
+    // ── Step navigation ──────────────────────────────────────────────────────
+    const wizSkipBtn   = document.getElementById('wizSkipBtn');
+    const wizStep1Next = document.getElementById('wizStep1Next');
+    const wizStep2Back = document.getElementById('wizStep2Back');
+    const wizStep2Next = document.getElementById('wizStep2Next');
+    const wizStep3Back = document.getElementById('wizStep3Back');
+
+    if (wizSkipBtn) {
+      wizSkipBtn.addEventListener('click', closeWizard);
+    }
+
+    if (wizStep1Next) {
+      wizStep1Next.addEventListener('click', () => {
+        const nameInput = document.getElementById('wiz_business_name');
+        const errEl     = document.getElementById('wiz_business_name_err');
+        const name = (nameInput && nameInput.value.trim()) || '';
+        if (!name) {
+          if (errEl) errEl.textContent = 'Business name is required.';
+          if (nameInput) nameInput.classList.add('invalid');
+          return;
+        }
+        if (errEl) errEl.textContent = '';
+        if (nameInput) nameInput.classList.remove('invalid');
+        setStep(2);
+      });
+    }
+
+    if (wizStep2Back) wizStep2Back.addEventListener('click', () => setStep(1));
+
+    if (wizStep2Next) {
+      wizStep2Next.addEventListener('click', async () => {
+        // Gather all form data and save profile before reaching step 3
+        const profile = buildWizardProfile();
+        const saveStatus = document.getElementById('wizSaveStatus');
+        try {
+          wizStep2Next.disabled = true;
+          wizStep2Next.textContent = 'Saving…';
+          const res = await window.electronAPI.saveCompanyProfile(profile);
+          if (res && res.ok) {
+            // Refresh global locale settings
+            if (window.QuoteCraftUtils && window.QuoteCraftUtils.setSettings) {
+              window.QuoteCraftUtils.setSettings(profile);
+            }
+            if (saveStatus) {
+              saveStatus.textContent = '✅ Profile saved successfully!';
+              saveStatus.style.color = '#22c55e';
+            }
+            setStep(3);
+          } else {
+            const errMsg = (res && res.errors && Object.values(res.errors)[0]) || 'Could not save profile.';
+            window.QuoteCraftUtils.showToast(errMsg, 'error');
+          }
+        } catch (e) {
+          window.QuoteCraftUtils.showToast('Failed to save profile: ' + e.message, 'error');
+        } finally {
+          wizStep2Next.disabled = false;
+          wizStep2Next.textContent = 'Continue →';
+        }
+      });
+    }
+
+    if (wizStep3Back) wizStep3Back.addEventListener('click', () => setStep(2));
+
+    // ── Step 3: First action cards ───────────────────────────────────────────
+    const wizActionClient    = document.getElementById('wizActionClient');
+    const wizActionQuote     = document.getElementById('wizActionQuote');
+    const wizActionDashboard = document.getElementById('wizActionDashboard');
+
+    if (wizActionClient) {
+      wizActionClient.addEventListener('click', () => {
+        closeWizard();
+        window.QuoteCraftUtils.goToPage('clients');
+        // Trigger the add client modal after a brief delay
+        setTimeout(() => {
+          const addBtn = document.getElementById('addClientBtn');
+          if (addBtn) addBtn.click();
+        }, 300);
+      });
+    }
+    if (wizActionQuote) {
+      wizActionQuote.addEventListener('click', () => {
+        closeWizard();
+        window.QuoteCraftUtils.goToPage('quotes');
+        setTimeout(() => {
+          const addBtn = document.getElementById('addQuoteBtn') || document.querySelector('[data-action="new-quote"]');
+          if (addBtn) addBtn.click();
+        }, 300);
+      });
+    }
+    if (wizActionDashboard) {
+      wizActionDashboard.addEventListener('click', () => {
+        closeWizard();
+        window.QuoteCraftUtils.goToPage('dashboard');
+      });
+    }
+
+    // Expose launcher so checkOnboarding can call it
+    window._openOnboardingWizard = openWizard;
+  }
+
+  function buildWizardProfile() {
+    // Collect all existing profile keys to avoid clobbering unrelated fields
+    const get = (id) => {
+      const el = document.getElementById(id);
+      return el ? el.value.trim() : '';
+    };
+    return {
+      business_name:       get('wiz_business_name'),
+      email:               get('wiz_email'),
+      phone:               get('wiz_phone'),
+      address:             get('wiz_address'),
+      logo_path:           get('wiz_logo_path') || undefined,
+      default_currency:    get('wiz_currency')    || 'USD',
+      reporting_currency:  get('wiz_currency')    || 'USD',
+      date_format:         get('wiz_date_format') || 'MMM D, YYYY',
+      decimal_separator:   get('wiz_decimal_sep') || '.',
+      default_tax_rate:    Number(get('wiz_tax_rate')) || 0,
+      payment_terms:       Number(get('wiz_payment_terms')) || 14,
+      // Required fields — send defaults so validation passes
+      invoice_start_number: 1,
+      quote_start_number:   1,
+      invoice_prefix:       'INV',
+      quote_prefix:         'QT',
+    };
+  }
+
   async function checkOnboarding(profileData) {
-    const banner = document.getElementById('onboardingBanner');
-    if (!banner) return;
+    const banner    = document.getElementById('onboardingBanner');
     const dismissed = localStorage.getItem('qc-onboarding-dismissed');
-    const isProfileEmpty = !profileData || !profileData.company_name || !profileData.company_name.trim();
+    const isProfileEmpty = !profileData || !profileData.business_name || !String(profileData.business_name).trim();
 
     if (isProfileEmpty && !dismissed) {
-      banner.classList.remove('hidden');
-      const setupBtn = document.getElementById('onboardingSetupBtn');
-      const dismissBtn = document.getElementById('onboardingDismissBtn');
-      if (setupBtn) {
-        setupBtn.onclick = () => {
-          window.QuoteCraftUtils.goToPage('settings');
-        };
+      // Initialize wizard (idempotent) then open it
+      initWizard();
+      if (window._openOnboardingWizard) {
+        window._openOnboardingWizard();
       }
-      if (dismissBtn) {
-        dismissBtn.onclick = () => {
-          banner.classList.add('hidden');
-          try { localStorage.setItem('qc-onboarding-dismissed', '1'); } catch (e) {}
-        };
-      }
+      if (banner) banner.classList.add('hidden');
     } else {
-      banner.classList.add('hidden');
+      if (banner) banner.classList.add('hidden');
     }
   }
 

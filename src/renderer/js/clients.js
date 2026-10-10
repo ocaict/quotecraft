@@ -1202,6 +1202,7 @@
       tags: form.elements['tags'] ? form.elements['tags'].value : '',
       notes: form.elements['notes'].value,
       default_hourly_rate: form.elements['default_hourly_rate'] ? form.elements['default_hourly_rate'].value : '',
+      default_currency: form.elements['default_currency'] ? form.elements['default_currency'].value : '',
       contacts: collectContactsFromRows(),
     };
   }
@@ -1222,6 +1223,9 @@
     form.elements['notes'].value = client.notes || '';
     if (form.elements['default_hourly_rate']) {
       form.elements['default_hourly_rate'].value = client.default_hourly_rate != null ? client.default_hourly_rate : '';
+    }
+    if (form.elements['default_currency']) {
+      form.elements['default_currency'].value = client.default_currency || '';
     }
   }
 

@@ -3130,6 +3130,16 @@
           <span class="hint">Includes non-sensitive system specs, database health, and runtime diagnostic logs for technical support.</span>
         </div>
 
+        <!-- Data Portability / GDPR Export -->
+        <div class="card settings-card" id="dataExportCard">
+          <h2>Data Portability &amp; Export</h2>
+          <p class="subtitle">Download all your business data as CSV files in a single ZIP archive. Use for backups, migrations, or GDPR compliance.</p>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+            <button type="button" id="exportAllDataBtn" class="btn btn-secondary">📦 Export All Business Data (.zip)</button>
+          </div>
+          <span class="hint">Exports: clients, invoices, quotes, payments, expenses, and time entries as CSV files.</span>
+        </div>
+
         <!-- Software Updates -->
         <div class="card settings-card">
           <h2>Software Updates</h2>
@@ -3585,6 +3595,27 @@
             <input type="number" id="clientDefaultHourlyRate" name="default_hourly_rate" min="0" step="0.01" placeholder="e.g. 80.00">
             <span class="hint">Default billing rate for time entries when a project has no rate set.</span>
             <span class="field-error" data-error-for="default_hourly_rate"></span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="clientDefaultCurrency">Preferred currency (optional)</label>
+            <select id="clientDefaultCurrency" name="default_currency">
+              <option value="">Default (Company Currency)</option>
+              <option value="NGN">NGN - Nigerian Naira (₦)</option>
+              <option value="USD">USD - US Dollar ($)</option>
+              <option value="EUR">EUR - Euro (€)</option>
+              <option value="GBP">GBP - British Pound (£)</option>
+              <option value="CAD">CAD - Canadian Dollar ($)</option>
+              <option value="AUD">AUD - Australian Dollar ($)</option>
+              <option value="INR">INR - Indian Rupee (₹)</option>
+              <option value="JPY">JPY - Japanese Yen (¥)</option>
+              <option value="ZAR">ZAR - South African Rand (R)</option>
+              <option value="KES">KES - Kenyan Shilling (KSh)</option>
+              <option value="GHS">GHS - Ghanaian Cedi (GH₵)</option>
+            </select>
+            <span class="hint">Auto-selects on new quotes and invoices for this client.</span>
           </div>
         </div>
 
@@ -4580,6 +4611,172 @@
       </form>
     </div>
   </div>
+
+  <!-- ── Onboarding Wizard Modal (3-step first-run setup) ────────────────── -->
+  <div id="onboardingWizard" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="wizardTitle" style="z-index: 900;">
+    <div class="modal" style="max-width: 600px;">
+      <!-- Progress bar -->
+      <div class="wizard-progress">
+        <div class="wizard-progress-bar" id="wizardProgressBar" style="width: 33.33%;"></div>
+      </div>
+
+      <!-- Step indicator -->
+      <div class="wizard-steps" id="wizardSteps">
+        <div class="wizard-step active" data-step="1">
+          <div class="wizard-step-dot">1</div>
+          <span>Company</span>
+        </div>
+        <div class="wizard-step-line"></div>
+        <div class="wizard-step" data-step="2">
+          <div class="wizard-step-dot">2</div>
+          <span>Localization</span>
+        </div>
+        <div class="wizard-step-line"></div>
+        <div class="wizard-step" data-step="3">
+          <div class="wizard-step-dot">3</div>
+          <span>Get Started</span>
+        </div>
+      </div>
+
+      <!-- Step 1: Company Identity -->
+      <div id="wizardStep1" class="wizard-panel">
+        <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+          <div>
+            <div style="font-size: 26px; margin-bottom: 8px;">🏢</div>
+            <h2 id="wizardTitle" style="margin: 0 0 4px;">Welcome to QuoteCraft!</h2>
+            <p class="subtitle" style="margin: 0;">Let's set up your business identity — it'll appear on your quotes and invoices.</p>
+          </div>
+        </div>
+        <div class="modal-body" style="padding-top: 16px;">
+          <div class="field field-required">
+            <label for="wiz_business_name">Business Name</label>
+            <input type="text" id="wiz_business_name" name="wiz_business_name" placeholder="Acme Corporation" autocomplete="organization">
+            <span class="field-error" id="wiz_business_name_err"></span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="field">
+              <label for="wiz_email">Business Email</label>
+              <input type="email" id="wiz_email" name="wiz_email" placeholder="hello@acme.com">
+            </div>
+            <div class="field">
+              <label for="wiz_phone">Phone</label>
+              <input type="text" id="wiz_phone" name="wiz_phone" placeholder="+1 555 000 0000">
+            </div>
+          </div>
+          <div class="field">
+            <label for="wiz_address">Business Address</label>
+            <textarea id="wiz_address" name="wiz_address" rows="2" placeholder="123 Main St, City, Country" style="resize: vertical;"></textarea>
+          </div>
+          <div class="field">
+            <label>Company Logo <span class="field-optional">(optional)</span></label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button type="button" id="wizPickLogoBtn" class="btn btn-secondary btn-small">📁 Choose Logo</button>
+              <span id="wizLogoName" style="font-size: 12px; color: var(--text-muted);">No logo selected</span>
+              <button type="button" id="wizRemoveLogoBtn" class="btn btn-ghost btn-small hidden">✕ Remove</button>
+            </div>
+            <input type="hidden" id="wiz_logo_path">
+          </div>
+        </div>
+        <div class="modal-actions">
+          <span style="font-size: 12px; color: var(--text-muted);">Step 1 of 3</span>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="wizSkipBtn" class="btn btn-ghost">Skip Setup</button>
+            <button type="button" id="wizStep1Next" class="btn btn-primary">Continue →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Localization -->
+      <div id="wizardStep2" class="wizard-panel hidden">
+        <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+          <div>
+            <div style="font-size: 26px; margin-bottom: 8px;">🌍</div>
+            <h2 style="margin: 0 0 4px;">Localization Settings</h2>
+            <p class="subtitle" style="margin: 0;">Configure currency and date display for your region.</p>
+          </div>
+        </div>
+        <div class="modal-body" style="padding-top: 16px;">
+          <div class="field field-required">
+            <label for="wiz_currency">Default Currency</label>
+            <select id="wiz_currency" name="wiz_currency"></select>
+            <span class="hint">Used on all quotes, invoices, and reports by default.</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="field">
+              <label for="wiz_date_format">Date Format</label>
+              <select id="wiz_date_format" name="wiz_date_format">
+                <option value="MMM D, YYYY">Jan 5, 2025</option>
+                <option value="DD/MM/YYYY">05/01/2025</option>
+                <option value="MM/DD/YYYY">01/05/2025</option>
+                <option value="YYYY-MM-DD">2025-01-05</option>
+                <option value="D MMMM YYYY">5 January 2025</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="wiz_decimal_sep">Decimal Separator</label>
+              <select id="wiz_decimal_sep" name="wiz_decimal_sep">
+                <option value=".">Period  (1,234.56)</option>
+                <option value=",">Comma   (1.234,56)</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="field">
+              <label for="wiz_tax_rate">Default Tax Rate (%)</label>
+              <input type="number" id="wiz_tax_rate" name="wiz_tax_rate" value="0" min="0" max="100" step="0.01" placeholder="0">
+            </div>
+            <div class="field">
+              <label for="wiz_payment_terms">Default Payment Terms (days)</label>
+              <input type="number" id="wiz_payment_terms" name="wiz_payment_terms" value="14" min="0" step="1" placeholder="14">
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <span style="font-size: 12px; color: var(--text-muted);">Step 2 of 3</span>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="wizStep2Back" class="btn btn-ghost">← Back</button>
+            <button type="button" id="wizStep2Next" class="btn btn-primary">Continue →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: First Action -->
+      <div id="wizardStep3" class="wizard-panel hidden">
+        <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+          <div>
+            <div style="font-size: 26px; margin-bottom: 8px;">🚀</div>
+            <h2 style="margin: 0 0 4px;">All Set — What's First?</h2>
+            <p class="subtitle" style="margin: 0;">Your profile is saved. Choose how you'd like to begin.</p>
+          </div>
+        </div>
+        <div class="modal-body" style="padding-top: 16px;">
+          <div class="wizard-action-cards">
+            <button type="button" class="wizard-action-card" id="wizActionClient">
+              <div class="wizard-action-icon">👤</div>
+              <div class="wizard-action-title">Add Your First Client</div>
+              <div class="wizard-action-desc">Add a client to start sending personalized quotes and invoices.</div>
+            </button>
+            <button type="button" class="wizard-action-card" id="wizActionQuote">
+              <div class="wizard-action-icon">📄</div>
+              <div class="wizard-action-title">Create a Quote</div>
+              <div class="wizard-action-desc">Jump straight in and draft your first professional quote.</div>
+            </button>
+            <button type="button" class="wizard-action-card" id="wizActionDashboard">
+              <div class="wizard-action-icon">📊</div>
+              <div class="wizard-action-title">Explore the Dashboard</div>
+              <div class="wizard-action-desc">See your analytics and overview. Add data as you go.</div>
+            </button>
+          </div>
+          <p id="wizSaveStatus" style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 12px; min-height: 18px;"></p>
+        </div>
+        <div class="modal-actions">
+          <span style="font-size: 12px; color: var(--text-muted);">Step 3 of 3</span>
+          <button type="button" id="wizStep3Back" class="btn btn-ghost">← Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ── End Onboarding Wizard ─────────────────────────────────────────────── -->
 
   <script src="js/currencies.js"></script>
   <script src="js/utils.js"></script>

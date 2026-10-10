@@ -1134,6 +1134,28 @@
     });
   }
 
+  const exportAllDataBtn = document.getElementById('exportAllDataBtn');
+  if (exportAllDataBtn) {
+    exportAllDataBtn.addEventListener('click', async () => {
+      exportAllDataBtn.disabled = true;
+      const originalText = exportAllDataBtn.textContent;
+      exportAllDataBtn.textContent = '⏳ Preparing export…';
+      try {
+        const res = await window.electronAPI.exportAllData();
+        if (res && res.ok && !res.cancelled) {
+          window.QuoteCraftUtils.showToast('Data exported successfully to ' + res.savedPath, 'success');
+        } else if (res && !res.ok) {
+          window.QuoteCraftUtils.showToast(res.error || 'Export failed.', 'error');
+        }
+      } catch (e) {
+        window.QuoteCraftUtils.showToast('Export failed: ' + e.message, 'error');
+      } finally {
+        exportAllDataBtn.disabled = false;
+        exportAllDataBtn.textContent = originalText;
+      }
+    });
+  }
+
   loadDiagnostics();
   loadPaymentPresets();
   document.addEventListener('pagechange', (e) => {

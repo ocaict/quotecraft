@@ -272,6 +272,7 @@ function createTables() {
       notes           TEXT DEFAULT '',
       tags            TEXT DEFAULT '',
       default_hourly_rate REAL DEFAULT NULL,
+      default_currency TEXT DEFAULT NULL,
       created_at      TEXT NOT NULL,
       updated_at      TEXT NOT NULL
     );
@@ -1375,6 +1376,16 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 41,
+    up: () => {
+      // Add default_currency to clients table
+      const cols = new Set(db.exec(`PRAGMA table_info(clients)`)[0].values.map((v) => v[1]));
+      if (!cols.has('default_currency')) {
+        db.run(`ALTER TABLE clients ADD COLUMN default_currency TEXT DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -2055,13 +2066,19 @@ function normalizeNullableRate(v) {
   return Math.round(n * 100) / 100;
 }
 
+function normalizeNullableCurrency(v) {
+  if (!v || typeof v !== 'string') return null;
+  const c = v.trim().toUpperCase();
+  return c.length >= 3 && c.length <= 5 ? c : null;
+}
+
 function addClient(client) {
   const now = new Date().toISOString();
   db.run(
     `INSERT INTO clients (
       name, email, phone, company_name, address_line1, address_line2, city,
-      state, postal_code, country, notes, tags, default_hourly_rate, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      state, postal_code, country, notes, tags, default_hourly_rate, default_currency, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       String(client.name || '').trim(),
       String(client.email || '').trim(),
@@ -2076,6 +2093,7 @@ function addClient(client) {
       String(client.notes || ''),
       normalizeTags(client.tags),
       normalizeNullableRate(client.default_hourly_rate),
+      normalizeNullableCurrency(client.default_currency),
       now,
       now,
     ]
@@ -2114,6 +2132,7 @@ function clientParams(client, now) {
     String(client.notes || ''),
     normalizeTags(client.tags),
     normalizeNullableRate(client.default_hourly_rate),
+    normalizeNullableCurrency(client.default_currency),
   ];
 }
 
@@ -2124,7 +2143,7 @@ function updateClient(id, client) {
     `UPDATE clients SET
        name = ?, email = ?, phone = ?, company_name = ?, address_line1 = ?,
        address_line2 = ?, city = ?, state = ?, postal_code = ?, country = ?,
-       notes = ?, tags = ?, default_hourly_rate = ?, updated_at = ?
+       notes = ?, tags = ?, default_hourly_rate = ?, default_currency = ?, updated_at = ?
      WHERE id = ?`,
     [...p, now, id]
   );

@@ -2092,6 +2092,15 @@
     clearFieldError('client_id');
     populateContactsForClient(clientSelect.value);
     populateProjectsForClient(clientSelect.value);
+    if (!editingQuoteId && clientSelect.value) {
+      const chosenClient = clients.find((c) => String(c.id) === String(clientSelect.value));
+      if (chosenClient && chosenClient.default_currency && quoteCurrencySelect) {
+        quoteCurrencySelect.value = chosenClient.default_currency;
+        currencyCode = chosenClient.default_currency;
+        updateExchangeRateVisibility();
+        recalcTotals();
+      }
+    }
   });
 
   discountTypeSelect.addEventListener('change', () => {
