@@ -86,11 +86,21 @@ const LOGO_EXTENSIONS = ['.png', '.jpg', '.jpeg'];
 
 // ---------- Shared formatting helpers ----------
 
+let currentPdfDateFormat = 'MMM D, YYYY';
+let currentPdfDecimalSeparator = '.';
+
+function setPdfLocale(dateFormat, decimalSeparator) {
+  currentPdfDateFormat = dateFormat || 'MMM D, YYYY';
+  currentPdfDecimalSeparator = decimalSeparator || '.';
+}
+
 function formatAmount(amount) {
   const n = Math.round((Number(amount || 0) + 1e-9) * 100) / 100;
+  const sep = currentPdfDecimalSeparator || '.';
+  const thousandSep = sep === ',' ? '.' : ',';
   const parts = n.toFixed(2).split('.');
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return parts.join('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousandSep);
+  return parts.join(sep);
 }
 
 function currencySymbol(code) {
@@ -115,11 +125,41 @@ function money(amount, currencyCode) {
   return code + ' ' + value;
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr, customFormat) {
   if (!dateStr) return '—';
-  const d = new Date(dateStr + (dateStr.includes('T') || dateStr.includes('Z') ? '' : 'T00:00:00'));
+  const str = String(dateStr);
+  const datePart = str.split('T')[0];
+  const parts = datePart.split('-');
+  let d;
+  if (parts.length === 3) {
+    d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  } else {
+    d = new Date(dateStr + (str.includes('T') || str.includes('Z') ? '' : 'T00:00:00'));
+  }
   if (isNaN(d.getTime())) return String(dateStr);
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+  const fmt = customFormat || currentPdfDateFormat || 'MMM D, YYYY';
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const day = d.getDate();
+  const pad = (n) => (n < 10 ? '0' + n : String(n));
+
+  const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthsFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  switch (fmt) {
+    case 'DD/MM/YYYY':
+      return `${pad(day)}/${pad(month + 1)}/${year}`;
+    case 'MM/DD/YYYY':
+      return `${pad(month + 1)}/${pad(day)}/${year}`;
+    case 'YYYY-MM-DD':
+      return `${year}-${pad(month + 1)}-${pad(day)}`;
+    case 'D MMMM YYYY':
+      return `${day} ${monthsFull[month]} ${year}`;
+    case 'MMM D, YYYY':
+    default:
+      return `${monthsShort[month]} ${day}, ${year}`;
+  }
 }
 
 function normalizeQty(value) {
@@ -299,11 +339,11 @@ function drawClientBlock(ctx, client, label, contact) {
 
 function drawItemsTable(ctx, items, currency) {
   const { doc, W } = ctx;
-  const qtyW = 42;
-  const priceW = 62;
-  const discW = 50;
-  const taxW = 46;
-  const totalW = 74;
+  const qtyW = 50;
+  const priceW = 60;
+  const discW = 48;
+  const taxW = 44;
+  const totalW = 72;
   const descW = W - qtyW - priceW - discW - taxW - totalW;
   const qtyX = MARGIN + descW;
   const priceX = qtyX + qtyW;
@@ -356,7 +396,8 @@ function drawItemsTable(ctx, items, currency) {
 
     doc.font('Helvetica').fontSize(9.5).fillColor(COLORS.ink);
     doc.text(desc, MARGIN + 6, ctx.y + rowPadY, { width: descW - 12, lineGap: 1, height: rowH - rowPadY * 2 });
-    doc.text(normalizeQty(item.quantity), qtyX, ctx.y + rowPadY + 1.5, { width: qtyW - 8, align: 'right', lineGap: 0 });
+    const qtyStr = normalizeQty(item.quantity) + (item.unit_label ? ` ${item.unit_label}` : '');
+    doc.text(qtyStr, qtyX, ctx.y + rowPadY + 1.5, { width: qtyW - 8, align: 'right', lineGap: 0 });
     doc.text(money(item.unit_price, currency), priceX, ctx.y + rowPadY + 1.5, { width: priceW - 8, align: 'right', lineGap: 0 });
 
     // Discount column
@@ -652,6 +693,7 @@ function drawQuoteAcceptanceSection(ctx, quote, client, profile) {
 // ---------- Quote PDF ----------
 
 function renderQuotePdf(quote, client, profile, opts) {
+  setPdfLocale(profile && profile.date_format, profile && profile.decimal_separator);
   const currency = quote.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
@@ -708,6 +750,7 @@ function renderQuotePdf(quote, client, profile, opts) {
 // ---------- Invoice PDF ----------
 
 function renderInvoicePdf(invoice, client, profile, opts) {
+  setPdfLocale(profile && profile.date_format, profile && profile.decimal_separator);
   const currency = invoice.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const status = effectiveInvoiceStatus(invoice);
@@ -886,7 +929,7 @@ function buildPrintItemsHtml(items, currency) {
     const taxLabel = Number(item.tax_rate) > 0 ? `${item.tax_rate}%` : '0%';
     return `<tr${idx % 2 === 1 ? ' class="alt"' : ''}>
       <td class="col-desc">${escapeHtml(String(item.description || ''))}</td>
-      <td class="col-num">${escapeHtml(normalizeQty(item.quantity))}</td>
+      <td class="col-num">${escapeHtml(normalizeQty(item.quantity) + (item.unit_label ? ' ' + item.unit_label : ''))}</td>
       <td class="col-num">${money(item.unit_price, currency)}</td>
       <td class="col-num">${escapeHtml(discLabel)}</td>
       <td class="col-num">${escapeHtml(taxLabel)}</td>
@@ -1211,6 +1254,7 @@ function renderInvoicePrintHtml(invoice, client, profile) {
 // ---------- Credit Note PDF ----------
 
 function renderCreditNotePdf(creditNote, invoice, client, profile, opts) {
+  setPdfLocale(profile && profile.date_format, profile && profile.decimal_separator);
   const currency = (invoice && invoice.currency) || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
@@ -1389,6 +1433,7 @@ function drawStatementTable(ctx, rows, currency) {
 }
 
 function renderClientStatementPdf(statement, profile, opts) {
+  setPdfLocale(profile && profile.date_format, profile && profile.decimal_separator);
   const currency = statement.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const client = statement.client || {};
@@ -1849,6 +1894,7 @@ function escapeHtml(str) {
 }
 
 function renderQuoteHtml(quote, client, profile) {
+  setPdfLocale(profile && profile.date_format, profile && profile.decimal_separator);
   const currency = quote.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const isAccepted = quote.status === 'accepted';
@@ -1884,7 +1930,7 @@ function renderQuoteHtml(quote, client, profile) {
     return `
       <tr>
         <td class="col-desc">${escapeHtml(item.description)}</td>
-        <td class="col-qty">${normalizeQty(item.quantity)}</td>
+        <td class="col-qty">${normalizeQty(item.quantity)}${item.unit_label ? ' ' + escapeHtml(item.unit_label) : ''}</td>
         <td class="col-price">${money(item.unit_price, currency)}</td>
         <td class="col-disc">${escapeHtml(discText)}</td>
         <td class="col-tax">${escapeHtml(taxText)}</td>
@@ -2320,6 +2366,7 @@ function renderQuoteHtml(quote, client, profile) {
 }
 
 function renderInvoiceHtml(invoice, client, profile) {
+  setPdfLocale(profile && profile.date_format, profile && profile.decimal_separator);
   const currency = invoice.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const status = effectiveInvoiceStatus(invoice);
@@ -2372,7 +2419,7 @@ function renderInvoiceHtml(invoice, client, profile) {
     return `
       <tr>
         <td class="col-desc">${escapeHtml(item.description)}</td>
-        <td class="col-qty">${normalizeQty(item.quantity)}</td>
+        <td class="col-qty">${normalizeQty(item.quantity)}${item.unit_label ? ' ' + escapeHtml(item.unit_label) : ''}</td>
         <td class="col-price">${money(item.unit_price, currency)}</td>
         <td class="col-disc">${escapeHtml(discText)}</td>
         <td class="col-tax">${escapeHtml(taxText)}</td>

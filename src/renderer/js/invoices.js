@@ -850,7 +850,7 @@
       const tdDesc = document.createElement('td');
       tdDesc.textContent = item.description;
       const tdQty = document.createElement('td');
-      tdQty.textContent = item.quantity;
+      tdQty.textContent = item.quantity + (item.unit_label ? ' ' + item.unit_label : '');
       const tdPrice = document.createElement('td');
       tdPrice.textContent = money(item.unit_price, invCurr);
       const tdDisc = document.createElement('td');
@@ -2038,6 +2038,16 @@
     qtyInput.value = data.quantity !== undefined && data.quantity !== null ? data.quantity : '';
     tdQty.appendChild(qtyInput);
 
+    const tdUnit = document.createElement('td');
+    tdUnit.className = 'col-unit';
+    const unitInput = document.createElement('input');
+    unitInput.type = 'text';
+    unitInput.className = 'item-unit';
+    unitInput.name = 'item_unit_label';
+    unitInput.placeholder = 'e.g. hrs';
+    unitInput.value = data.unit_label || '';
+    tdUnit.appendChild(unitInput);
+
     const tdPrice = document.createElement('td');
     tdPrice.className = 'col-price';
     const priceInput = document.createElement('input');
@@ -2121,6 +2131,7 @@
 
     tr.appendChild(tdDesc);
     tr.appendChild(tdQty);
+    tr.appendChild(tdUnit);
     tr.appendChild(tdPrice);
     tr.appendChild(tdDisc);
     tr.appendChild(tdTax);
@@ -2257,6 +2268,7 @@
           opt.dataset.desc = t.description;
           opt.dataset.price = t.unit_price;
           opt.dataset.tax = t.tax_rate;
+          opt.dataset.unit = t.unit_label || '';
           invoiceFormLibrarySelect.appendChild(opt);
         });
       }
@@ -2447,6 +2459,7 @@
     const rows = Array.from(invoiceItemsBody.querySelectorAll('tr.item-row')).map((tr) => ({
       description: tr.querySelector('input[name="item_description"]').value,
       quantity: tr.querySelector('input[name="item_quantity"]').value,
+      unit_label: tr.querySelector('input[name="item_unit_label"]')?.value || '',
       unit_price: tr.querySelector('input[name="item_unit_price"]').value,
       discount_type: tr.querySelector('select[name="item_discount_type"]').value,
       discount_value: tr.querySelector('input[name="item_discount_value"]').value,
@@ -2510,6 +2523,7 @@
         invoiceItemsBody.appendChild(createInvoiceItemRow({
           description: it.description,
           quantity: it.quantity,
+          unit_label: it.unit_label || '',
           unit_price: it.unit_price,
           discount_type: it.discount_type || 'none',
           discount_value: it.discount_value,
@@ -2675,6 +2689,7 @@
       lineItems.push({
         description: desc,
         quantity: qty,
+        unit_label: (tr.querySelector('input[name="item_unit_label"]')?.value || '').trim(),
         unit_price: price,
         discount_type: dType,
         discount_value: dVal,
@@ -2823,15 +2838,50 @@
       const desc = selOpt.dataset.desc || '';
       const price = selOpt.dataset.price || 0;
       const tax = selOpt.dataset.tax || 0;
+      const unit = selOpt.dataset.unit || '';
       invoiceItemsBody.appendChild(createInvoiceItemRow({
         description: desc,
         quantity: 1,
+        unit_label: unit,
         unit_price: Number(price) || 0,
         tax_rate: Number(tax) || 0,
       }));
       invoiceFormLibrarySelect.value = '';
       recalcInvoiceTotals();
     });
+  }
+
+  // Payment preset quick-insert for invoices
+  const invoicePaymentPresetSelect = document.getElementById('invoicePaymentPresetSelect');
+  async function loadInvoicePaymentPresets() {
+    if (!invoicePaymentPresetSelect || !window.electronAPI || !window.electronAPI.listPaymentPresets) return;
+    try {
+      const res = await window.electronAPI.listPaymentPresets();
+      invoicePaymentPresetSelect.innerHTML = '<option value="">Insert payment preset…</option>';
+      if (res && res.ok && Array.isArray(res.presets)) {
+        res.presets.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.body;
+          opt.textContent = p.name;
+          invoicePaymentPresetSelect.appendChild(opt);
+        });
+      }
+    } catch (_) {}
+  }
+
+  if (invoicePaymentPresetSelect) {
+    invoicePaymentPresetSelect.addEventListener('change', () => {
+      const text = invoicePaymentPresetSelect.value;
+      if (!text || !invoiceFormTerms) return;
+      if (invoiceFormTerms.value && invoiceFormTerms.value.trim()) {
+        invoiceFormTerms.value = invoiceFormTerms.value.trim() + '\n\n' + text;
+      } else {
+        invoiceFormTerms.value = text;
+      }
+      invoicePaymentPresetSelect.value = '';
+    });
+    window.addEventListener('qc-payment-presets-updated', loadInvoicePaymentPresets);
+    loadInvoicePaymentPresets();
   }
 
   if (typeof window.QuoteCraftDrafts !== 'undefined' && invoiceForm) {

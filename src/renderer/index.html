@@ -922,6 +922,7 @@
                   <tr>
                     <th class="col-description">Description</th>
                     <th class="col-qty">Qty</th>
+                    <th class="col-unit">Unit</th>
                     <th class="col-price">Unit price</th>
                     <th class="col-line-discount">Line discount</th>
                     <th class="col-tax">Tax %</th>
@@ -992,7 +993,14 @@
           <div class="card">
             <h2>Notes / terms</h2>
             <div class="field field-span-2">
-              <label for="quoteTerms">Notes &amp; payment terms</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label for="quoteTerms" style="margin: 0;">Notes &amp; payment terms</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <select id="quotePaymentPresetSelect" style="font-size: 12px; padding: 4px 8px; width: auto;">
+                    <option value="">Insert payment preset…</option>
+                  </select>
+                </div>
+              </div>
               <textarea id="quoteTerms" name="terms" rows="4" placeholder="e.g. Payment due within 14 days"></textarea>
               <span class="hint">Pre-filled from your default payment terms in Settings. You can edit per quote.</span>
             </div>
@@ -1323,6 +1331,7 @@
                   <tr>
                     <th class="col-description">Description</th>
                     <th class="col-qty">Qty</th>
+                    <th class="col-unit">Unit</th>
                     <th class="col-price">Unit price</th>
                     <th class="col-line-discount">Line discount</th>
                     <th class="col-tax">Tax %</th>
@@ -1397,7 +1406,14 @@
               <textarea id="invoiceFormNotes" name="notes" rows="2" placeholder="e.g. Thank you for your business"></textarea>
             </div>
             <div class="field field-span-2" style="margin-top:12px;">
-              <label for="invoiceFormTerms">Payment terms</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label for="invoiceFormTerms" style="margin: 0;">Payment terms</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <select id="invoicePaymentPresetSelect" style="font-size: 12px; padding: 4px 8px; width: auto;">
+                    <option value="">Insert payment preset…</option>
+                  </select>
+                </div>
+              </div>
               <textarea id="invoiceFormTerms" name="terms" rows="3" placeholder="e.g. Payment due within 14 days"></textarea>
             </div>
           </div>
@@ -2627,6 +2643,17 @@
           </div>
         </div>
 
+        <div class="card" id="paymentPresetsCard">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+            <div>
+              <h2 style="margin: 0; padding-bottom: 0; border-bottom: none;">Payment instruction presets</h2>
+              <p class="subtitle" style="margin: 4px 0 0 0;">Create reusable payment blurbs (e.g. Bank Transfer, PayPal, Wire) to quick-insert on quotes and invoices.</p>
+            </div>
+            <button type="button" id="addPaymentPresetBtn" class="btn btn-secondary btn-small">+ Add preset</button>
+          </div>
+          <div id="paymentPresetsList" class="payment-presets-list"></div>
+        </div>
+
         <div class="card">
           <h2>Defaults</h2>
 
@@ -2673,6 +2700,28 @@
               <label for="default_quote_acceptance_instructions">Default Quote Acceptance Instructions</label>
               <input type="text" id="default_quote_acceptance_instructions" name="default_quote_acceptance_instructions" placeholder="To accept this quote, please reply to confirm via email or phone.">
               <span class="hint">Printed on all shareable quote PDFs and HTML exports instructing clients how to confirm offline.</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="date_format">Date format</label>
+              <select id="date_format" name="date_format">
+                <option value="MMM D, YYYY">MMM D, YYYY (e.g. Jan 15, 2026)</option>
+                <option value="DD/MM/YYYY">DD/MM/YYYY (e.g. 15/01/2026)</option>
+                <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 01/15/2026)</option>
+                <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 2026-01-15)</option>
+                <option value="D MMMM YYYY">D MMMM YYYY (e.g. 15 January 2026)</option>
+              </select>
+              <span class="hint">Formatting style for quotes, invoices, and exports.</span>
+            </div>
+            <div class="field">
+              <label for="decimal_separator">Decimal separator</label>
+              <select id="decimal_separator" name="decimal_separator">
+                <option value=".">Dot (.) &mdash; 1,234.56</option>
+                <option value=",">Comma (,) &mdash; 1.234,56</option>
+              </select>
+              <span class="hint">Decimal separator used for currency amounts.</span>
             </div>
           </div>
         </div>
@@ -4466,6 +4515,33 @@
       <div style="flex: 1; position: relative; background: #2a2e3d; border-radius: 6px; overflow: hidden;">
         <iframe id="pdfPreviewIframe" style="width: 100%; height: 100%; border: none;"></iframe>
       </div>
+    </div>
+  </div>
+
+  <!-- Payment Preset Modal -->
+  <div id="paymentPresetModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="paymentPresetModalTitle">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 id="paymentPresetModalTitle">Payment Preset</h2>
+        <button type="button" class="modal-close" id="paymentPresetModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="paymentPresetForm" class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 20px;">
+        <input type="hidden" id="presetId" name="id">
+        <div class="field field-required">
+          <label for="presetName">Preset Name</label>
+          <input type="text" id="presetName" name="name" placeholder="e.g. Wire Transfer, PayPal, ACH" required autocomplete="off">
+          <span class="field-error" data-error-for="preset_name"></span>
+        </div>
+        <div class="field field-required">
+          <label for="presetBody">Payment Instructions / Details</label>
+          <textarea id="presetBody" name="body" rows="4" placeholder="e.g. Bank: Example Bank&#10;Account: 123456789&#10;Routing: 987654321" required></textarea>
+          <span class="field-error" data-error-for="preset_body"></span>
+        </div>
+        <div class="form-actions" style="margin-top: 8px; display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" id="cancelPaymentPresetBtn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="savePaymentPresetBtn" class="btn btn-primary">Save Preset</button>
+        </div>
+      </form>
     </div>
   </div>
 

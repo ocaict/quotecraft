@@ -121,6 +121,8 @@
       credit_note_start_number: 1,
       default_currency: 'USD',
       reporting_currency: 'USD',
+      date_format: 'MMM D, YYYY',
+      decimal_separator: '.',
       pdf_theme: 'classic',
       number_padding: 4,
       number_include_year: 1,
@@ -175,6 +177,9 @@
       const res = await window.electronAPI.getCompanyProfile();
       if (res.ok) {
         fillForm(res.profile);
+        if (window.QuoteCraftUtils) {
+          window.QuoteCraftUtils.setSettings(res.profile);
+        }
       }
     } catch (e) {
       window.QuoteCraftUtils.showToast('Could not load settings: ' + e.message, 'error');
@@ -254,6 +259,10 @@
       const res = await window.electronAPI.saveCompanyProfile(data);
       if (res.ok) {
         fillForm(res.profile);
+        if (window.QuoteCraftUtils) {
+          window.QuoteCraftUtils.setSettings(res.profile);
+        }
+        window.dispatchEvent(new CustomEvent('qc-settings-updated', { detail: res.profile }));
         window.QuoteCraftUtils.showToast('Settings saved successfully.', 'success');
       } else {
         valid = false;
@@ -852,5 +861,166 @@
     });
   }
 
+  // ---------- Payment Instruction Presets ----------
+  const presetsListEl = document.getElementById('paymentPresetsList');
+  const addPresetBtn = document.getElementById('addPaymentPresetBtn');
+  const presetModal = document.getElementById('paymentPresetModal');
+  const presetModalClose = document.getElementById('paymentPresetModalClose');
+  const cancelPresetBtn = document.getElementById('cancelPaymentPresetBtn');
+  const presetForm = document.getElementById('paymentPresetForm');
+  const presetIdInput = document.getElementById('presetId');
+  const presetNameInput = document.getElementById('presetName');
+  const presetBodyInput = document.getElementById('presetBody');
+  const presetModalTitle = document.getElementById('paymentPresetModalTitle');
+
+  function openPresetModal(preset = null) {
+    if (!presetModal) return;
+    if (preset) {
+      if (presetModalTitle) presetModalTitle.textContent = 'Edit Payment Preset';
+      if (presetIdInput) presetIdInput.value = preset.id;
+      if (presetNameInput) presetNameInput.value = preset.name || '';
+      if (presetBodyInput) presetBodyInput.value = preset.body || '';
+    } else {
+      if (presetModalTitle) presetModalTitle.textContent = 'Add Payment Preset';
+      if (presetIdInput) presetIdInput.value = '';
+      if (presetNameInput) presetNameInput.value = '';
+      if (presetBodyInput) presetBodyInput.value = '';
+    }
+    presetModal.classList.remove('hidden');
+    if (presetNameInput) presetNameInput.focus();
+  }
+
+  function closePresetModal() {
+    if (!presetModal) return;
+    presetModal.classList.add('hidden');
+    if (presetForm) presetForm.reset();
+  }
+
+  if (addPresetBtn) addPresetBtn.addEventListener('click', () => openPresetModal(null));
+  if (presetModalClose) presetModalClose.addEventListener('click', closePresetModal);
+  if (cancelPresetBtn) cancelPresetBtn.addEventListener('click', closePresetModal);
+
+  async function loadPaymentPresets() {
+    if (!presetsListEl || !window.electronAPI || !window.electronAPI.listPaymentPresets) return;
+    try {
+      const res = await window.electronAPI.listPaymentPresets();
+      if (!res || !res.ok) {
+        presetsListEl.innerHTML = '<div class="payment-preset-empty">Failed to load presets</div>';
+        return;
+      }
+      renderPaymentPresets(res.presets || []);
+    } catch (err) {
+      presetsListEl.innerHTML = '<div class="payment-preset-empty">Error loading presets</div>';
+    }
+  }
+
+  function renderPaymentPresets(presets) {
+    if (!presetsListEl) return;
+    if (!presets || presets.length === 0) {
+      presetsListEl.innerHTML = '<div class="payment-preset-empty">No payment instruction presets yet. Click "+ Add preset" to create one.</div>';
+      return;
+    }
+
+    presetsListEl.innerHTML = '';
+    presets.forEach((p) => {
+      const item = document.createElement('div');
+      item.className = 'payment-preset-item';
+
+      const main = document.createElement('div');
+      main.className = 'payment-preset-main';
+
+      const title = document.createElement('div');
+      title.className = 'payment-preset-title';
+      title.textContent = p.name;
+
+      const body = document.createElement('pre');
+      body.className = 'payment-preset-body';
+      body.textContent = p.body;
+
+      main.appendChild(title);
+      main.appendChild(body);
+
+      const actions = document.createElement('div');
+      actions.className = 'payment-preset-actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn btn-small btn-secondary';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', () => openPresetModal(p));
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn btn-small btn-danger';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', async () => {
+        if (!confirm(`Delete preset "${p.name}"?`)) return;
+        try {
+          const dRes = await window.electronAPI.deletePaymentPreset(p.id);
+          if (dRes && dRes.ok) {
+            window.QuoteCraftUtils.showToast('Preset deleted.', 'success');
+            loadPaymentPresets();
+            window.dispatchEvent(new CustomEvent('qc-payment-presets-updated'));
+          } else {
+            window.QuoteCraftUtils.showToast((dRes && dRes.error) || 'Failed to delete preset.', 'error');
+          }
+        } catch (e) {
+          window.QuoteCraftUtils.showToast('Error deleting preset: ' + e.message, 'error');
+        }
+      });
+
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+
+      item.appendChild(main);
+      item.appendChild(actions);
+      presetsListEl.appendChild(item);
+    });
+  }
+
+  if (presetForm) {
+    presetForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = presetIdInput.value;
+      const name = presetNameInput.value.trim();
+      const body = presetBodyInput.value.trim();
+
+      if (!name) {
+        window.QuoteCraftUtils.showToast('Preset name is required.', 'error');
+        return;
+      }
+      if (!body) {
+        window.QuoteCraftUtils.showToast('Payment instructions cannot be empty.', 'error');
+        return;
+      }
+
+      try {
+        let res;
+        if (id) {
+          res = await window.electronAPI.updatePaymentPreset(Number(id), { name, body });
+        } else {
+          res = await window.electronAPI.createPaymentPreset({ name, body });
+        }
+
+        if (res && res.ok) {
+          closePresetModal();
+          window.QuoteCraftUtils.showToast(id ? 'Preset updated.' : 'Preset created.', 'success');
+          loadPaymentPresets();
+          window.dispatchEvent(new CustomEvent('qc-payment-presets-updated'));
+        } else {
+          window.QuoteCraftUtils.showToast((res && res.error) || 'Could not save preset.', 'error');
+        }
+      } catch (err) {
+        window.QuoteCraftUtils.showToast('Failed to save preset: ' + err.message, 'error');
+      }
+    });
+  }
+
   loadDiagnostics();
+  loadPaymentPresets();
+  document.addEventListener('pagechange', (e) => {
+    if (e.detail === 'settings') {
+      loadPaymentPresets();
+    }
+  });
 })();

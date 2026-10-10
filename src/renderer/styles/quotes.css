@@ -56,13 +56,20 @@
   border-bottom: none;
 }
 
-.col-description { width: 30%; }
+.col-description { width: 28%; }
 .col-qty { width: 8%; }
-.col-price { width: 13%; }
-.col-line-discount { width: 15%; }
-.col-tax { width: 10%; }
-.col-total { width: 12%; }
-.col-remove { width: 12%; text-align: right; }
+.col-unit { width: 8%; }
+.col-price { width: 12%; }
+.col-line-discount { width: 14%; }
+.col-tax { width: 9%; }
+.col-total { width: 10%; }
+.col-remove { width: 11%; text-align: right; }
+
+.item-unit {
+  width: 100% !important;
+  font-size: 13px !important;
+  padding: 7px 6px !important;
+}
 
 .line-tax-input {
   width: 100% !important;

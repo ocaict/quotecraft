@@ -642,6 +642,16 @@
     qtyInput.value = data.quantity !== undefined && data.quantity !== null ? data.quantity : '';
     tdQty.appendChild(qtyInput);
 
+    const tdUnit = document.createElement('td');
+    tdUnit.className = 'col-unit';
+    const unitInput = document.createElement('input');
+    unitInput.type = 'text';
+    unitInput.className = 'item-unit';
+    unitInput.name = 'item_unit_label';
+    unitInput.placeholder = 'e.g. hrs';
+    unitInput.value = data.unit_label || '';
+    tdUnit.appendChild(unitInput);
+
     const tdPrice = document.createElement('td');
     const priceInput = document.createElement('input');
     priceInput.type = 'number';
@@ -721,6 +731,7 @@
 
     tr.appendChild(tdDesc);
     tr.appendChild(tdQty);
+    tr.appendChild(tdUnit);
     tr.appendChild(tdPrice);
     tr.appendChild(tdDisc);
     tr.appendChild(tdTax);
@@ -850,6 +861,7 @@
     const rows = Array.from(itemsBody.querySelectorAll('tr.item-row')).map((tr) => ({
       description: tr.querySelector('input[name="item_description"]').value,
       quantity: tr.querySelector('input[name="item_quantity"]').value,
+      unit_label: tr.querySelector('input[name="item_unit_label"]')?.value || '',
       unit_price: tr.querySelector('input[name="item_unit_price"]').value,
       discount_type: tr.querySelector('select[name="item_discount_type"]').value,
       discount_value: tr.querySelector('input[name="item_discount_value"]').value,
@@ -912,6 +924,7 @@
       itemsBody.appendChild(createLineItemRow({
         description: item.description,
         quantity: item.quantity,
+        unit_label: item.unit_label || '',
         unit_price: item.unit_price,
         discount_type: item.discount_type || 'none',
         discount_value: item.discount_value,
@@ -1034,6 +1047,7 @@
       itemsBody.appendChild(createLineItemRow({
         description: item.description,
         quantity: item.quantity,
+        unit_label: item.unit_label || '',
         unit_price: item.unit_price,
         discount_type: item.discount_type || 'none',
         discount_value: item.discount_value || 0,
@@ -1179,6 +1193,7 @@
       return {
         description: tr.querySelector('input[name="item_description"]').value.trim(),
         quantity: qty,
+        unit_label: (tr.querySelector('input[name="item_unit_label"]')?.value || '').trim(),
         unit_price: price,
         tax_rate: itemTax,
         discount_type: dType,
@@ -1682,7 +1697,7 @@
       const tdDesc = document.createElement('td');
       tdDesc.textContent = item.description;
       const tdQty = document.createElement('td');
-      tdQty.textContent = item.quantity;
+      tdQty.textContent = item.quantity + (item.unit_label ? ' ' + item.unit_label : '');
       const tdPrice = document.createElement('td');
       tdPrice.textContent = window.QuoteCraftUtils.formatCurrency(item.unit_price, currency);
       const tdDisc = document.createElement('td');
@@ -2437,6 +2452,7 @@
         const row = createLineItemRow({
           description: desc,
           quantity: 1,
+          unit_label: item.unit_label || '',
           unit_price: item.unit_price,
           tax_rate: (item.default_tax_rate !== null && item.default_tax_rate !== undefined) ? item.default_tax_rate : (taxRateInput.value || 0),
         });
@@ -2450,6 +2466,39 @@
   window.addEventListener('qc-library-updated', () => {
     loadLibraryItems();
   });
+
+  // Payment preset quick-insert for quotes
+  const quotePaymentPresetSelect = document.getElementById('quotePaymentPresetSelect');
+  async function loadQuotePaymentPresets() {
+    if (!quotePaymentPresetSelect || !window.electronAPI || !window.electronAPI.listPaymentPresets) return;
+    try {
+      const res = await window.electronAPI.listPaymentPresets();
+      quotePaymentPresetSelect.innerHTML = '<option value="">Insert payment preset…</option>';
+      if (res && res.ok && Array.isArray(res.presets)) {
+        res.presets.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.body;
+          opt.textContent = p.name;
+          quotePaymentPresetSelect.appendChild(opt);
+        });
+      }
+    } catch (_) {}
+  }
+
+  if (quotePaymentPresetSelect) {
+    quotePaymentPresetSelect.addEventListener('change', () => {
+      const text = quotePaymentPresetSelect.value;
+      if (!text || !termsArea) return;
+      if (termsArea.value && termsArea.value.trim()) {
+        termsArea.value = termsArea.value.trim() + '\n\n' + text;
+      } else {
+        termsArea.value = text;
+      }
+      quotePaymentPresetSelect.value = '';
+    });
+    window.addEventListener('qc-payment-presets-updated', loadQuotePaymentPresets);
+    loadQuotePaymentPresets();
+  }
 
   // ---------- Cross-page helpers ----------
 

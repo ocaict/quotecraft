@@ -187,5 +187,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRecoveryInfo: () => ipcRenderer.invoke('database:getRecoveryInfo'),
   verifyDatabaseHealth: () => ipcRenderer.invoke('database:verifyHealth'),
   getDefaultAutoBackupFolder: () => ipcRenderer.invoke('autobackup:getDefaultFolder'),
+
+  // Payment Instruction Presets
+  listPaymentPresets: () => ipcRenderer.invoke('paymentPresets:list'),
+  createPaymentPreset: (data) => ipcRenderer.invoke('paymentPresets:create', data),
+  updatePaymentPreset: (id, data) => ipcRenderer.invoke('paymentPresets:update', id, data),
+  deletePaymentPreset: (id) => ipcRenderer.invoke('paymentPresets:delete', id),
 });
 

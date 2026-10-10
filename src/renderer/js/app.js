@@ -160,5 +160,19 @@
     }
   }
 
+  // Load and apply company locale preferences (date_format, decimal_separator)
+  async function initLocaleSettings() {
+    try {
+      if (!window.electronAPI || !window.electronAPI.getCompanyProfile) return;
+      const res = await window.electronAPI.getCompanyProfile();
+      if (res && res.ok && res.profile && window.QuoteCraftUtils) {
+        window.QuoteCraftUtils.setSettings(res.profile);
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
   checkDatabaseRecovery();
+  initLocaleSettings();
 })();

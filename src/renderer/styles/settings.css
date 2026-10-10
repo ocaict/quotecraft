@@ -551,3 +551,64 @@
   color: var(--text-muted);
   line-height: 1.4;
 }
+
+/* ---------- Payment Instruction Presets ---------- */
+.payment-presets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.payment-preset-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.payment-preset-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.15s;
+}
+
+.payment-preset-item:hover {
+  border-color: var(--border-strong, #444);
+}
+
+.payment-preset-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.payment-preset-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 4px 0;
+}
+
+.payment-preset-body {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.payment-preset-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}

@@ -35,25 +35,75 @@ window.QuoteCraftUtils = {
     return map[status] || status;
   },
 
-  formatCurrency(amount, currencyCode) {
-    const currency = (window.CURRENCIES || []).find((c) => c.code === currencyCode);
-    const symbol = currency ? currency.symbol : (currencyCode || '') + ' ';
-    const value = Number(amount || 0).toFixed(2);
-    return symbol + value;
+  _settings: {
+    date_format: 'MMM D, YYYY',
+    decimal_separator: '.',
   },
 
-  formatDate(isoString) {
+  setSettings(profile) {
+    if (!profile) return;
+    if (profile.date_format) this._settings.date_format = profile.date_format;
+    if (profile.decimal_separator) this._settings.decimal_separator = profile.decimal_separator;
+  },
+
+  formatNumber(val, decimals = 2) {
+    const num = Math.round((Number(val || 0) + 1e-9) * Math.pow(10, decimals)) / Math.pow(10, decimals);
+    const sep = (this._settings && this._settings.decimal_separator) || '.';
+    const thousandSep = sep === ',' ? '.' : ',';
+    const parts = num.toFixed(decimals).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousandSep);
+    return decimals > 0 ? parts.join(sep) : parts[0];
+  },
+
+  formatCurrency(amount, currencyCode) {
+    const currency = (window.CURRENCIES || []).find((c) => c.code === currencyCode);
+    const symbol = currency ? currency.symbol : (currencyCode ? currencyCode + ' ' : '');
+    return symbol + this.formatNumber(amount, 2);
+  },
+
+  formatDate(isoString, customFormat) {
     if (!isoString) return '';
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return isoString;
-    return d.toLocaleDateString();
+    const datePart = String(isoString).split('T')[0];
+    const parts = datePart.split('-');
+    let d;
+    if (parts.length === 3) {
+      d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    } else {
+      d = new Date(isoString);
+    }
+    if (isNaN(d.getTime())) return String(isoString);
+
+    const fmt = customFormat || (this._settings && this._settings.date_format) || 'MMM D, YYYY';
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const day = d.getDate();
+    const pad = (n) => (n < 10 ? '0' + n : String(n));
+
+    const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthsFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    switch (fmt) {
+      case 'DD/MM/YYYY':
+        return `${pad(day)}/${pad(month + 1)}/${year}`;
+      case 'MM/DD/YYYY':
+        return `${pad(month + 1)}/${pad(day)}/${year}`;
+      case 'YYYY-MM-DD':
+        return `${year}-${pad(month + 1)}-${pad(day)}`;
+      case 'D MMMM YYYY':
+        return `${day} ${monthsFull[month]} ${year}`;
+      case 'MMM D, YYYY':
+      default:
+        return `${monthsShort[month]} ${day}, ${year}`;
+    }
   },
 
   formatDateTime(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return isoString;
-    return d.toLocaleString();
+    const dateFormatted = this.formatDate(isoString);
+    const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${dateFormatted} ${timeFormatted}`;
   },
 
   showToast(message, type) {

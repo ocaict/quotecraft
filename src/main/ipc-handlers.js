@@ -148,6 +148,10 @@ const {
   getDbPath,
   getRecoveryInfo,
   verifyDatabaseHealth,
+  listPaymentInstructionPresets,
+  createPaymentInstructionPreset,
+  updatePaymentInstructionPreset,
+  deletePaymentInstructionPreset,
 } = require('./database');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
 const {
@@ -2501,6 +2505,37 @@ function registerIpcHandlers() {
       return { ok: true, savedPath: result.filePath };
     } catch (err) {
       return { ok: false, errors: { general: `Could not export diagnostics: ${err.message}` } };
+    }
+  });
+  ipcMain.handle('paymentPresets:list', async () => {
+    try {
+      return { ok: true, presets: listPaymentInstructionPresets() };
+    } catch (err) {
+      return { ok: false, errors: { general: err.message } };
+    }
+  });
+
+  ipcMain.handle('paymentPresets:create', async (_event, data) => {
+    try {
+      return createPaymentInstructionPreset(data);
+    } catch (err) {
+      return { ok: false, errors: { general: err.message } };
+    }
+  });
+
+  ipcMain.handle('paymentPresets:update', async (_event, id, data) => {
+    try {
+      return updatePaymentInstructionPreset(id, data);
+    } catch (err) {
+      return { ok: false, errors: { general: err.message } };
+    }
+  });
+
+  ipcMain.handle('paymentPresets:delete', async (_event, id) => {
+    try {
+      return deletePaymentInstructionPreset(id);
+    } catch (err) {
+      return { ok: false, errors: { general: err.message } };
     }
   });
 }

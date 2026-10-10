@@ -1298,6 +1298,59 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 37,
+    up: () => {
+      // Add unit_label to line item tables for custom units of measurement
+      const qliCols = new Set(db.exec(`PRAGMA table_info(quote_line_items)`)[0].values.map((v) => v[1]));
+      if (!qliCols.has('unit_label')) {
+        db.run(`ALTER TABLE quote_line_items ADD COLUMN unit_label TEXT NOT NULL DEFAULT ''`);
+      }
+      const iliCols = new Set(db.exec(`PRAGMA table_info(invoice_line_items)`)[0].values.map((v) => v[1]));
+      if (!iliCols.has('unit_label')) {
+        db.run(`ALTER TABLE invoice_line_items ADD COLUMN unit_label TEXT NOT NULL DEFAULT ''`);
+      }
+    },
+  },
+  {
+    version: 38,
+    up: () => {
+      // Add date_format and decimal_separator preferences to company_profile
+      const cols = new Set(db.exec(`PRAGMA table_info(company_profile)`)[0].values.map((v) => v[1]));
+      if (!cols.has('date_format')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN date_format TEXT NOT NULL DEFAULT 'MMM D, YYYY'`);
+      }
+      if (!cols.has('decimal_separator')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN decimal_separator TEXT NOT NULL DEFAULT '.'`);
+      }
+    },
+  },
+  {
+    version: 39,
+    up: () => {
+      // Create payment_instruction_presets table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS payment_instruction_presets (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          name        TEXT NOT NULL,
+          body        TEXT NOT NULL DEFAULT '',
+          sort_order  INTEGER NOT NULL DEFAULT 0,
+          created_at  TEXT NOT NULL,
+          updated_at  TEXT NOT NULL
+        )
+      `);
+    },
+  },
+  {
+    version: 40,
+    up: () => {
+      // Add line_item_template support for unit_label
+      const cols = new Set(db.exec(`PRAGMA table_info(line_item_templates)`)[0].values.map((v) => v[1]));
+      if (!cols.has('unit_label')) {
+        db.run(`ALTER TABLE line_item_templates ADD COLUMN unit_label TEXT NOT NULL DEFAULT ''`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -1345,6 +1398,8 @@ function getCompanyProfile() {
   profile.pdf_theme = profile.pdf_theme || 'classic';
   profile.number_padding = profile.number_padding != null ? Number(profile.number_padding) : 4;
   profile.number_include_year = profile.number_include_year != null ? Number(profile.number_include_year) : 1;
+  profile.date_format = profile.date_format || 'MMM D, YYYY';
+  profile.decimal_separator = profile.decimal_separator || '.';
   return profile;
 }
 
@@ -1390,6 +1445,8 @@ function saveCompanyProfile(profile) {
     number_include_year: profile.number_include_year !== undefined && profile.number_include_year !== null && profile.number_include_year !== ''
       ? (Number(profile.number_include_year) ? 1 : 0)
       : (existing && existing.number_include_year != null ? existing.number_include_year : 1),
+    date_format: profile.date_format !== undefined ? (profile.date_format || 'MMM D, YYYY') : (existing && existing.date_format) || 'MMM D, YYYY',
+    decimal_separator: profile.decimal_separator !== undefined ? (profile.decimal_separator || '.') : (existing && existing.decimal_separator) || '.',
   };
 
   if (existing) {
@@ -1401,7 +1458,8 @@ function saveCompanyProfile(profile) {
         default_hourly_rate = ?, invoice_prefix = ?, invoice_start_number = ?, quote_prefix = ?,
         quote_start_number = ?, default_terms = ?, payment_details = ?,
         credit_note_prefix = ?, credit_note_start_number = ?, default_quote_acceptance_instructions = ?,
-        pdf_theme = ?, number_padding = ?, number_include_year = ?, updated_at = ?
+        pdf_theme = ?, number_padding = ?, number_include_year = ?,
+        date_format = ?, decimal_separator = ?, updated_at = ?
        WHERE id = 1`,
       [
         fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
@@ -1410,7 +1468,8 @@ function saveCompanyProfile(profile) {
         fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
-        fields.pdf_theme, fields.number_padding, fields.number_include_year, now,
+        fields.pdf_theme, fields.number_padding, fields.number_include_year,
+        fields.date_format, fields.decimal_separator, now,
       ]
     );
   } else {
@@ -1421,8 +1480,8 @@ function saveCompanyProfile(profile) {
         reporting_currency, default_tax_rate, default_hourly_rate, invoice_prefix, invoice_start_number, quote_prefix,
         quote_start_number, default_terms, payment_details,
         credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, pdf_theme,
-        number_padding, number_include_year, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        number_padding, number_include_year, date_format, decimal_separator, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         1, fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
@@ -1430,7 +1489,8 @@ function saveCompanyProfile(profile) {
         fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
-        fields.pdf_theme, fields.number_padding, fields.number_include_year, now, now,
+        fields.pdf_theme, fields.number_padding, fields.number_include_year,
+        fields.date_format, fields.decimal_separator, now, now,
       ]
     );
   }
@@ -2744,11 +2804,12 @@ function addLineItemTemplate(item) {
   const description = String(item.description || '').trim();
   const unitPrice = Number(item.unit_price || 0);
   const taxRate = Number(item.tax_rate || 0);
+  const unitLabel = String(item.unit_label || '').trim();
 
   db.run(
-    `INSERT INTO line_item_templates (name, description, unit_price, tax_rate, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [name, description, unitPrice, taxRate, now, now]
+    `INSERT INTO line_item_templates (name, description, unit_price, tax_rate, unit_label, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [name, description, unitPrice, taxRate, unitLabel, now, now]
   );
 
   const idRes = db.exec('SELECT last_insert_rowid() AS id');
@@ -2763,12 +2824,13 @@ function updateLineItemTemplate(id, item) {
   const description = String(item.description || '').trim();
   const unitPrice = Number(item.unit_price || 0);
   const taxRate = Number(item.tax_rate || 0);
+  const unitLabel = String(item.unit_label || '').trim();
 
   db.run(
     `UPDATE line_item_templates
-     SET name = ?, description = ?, unit_price = ?, tax_rate = ?, updated_at = ?
+     SET name = ?, description = ?, unit_price = ?, tax_rate = ?, unit_label = ?, updated_at = ?
      WHERE id = ?`,
-    [name, description, unitPrice, taxRate, now, id]
+    [name, description, unitPrice, taxRate, unitLabel, now, id]
   );
   saveToDisk();
   return getLineItemTemplate(id);
@@ -2781,7 +2843,57 @@ function deleteLineItemTemplate(id) {
   return { ok: true, deleted };
 }
 
-// ---------- Expenses ----------
+// ---------- Payment Instruction Presets ----------
+
+function listPaymentInstructionPresets() {
+  const res = db.exec(`SELECT * FROM payment_instruction_presets ORDER BY sort_order ASC, name COLLATE NOCASE ASC`);
+  return rowsToArray(res);
+}
+
+function getPaymentInstructionPreset(id) {
+  const res = db.exec('SELECT * FROM payment_instruction_presets WHERE id = ?', [id]);
+  return rowToObject(res);
+}
+
+function createPaymentInstructionPreset(data) {
+  const now = new Date().toISOString();
+  const name = String(data.name || '').trim();
+  if (!name) return { ok: false, errors: { name: 'Preset name is required.' } };
+  const body = String(data.body || '').trim();
+  const sortOrder = Number(data.sort_order) || 0;
+  db.run(
+    `INSERT INTO payment_instruction_presets (name, body, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+    [name, body, sortOrder, now, now]
+  );
+  const idRes = db.exec('SELECT last_insert_rowid() AS id');
+  const newId = idRes[0].values[0][0];
+  saveToDisk();
+  return { ok: true, preset: getPaymentInstructionPreset(newId) };
+}
+
+function updatePaymentInstructionPreset(id, data) {
+  const now = new Date().toISOString();
+  const existing = getPaymentInstructionPreset(id);
+  if (!existing) return { ok: false, errors: { general: 'Preset not found.' } };
+  const name = data.name !== undefined ? String(data.name).trim() : existing.name;
+  if (!name) return { ok: false, errors: { name: 'Preset name is required.' } };
+  const body = data.body !== undefined ? String(data.body).trim() : existing.body;
+  const sortOrder = data.sort_order !== undefined ? Number(data.sort_order) : existing.sort_order;
+  db.run(
+    `UPDATE payment_instruction_presets SET name = ?, body = ?, sort_order = ?, updated_at = ? WHERE id = ?`,
+    [name, body, sortOrder, now, id]
+  );
+  saveToDisk();
+  return { ok: true, preset: getPaymentInstructionPreset(id) };
+}
+
+function deletePaymentInstructionPreset(id) {
+  db.run(`DELETE FROM payment_instruction_presets WHERE id = ?`, [id]);
+  const deleted = db.getRowsModified() > 0;
+  saveToDisk();
+  return { ok: true, deleted };
+}
+
 
 const EXPENSE_CATEGORIES = ['Software', 'Supplies', 'Travel', 'Other'];
 
@@ -3780,7 +3892,7 @@ function rowsToArray(res) {
 
 function getQuoteLineItems(quoteId) {
   const res = db.exec(
-    `SELECT id, description, quantity, unit_price, tax_rate, discount_type, discount_value, discount_amount, discount_percent, amount, sort_order
+    `SELECT id, description, quantity, unit_price, tax_rate, discount_type, discount_value, discount_amount, discount_percent, amount, unit_label, sort_order
        FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order ASC, id ASC`,
     [quoteId]
   );
@@ -3915,8 +4027,8 @@ function createQuote(data, lineItems) {
         `INSERT INTO quote_line_items (
           quote_id, description, quantity, unit_price,
           tax_rate, discount_type, discount_value, discount_amount,
-          discount_percent, amount, sort_order
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          discount_percent, amount, unit_label, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           createdQuoteId,
           String(item.description).trim(),
@@ -3928,6 +4040,7 @@ function createQuote(data, lineItems) {
           item.discount_amount,
           0,
           item.amount,
+          item.unit_label || '',
           idx,
         ]
       );
@@ -4051,8 +4164,8 @@ function updateQuote(id, data, lineItems) {
           `INSERT INTO quote_line_items (
             quote_id, description, quantity, unit_price,
             tax_rate, discount_type, discount_value, discount_amount,
-            discount_percent, amount, sort_order
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            discount_percent, amount, unit_label, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             createdRevisionId,
             String(item.description).trim(),
@@ -4064,6 +4177,7 @@ function updateQuote(id, data, lineItems) {
             item.discount_amount,
             0,
             item.amount,
+            item.unit_label || '',
             idx,
           ]
         );
@@ -4123,8 +4237,8 @@ function updateQuote(id, data, lineItems) {
         `INSERT INTO quote_line_items (
           quote_id, description, quantity, unit_price,
           tax_rate, discount_type, discount_value, discount_amount,
-          discount_percent, amount, sort_order
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          discount_percent, amount, unit_label, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           String(item.description).trim(),
@@ -4136,6 +4250,7 @@ function updateQuote(id, data, lineItems) {
           item.discount_amount,
           0,
           item.amount,
+          item.unit_label || '',
           idx,
         ]
       );
@@ -4482,6 +4597,7 @@ function computeDocumentTotals(data, lineItems) {
       description: item.description,
       quantity: qty,
       unit_price: price,
+      unit_label: String(item.unit_label || ''),
       tax_rate: taxRate,
       discount_type: dType,
       discount_value: dType === 'none' ? 0 : dVal,
@@ -4542,6 +4658,7 @@ function computeDocumentTotals(data, lineItems) {
       description: l.description,
       quantity: l.quantity,
       unit_price: l.unit_price,
+      unit_label: l.unit_label || '',
       tax_rate: l.tax_rate,
       discount_type: l.discount_type,
       discount_value: l.discount_value,
@@ -4632,7 +4749,7 @@ function validateQuoteInput(data, lineItems) {
 
 function getInvoiceLineItems(invoiceId) {
   const res = db.exec(
-    `SELECT id, description, quantity, unit_price, tax_rate, discount_type, discount_value, discount_amount, discount_percent, amount, sort_order
+    `SELECT id, description, quantity, unit_price, tax_rate, discount_type, discount_value, discount_amount, discount_percent, amount, unit_label, sort_order
        FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order ASC, id ASC`,
     [invoiceId]
   );
@@ -4897,8 +5014,8 @@ function updateInvoice(id, data, lineItems) {
         `INSERT INTO invoice_line_items (
           invoice_id, description, quantity, unit_price,
           tax_rate, discount_type, discount_value, discount_amount,
-          discount_percent, amount, sort_order
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          discount_percent, amount, unit_label, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           String(item.description).trim(),
@@ -4910,6 +5027,7 @@ function updateInvoice(id, data, lineItems) {
           item.discount_amount,
           0,
           item.amount,
+          item.unit_label || '',
           idx,
         ]
       );
@@ -5021,8 +5139,8 @@ function createInvoice(data, inputLineItems) {
         `INSERT INTO invoice_line_items (
           invoice_id, description, quantity, unit_price,
           tax_rate, discount_type, discount_value, discount_amount,
-          discount_percent, amount, sort_order
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          discount_percent, amount, unit_label, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           invoiceId,
           String(item.description).trim(),
@@ -5034,6 +5152,7 @@ function createInvoice(data, inputLineItems) {
           item.discount_amount,
           0,
           item.amount,
+          item.unit_label || '',
           idx,
         ]
       );
@@ -5369,14 +5488,15 @@ function duplicateInvoice(id) {
     (source.line_items || []).forEach((item, idx) => {
       db.run(
         `INSERT INTO invoice_line_items (
-           invoice_id, description, quantity, unit_price,
+           invoice_id, description, quantity, unit_label, unit_price,
            tax_rate, discount_type, discount_value, discount_amount,
            discount_percent, amount, sort_order
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newInvoiceId,
           String(item.description).trim(),
           Number(item.quantity),
+          item.unit_label || '',
           Number(item.unit_price),
           Number(item.tax_rate) || 0,
           item.discount_type || 'none',
@@ -5642,14 +5762,15 @@ function convertQuoteToInvoice(quoteId, overrides) {
     (quote.line_items || []).forEach((item, idx) => {
       db.run(
         `INSERT INTO invoice_line_items (
-          invoice_id, description, quantity, unit_price,
+          invoice_id, description, quantity, unit_label, unit_price,
           tax_rate, discount_type, discount_value, discount_amount,
           discount_percent, amount, sort_order
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           invoiceId,
           item.description,
           Number(item.quantity),
+          item.unit_label || '',
           Number(item.unit_price),
           Number(item.tax_rate) || 0,
           item.discount_type || 'none',
@@ -6110,7 +6231,7 @@ function getPaymentsReport(filter = {}) {
   }));
 
   const companyProfile = getCompanyProfile();
-  const baseCurrency = (companyProfile && companyProfile.base_currency) || 'USD';
+  const baseCurrency = (companyProfile && (companyProfile.reporting_currency || companyProfile.default_currency)) || 'USD';
 
   return {
     totalReceived,
@@ -8528,5 +8649,10 @@ module.exports = {
   getDbPath,
   getRecoveryInfo,
   verifyDatabaseHealth,
+  listPaymentInstructionPresets,
+  getPaymentInstructionPreset,
+  createPaymentInstructionPreset,
+  updatePaymentInstructionPreset,
+  deletePaymentInstructionPreset,
 };
 
