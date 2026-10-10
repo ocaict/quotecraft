@@ -12,21 +12,25 @@ if (!gotTheLock) {
   app.quit();
 }
 
+const logger = require('./logger');
 const { initializeDatabase, closeDatabase } = require('./database');
 const { registerIpcHandlers } = require('./ipc-handlers');
 const { startAutoBackupScheduler, stopAutoBackupScheduler, runOnCloseIfEnabled } = require('./auto-backup');
 const { loadWindowState, trackWindowState } = require('./window-state');
 const { buildAppMenu } = require('./menu');
 const { setupTray, destroyTray } = require('./tray');
+const { initUpdater } = require('./updater');
 
 let mainWindow = null;
 
+logger.info(`[QuoteCraft] Starting application (v${app.getVersion()}). Platform: ${process.platform}`);
+
 // Catch unhandled errors gracefully in production
 process.on('uncaughtException', (err) => {
-  console.error('[QuoteCraft Process Uncaught Exception]', err);
+  logger.error('[QuoteCraft Process Uncaught Exception]', err);
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('[QuoteCraft Process Unhandled Rejection]', reason);
+  logger.error('[QuoteCraft Process Unhandled Rejection]', reason);
 });
 
 async function createWindow() {
@@ -99,6 +103,7 @@ if (gotTheLock) {
     await initializeDatabase();
     registerIpcHandlers();
     await createWindow();
+    initUpdater(mainWindow);
 
     Menu.setApplicationMenu(buildAppMenu(mainWindow));
     setupTray(mainWindow);

@@ -1,6 +1,8 @@
 const { ipcMain, dialog, app, shell, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const logger = require('./logger');
+const updater = require('./updater');
 const {
   renderQuotePdf,
   renderInvoicePdf,
@@ -2536,6 +2538,73 @@ function registerIpcHandlers() {
       return deletePaymentInstructionPreset(id);
     } catch (err) {
       return { ok: false, errors: { general: err.message } };
+    }
+  });
+
+  // Logging & Diagnostics
+  ipcMain.handle('logs:export', async () => {
+    try {
+      const defaultFilename = `QuoteCraft_Logs_${new Date().toISOString().slice(0, 10)}.log`;
+      const result = await dialog.showSaveDialog({
+        title: 'Export Diagnostic Logs',
+        defaultPath: defaultFilename,
+        filters: [{ name: 'Log Files', extensions: ['log', 'txt'] }],
+      });
+      if (result.canceled || !result.filePath) return { ok: true, cancelled: true };
+      const res = logger.exportLogs(result.filePath);
+      return res;
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('logs:getRecent', async (_event, maxLines = 150) => {
+    try {
+      return { ok: true, logs: logger.getRecentLogs(maxLines) };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('log:write', async (_event, { level = 'info', message = '', details = null }) => {
+    try {
+      const msg = details ? `${message} | Details: ${typeof details === 'object' ? JSON.stringify(details) : details}` : message;
+      if (level === 'error') {
+        logger.error(`[Renderer] ${msg}`);
+      } else if (level === 'warn') {
+        logger.warn(`[Renderer] ${msg}`);
+      } else {
+        logger.info(`[Renderer] ${msg}`);
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // Auto-Updater
+  ipcMain.handle('updater:check', async () => {
+    try {
+      return await updater.checkForUpdates(true);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('updater:install', async () => {
+    try {
+      updater.quitAndInstall();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('updater:getStatus', async () => {
+    try {
+      return { ok: true, status: updater.getStatus() };
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
   });
 }

@@ -158,6 +158,15 @@
   let statusFilter = 'all';
   const selectedInvoiceIds = new Set();
 
+  // Pagination
+  const invoicePaginationEl = document.getElementById('invoicePagination');
+  const invoicePaginator = window.QuoteCraftUtils.createPaginator({
+    containerEl: invoicePaginationEl,
+    pageSizes: [25, 50, 100],
+    defaultSize: 25,
+    onNavigate: () => renderList(),
+  });
+
   function toast(message, type) {
     window.QuoteCraftUtils.showToast(message, type);
   }
@@ -388,9 +397,9 @@
   }
 
   function renderList() {
-    const filtered = sortInvoices(filterInvoices());
+    const allFiltered = sortInvoices(filterInvoices());
 
-    if (filtered.length === 0) {
+    if (allFiltered.length === 0) {
       if (invoices.length === 0) {
         invoiceListEl.innerHTML = window.QuoteCraftUtils.emptyStateHTML({
           icon: 'invoices',
@@ -420,8 +429,11 @@
           });
         }
       }
+      invoicePaginationEl && (invoicePaginationEl.innerHTML = '');
       return;
     }
+
+    const filtered = invoicePaginator.paginate(allFiltered);
 
     function makeTh(label, field, extraClass = '') {
       const isCurrent = sortField === field;
@@ -456,6 +468,7 @@
           sortField = field;
           sortDirection = (field === 'date' || field === 'due_date' || field === 'total' || field === 'paid' || field === 'balance') ? 'desc' : 'asc';
         }
+        invoicePaginator.reset();
         renderList();
       });
     });
@@ -1847,11 +1860,13 @@
 
   invoiceSearch.addEventListener('input', () => {
     searchTerm = invoiceSearch.value;
+    invoicePaginator.reset();
     renderList();
   });
 
   invoiceStatusFilter.addEventListener('change', () => {
     statusFilter = invoiceStatusFilter.value;
+    invoicePaginator.reset();
     renderList();
   });
 

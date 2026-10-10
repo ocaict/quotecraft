@@ -1,6 +1,29 @@
 (function () {
   'use strict';
 
+  // Global Renderer Error Boundary & Logging
+  window.addEventListener('error', (event) => {
+    try {
+      const errorMsg = (event && event.error && event.error.stack) || event.message || 'Unknown renderer error';
+      if (window.electronAPI && window.electronAPI.logWrite) {
+        window.electronAPI.logWrite({ level: 'error', message: 'Uncaught Renderer Error', details: errorMsg });
+      }
+      if (window.QuoteCraftUtils && window.QuoteCraftUtils.showToast) {
+        window.QuoteCraftUtils.showToast('An unexpected error occurred. Check diagnostics log.', 'error');
+      }
+    } catch (_) {}
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    try {
+      const reason = event.reason;
+      const errorMsg = (reason && reason.stack) || (reason && reason.message) || String(reason || '');
+      if (window.electronAPI && window.electronAPI.logWrite) {
+        window.electronAPI.logWrite({ level: 'error', message: 'Unhandled Promise Rejection', details: errorMsg });
+      }
+    } catch (_) {}
+  });
+
   // Navigation link click handling
   document.querySelectorAll('#nav a').forEach((link) => {
     link.addEventListener('click', (e) => {

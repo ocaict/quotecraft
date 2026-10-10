@@ -21,6 +21,15 @@
   const methodsGridEl = document.getElementById('paymentsMethodsGrid');
   const tableBodyEl = document.getElementById('paymentsTableBody');
   const invoicesViewPaymentsBtn = document.getElementById('invoicesViewPaymentsBtn');
+  const paymentsPaginationEl = document.getElementById('paymentsPagination');
+  const paymentsPaginator = window.QuoteCraftUtils ? window.QuoteCraftUtils.createPaginator({
+    containerEl: paymentsPaginationEl,
+    pageSizes: [25, 50, 100],
+    defaultSize: 25,
+    onNavigate: () => {
+      if (currentReport) renderReport(currentReport);
+    },
+  }) : null;
 
   function getISODate(d) {
     const year = d.getFullYear();
@@ -79,7 +88,8 @@
     };
   }
 
-  async function loadReport() {
+  async function loadReport(resetPage = true) {
+    if (resetPage && paymentsPaginator) paymentsPaginator.reset();
     try {
       const filter = getFilterPayload();
       const res = await window.electronAPI.getPaymentsReport(filter);
@@ -164,6 +174,7 @@
     // 4. Render Payments Ledger Table
     tableBodyEl.innerHTML = '';
     if (!report.payments || report.payments.length === 0) {
+      if (paymentsPaginationEl) paymentsPaginationEl.innerHTML = '';
       tableBodyEl.innerHTML = `
         <tr>
           <td colspan="7" class="payments-empty">
@@ -174,7 +185,8 @@
       return;
     }
 
-    report.payments.forEach((p) => {
+    const listToRender = paymentsPaginator ? paymentsPaginator.paginate(report.payments) : report.payments;
+    listToRender.forEach((p) => {
       const tr = document.createElement('tr');
       const slug = getMethodSlug(p.payment_method);
       const displayMethod = (p.payment_method || '').trim() || 'Unspecified';

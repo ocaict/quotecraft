@@ -119,7 +119,7 @@ function money(amount, currencyCode) {
   const code = currencyCode || 'USD';
   const symbol = currencySymbol(code);
   const value = formatAmount(amount);
-  if (symbol && isWinAnsiSafe(symbol)) {
+  if (symbol) {
     return symbol + value;
   }
   return code + ' ' + value;
@@ -218,6 +218,20 @@ function createDocument({ title, author, subject, theme }) {
     bufferPages: true,
     info: { Title: title, Author: author, Subject: subject },
   });
+
+  const fontRegular = path.join(__dirname, 'assets/fonts/QuoteCraft-Regular.ttf');
+  const fontBold = path.join(__dirname, 'assets/fonts/QuoteCraft-Bold.ttf');
+  const fontOblique = path.join(__dirname, 'assets/fonts/QuoteCraft-Oblique.ttf');
+  if (fs.existsSync(fontRegular) && fs.existsSync(fontBold)) {
+    doc.registerFont('QuoteCraft-Regular', fontRegular);
+    doc.registerFont('QuoteCraft-Bold', fontBold);
+    if (fs.existsSync(fontOblique)) {
+      doc.registerFont('QuoteCraft-Oblique', fontOblique);
+      doc.registerFont('Helvetica-Oblique', fontOblique);
+    }
+    doc.registerFont('Helvetica', fontRegular);
+    doc.registerFont('Helvetica-Bold', fontBold);
+  }
 
   const chunks = [];
   const done = new Promise((resolve, reject) => {
@@ -2819,4 +2833,7 @@ module.exports = {
   renderInvoiceHtml,
   renderQuotePrintHtml,
   renderInvoicePrintHtml,
+  money,
+  formatAmount,
+  setPdfLocale,
 };

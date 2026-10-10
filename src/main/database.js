@@ -20,8 +20,14 @@ function getDbPath() {
   return DB_FILE;
 }
 
-function saveToDisk() {
-  if (!db) throw new Error('Database not initialized');
+let _saveDiskTimer = null;
+
+function _doSaveToDisk() {
+  if (_saveDiskTimer) {
+    clearTimeout(_saveDiskTimer);
+    _saveDiskTimer = null;
+  }
+  if (!db) return;
   const data = db.export();
   const buffer = Buffer.from(data);
   const dir = path.dirname(DB_FILE);
@@ -34,6 +40,24 @@ function saveToDisk() {
     fs.copyFileSync(tmpFile, DB_FILE);
     try { fs.unlinkSync(tmpFile); } catch (e) { /* ignore */ }
   }
+}
+
+function saveToDisk(immediate = false) {
+  if (immediate) {
+    _doSaveToDisk();
+    return;
+  }
+  if (_saveDiskTimer) {
+    clearTimeout(_saveDiskTimer);
+  }
+  _saveDiskTimer = setTimeout(() => {
+    _saveDiskTimer = null;
+    _doSaveToDisk();
+  }, 400);
+}
+
+function saveToDiskImmediate() {
+  saveToDisk(true);
 }
 
 function checkIntegrity() {
@@ -7621,7 +7645,7 @@ async function restoreDatabaseFromBuffer(dbBytes) {
 
 function closeDatabase() {
   if (db) {
-    saveToDisk();
+    saveToDisk(true);
     db.close();
     db = null;
   }
@@ -8509,6 +8533,7 @@ module.exports = {
   getDb,
   getDbPath,
   saveToDisk,
+  saveToDiskImmediate,
   closeDatabase,
   getCompanyProfile,
   saveCompanyProfile,

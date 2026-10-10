@@ -861,6 +861,124 @@
     });
   }
 
+  const exportLogsBtn = document.getElementById('exportLogsBtn');
+  if (exportLogsBtn) {
+    exportLogsBtn.addEventListener('click', async () => {
+      exportLogsBtn.disabled = true;
+      try {
+        const res = await window.electronAPI.exportLogs();
+        if (res && res.ok && !res.cancelled) {
+          window.QuoteCraftUtils.showToast('Application logs saved to ' + res.path, 'success');
+        } else if (res && !res.ok) {
+          window.QuoteCraftUtils.showToast(res.error || 'Could not export logs.', 'error');
+        }
+      } catch (err) {
+        window.QuoteCraftUtils.showToast('Failed to export logs: ' + err.message, 'error');
+      } finally {
+        exportLogsBtn.disabled = false;
+      }
+    });
+  }
+
+  // ---------- Auto-Updater Controls ----------
+  const checkForUpdatesBtn = document.getElementById('checkForUpdatesBtn');
+  const installUpdateBtn = document.getElementById('installUpdateBtn');
+  const updateStatusMessage = document.getElementById('updateStatusMessage');
+  const updateProgressBarContainer = document.getElementById('updateProgressBarContainer');
+  const updateProgressBar = document.getElementById('updateProgressBar');
+  const updateProgressPercent = document.getElementById('updateProgressPercent');
+  const updaterCurrentVersion = document.getElementById('updaterCurrentVersion');
+
+  function updateUpdaterUI(status) {
+    if (!status) return;
+    if (status.version && updaterCurrentVersion) {
+      updaterCurrentVersion.textContent = `v${status.version}`;
+    }
+
+    if (status.status === 'checking') {
+      if (updateStatusMessage) {
+        updateStatusMessage.textContent = 'Checking for updates...';
+        updateStatusMessage.style.color = 'var(--text-muted, #8b949e)';
+      }
+      if (checkForUpdatesBtn) checkForUpdatesBtn.disabled = true;
+    } else if (status.status === 'available') {
+      if (updateStatusMessage) {
+        updateStatusMessage.textContent = `Update v${status.version} found! Downloading in background...`;
+        updateStatusMessage.style.color = '#38bdf8';
+      }
+      if (updateProgressBarContainer) updateProgressBarContainer.classList.remove('hidden');
+      if (checkForUpdatesBtn) checkForUpdatesBtn.disabled = true;
+    } else if (status.status === 'downloading') {
+      if (updateProgressBarContainer) updateProgressBarContainer.classList.remove('hidden');
+      if (updateProgressBar) updateProgressBar.style.width = `${status.progress}%`;
+      if (updateProgressPercent) updateProgressPercent.textContent = `${status.progress}%`;
+    } else if (status.status === 'downloaded') {
+      if (updateProgressBarContainer) updateProgressBarContainer.classList.add('hidden');
+      if (updateStatusMessage) {
+        updateStatusMessage.textContent = `Update v${status.version} downloaded and ready to install.`;
+        updateStatusMessage.style.color = '#34d399';
+      }
+      if (installUpdateBtn) installUpdateBtn.classList.remove('hidden');
+      if (checkForUpdatesBtn) checkForUpdatesBtn.disabled = false;
+    } else if (status.status === 'not-available') {
+      if (updateStatusMessage) {
+        updateStatusMessage.textContent = status.isDev ? 'Development mode (updates disabled)' : 'QuoteCraft is up to date.';
+        updateStatusMessage.style.color = '#34d399';
+      }
+      if (updateProgressBarContainer) updateProgressBarContainer.classList.add('hidden');
+      if (checkForUpdatesBtn) checkForUpdatesBtn.disabled = false;
+    } else if (status.status === 'error') {
+      if (updateStatusMessage) {
+        updateStatusMessage.textContent = status.error ? `Update check error: ${status.error}` : 'Error checking for updates.';
+        updateStatusMessage.style.color = '#f87171';
+      }
+      if (updateProgressBarContainer) updateProgressBarContainer.classList.add('hidden');
+      if (checkForUpdatesBtn) checkForUpdatesBtn.disabled = false;
+    }
+  }
+
+  if (window.electronAPI && window.electronAPI.onUpdateStatus) {
+    window.electronAPI.onUpdateStatus(updateUpdaterUI);
+    if (window.electronAPI.getUpdateStatus) {
+      window.electronAPI.getUpdateStatus().then((res) => {
+        if (res && res.ok && res.status) {
+          updateUpdaterUI(res.status);
+        }
+      }).catch(() => {});
+    }
+  }
+
+  if (checkForUpdatesBtn) {
+    checkForUpdatesBtn.addEventListener('click', async () => {
+      checkForUpdatesBtn.disabled = true;
+      if (updateStatusMessage) updateStatusMessage.textContent = 'Connecting to update server...';
+      try {
+        const res = await window.electronAPI.checkForUpdates();
+        if (res && res.status) {
+          updateUpdaterUI(res.status);
+        } else if (res && res.isDev) {
+          if (updateStatusMessage) updateStatusMessage.textContent = 'Development mode — updates are disabled.';
+        } else if (res && !res.ok) {
+          if (updateStatusMessage) updateStatusMessage.textContent = res.error || 'Failed to check for updates.';
+        }
+      } catch (err) {
+        if (updateStatusMessage) updateStatusMessage.textContent = err.message;
+      } finally {
+        checkForUpdatesBtn.disabled = false;
+      }
+    });
+  }
+
+  if (installUpdateBtn) {
+    installUpdateBtn.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.installUpdate();
+      } catch (err) {
+        window.QuoteCraftUtils.showToast('Failed to restart and install update: ' + err.message, 'error');
+      }
+    });
+  }
+
   // ---------- Payment Instruction Presets ----------
   const presetsListEl = document.getElementById('paymentPresetsList');
   const addPresetBtn = document.getElementById('addPaymentPresetBtn');

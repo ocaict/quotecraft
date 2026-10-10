@@ -30,6 +30,15 @@
   var kpiBilled = document.getElementById('timeBilledHours');
 
   var tableBody = document.getElementById('timeEntriesBody');
+  var timeEntriesPaginationEl = document.getElementById('timeEntriesPagination');
+  var timeEntriesPaginator = window.QuoteCraftUtils ? window.QuoteCraftUtils.createPaginator({
+    containerEl: timeEntriesPaginationEl,
+    pageSizes: [25, 50, 100],
+    defaultSize: 25,
+    onNavigate: function () {
+      renderTable(lastEntries);
+    },
+  }) : null;
   var listViewBtn = document.getElementById('timeListViewBtn');
   var weeklyViewBtn = document.getElementById('timeWeeklyViewBtn');
   var entriesCard = document.getElementById('timeEntriesCard');
@@ -190,6 +199,7 @@
   function renderTable(entries) {
     tableBody.innerHTML = '';
     if (!entries.length) {
+      if (timeEntriesPaginationEl) timeEntriesPaginationEl.innerHTML = '';
       tableBody.innerHTML =
         '<tr><td colspan="9" style="text-align:center;padding:36px 16px;">' +
         window.QuoteCraftUtils.emptyStateHTML({
@@ -201,7 +211,8 @@
       return;
     }
 
-    entries.forEach(function (entry) {
+    var listToRender = timeEntriesPaginator ? timeEntriesPaginator.paginate(entries) : entries;
+    listToRender.forEach(function (entry) {
       const tr = document.createElement('tr');
       const billed = Number(entry.billed) ? 1 : 0;
       const statusCell = billed
@@ -429,7 +440,8 @@
     kpiAmount.textContent = formatCurrency(summary.totalAmount);
   }
 
-  async function loadEntries() {
+  async function loadEntries(resetPage = true) {
+    if (resetPage && timeEntriesPaginator) timeEntriesPaginator.reset();
     try {
       const [listRes, summaryRes] = await Promise.all([
         window.electronAPI.listTimeEntries(getFilterPayload()),

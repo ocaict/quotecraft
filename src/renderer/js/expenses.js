@@ -25,6 +25,15 @@
   const countEl = document.getElementById('expensesCount');
   const categoriesGridEl = document.getElementById('expensesCategoriesGrid');
   const tableBodyEl = document.getElementById('expensesTableBody');
+  const expensesPaginationEl = document.getElementById('expensesPagination');
+  const expensesPaginator = window.QuoteCraftUtils ? window.QuoteCraftUtils.createPaginator({
+    containerEl: expensesPaginationEl,
+    pageSizes: [25, 50, 100],
+    defaultSize: 25,
+    onNavigate: () => {
+      if (currentSummary) renderExpensesSummary(currentSummary);
+    },
+  }) : null;
 
   // Bulk action bar
   const selectAllChk = document.getElementById('expensesSelectAll');
@@ -276,7 +285,8 @@
     });
   }
 
-  async function loadExpenses() {
+  async function loadExpenses(resetPage = true) {
+    if (resetPage && expensesPaginator) expensesPaginator.reset();
     await loadBaseCurrency();
     await loadClients();
     try {
@@ -365,10 +375,12 @@
         </tr>
       `;
       if (selectAllChk) selectAllChk.checked = false;
+      expensesPaginationEl && (expensesPaginationEl.innerHTML = '');
       return;
     }
 
-    const listToRender = sortExpenses(summary.expenses || []);
+    const sortedExpenses = sortExpenses(summary.expenses || []);
+    const listToRender = expensesPaginator ? expensesPaginator.paginate(sortedExpenses) : sortedExpenses;
     listToRender.forEach((exp) => {
       const tr = document.createElement('tr');
       const slug = getCategorySlug(exp.category);
@@ -975,6 +987,7 @@
         }
       });
       if (currentSummary) {
+        if (expensesPaginator) expensesPaginator.reset();
         renderExpensesSummary(currentSummary);
       }
     });

@@ -193,5 +193,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createPaymentPreset: (data) => ipcRenderer.invoke('paymentPresets:create', data),
   updatePaymentPreset: (id, data) => ipcRenderer.invoke('paymentPresets:update', id, data),
   deletePaymentPreset: (id) => ipcRenderer.invoke('paymentPresets:delete', id),
+
+  // Application Logging
+  exportLogs: () => ipcRenderer.invoke('logs:export'),
+  getRecentLogs: (maxLines) => ipcRenderer.invoke('logs:getRecent', maxLines),
+  logWrite: (payload) => ipcRenderer.invoke('log:write', payload),
+
+  // Auto-Updater
+  checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  installUpdate: () => ipcRenderer.invoke('updater:install'),
+  getUpdateStatus: () => ipcRenderer.invoke('updater:getStatus'),
+  onUpdateStatus: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('updater:status', handler);
+    return () => ipcRenderer.removeListener('updater:status', handler);
+  },
 });
 

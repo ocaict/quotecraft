@@ -176,6 +176,15 @@
   let statusFilter = 'all';
   let sortBy = 'date';
 
+  // Pagination
+  const quotePaginationEl = document.getElementById('quotePagination');
+  const quotePaginator = window.QuoteCraftUtils.createPaginator({
+    containerEl: quotePaginationEl,
+    pageSizes: [25, 50, 100],
+    defaultSize: 25,
+    onNavigate: () => renderQuoteList(),
+  });
+
   function toast(message, type) {
     window.QuoteCraftUtils.showToast(message, type);
   }
@@ -1353,11 +1362,11 @@
   }
 
   function renderQuoteList() {
-    let filtered = quotes.slice();
+    let allFiltered = quotes.slice();
 
     const q = searchTerm.trim().toLowerCase();
     if (q || statusFilter !== 'all') {
-      filtered = filtered.filter((quote) => {
+      allFiltered = allFiltered.filter((quote) => {
         if (q && !matchesSearch(quote, q)) return false;
         if (statusFilter !== 'all') {
           if (effectiveStatus(quote) !== statusFilter) return false;
@@ -1366,9 +1375,9 @@
       });
     }
 
-    filtered = sortQuotesList(filtered);
+    allFiltered = sortQuotesList(allFiltered);
 
-    if (filtered.length === 0) {
+    if (allFiltered.length === 0) {
       if (quotes.length === 0) {
         quoteList.innerHTML = window.QuoteCraftUtils.emptyStateHTML({
           icon: 'quotes',
@@ -1392,12 +1401,16 @@
             searchTerm = '';
             quoteStatusFilter.value = 'all';
             statusFilter = 'all';
+            quotePaginator.reset();
             renderQuoteList();
           });
         }
       }
+      quotePaginationEl && (quotePaginationEl.innerHTML = '');
       return;
     }
+
+    const filtered = quotePaginator.paginate(allFiltered);
 
     function makeQuoteTh(label, field, extraClass = '') {
       const isCurrent = sortField === field;
@@ -1429,6 +1442,7 @@
           sortField = field;
           sortDirection = (field === 'date' || field === 'total') ? 'desc' : 'asc';
         }
+        quotePaginator.reset();
         renderQuoteList();
       });
     });
@@ -2119,16 +2133,19 @@
 
   quoteSearch.addEventListener('input', () => {
     searchTerm = quoteSearch.value;
+    quotePaginator.reset();
     renderQuoteList();
   });
 
   quoteStatusFilter.addEventListener('change', () => {
     statusFilter = quoteStatusFilter.value;
+    quotePaginator.reset();
     renderQuoteList();
   });
 
   quoteSort.addEventListener('change', () => {
     sortBy = quoteSort.value;
+    quotePaginator.reset();
     renderQuoteList();
   });
 

@@ -546,4 +546,109 @@ window.QuoteCraftUtils = {
       }
     });
   },
+
+  /**
+   * Creates a reusable paginator.
+   *
+   * @param {object} opts
+   *   - containerEl   {HTMLElement}  Where to render pagination controls
+   *   - pageSizes     {number[]}     Available page sizes (default [25, 50, 100])
+   *   - defaultSize   {number}       Initial page size (default 25)
+   *   - onNavigate    {Function}     Called when the user changes page or page size
+   * @returns {{ paginate, reset, currentPage, pageSize }}
+   */
+  createPaginator(opts = {}) {
+    const containerEl = opts.containerEl;
+    const pageSizes = opts.pageSizes || [25, 50, 100];
+    let pageSize = opts.defaultSize || pageSizes[0] || 25;
+    let currentPage = 1;
+    let totalItems = 0;
+
+    function totalPages() {
+      return Math.max(1, Math.ceil(totalItems / pageSize));
+    }
+
+    function renderControls() {
+      if (!containerEl) return;
+      const pages = totalPages();
+
+      if (totalItems <= pageSizes[0]) {
+        containerEl.innerHTML = '';
+        return;
+      }
+
+      // Build page window (show at most 5 page numbers)
+      const windowSize = 5;
+      let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+      let end = Math.min(pages, start + windowSize - 1);
+      if (end - start + 1 < windowSize) start = Math.max(1, end - windowSize + 1);
+
+      const pageNums = [];
+      if (start > 1) pageNums.push({ label: '1', page: 1 });
+      if (start > 2) pageNums.push({ label: '…', page: null });
+      for (let p = start; p <= end; p++) pageNums.push({ label: String(p), page: p });
+      if (end < pages - 1) pageNums.push({ label: '…', page: null });
+      if (end < pages) pageNums.push({ label: String(pages), page: pages });
+
+      const from = Math.min((currentPage - 1) * pageSize + 1, totalItems);
+      const to = Math.min(currentPage * pageSize, totalItems);
+
+      containerEl.innerHTML = `
+        <div class="pagination-bar">
+          <span class="pagination-info">${from}–${to} of ${totalItems}</span>
+          <div class="pagination-controls">
+            <button class="pg-btn pg-prev" ${currentPage <= 1 ? 'disabled' : ''} title="Previous page">&#8249;</button>
+            ${pageNums.map(n => n.page === null
+              ? `<span class="pg-ellipsis">…</span>`
+              : `<button class="pg-btn pg-num${n.page === currentPage ? ' pg-active' : ''}" data-page="${n.page}">${n.label}</button>`
+            ).join('')}
+            <button class="pg-btn pg-next" ${currentPage >= pages ? 'disabled' : ''} title="Next page">&#8250;</button>
+          </div>
+          <select class="pg-size-select" title="Items per page">
+            ${pageSizes.map(s => `<option value="${s}"${s === pageSize ? ' selected' : ''}>${s} / page</option>`).join('')}
+            <option value="all"${pageSize === 'all' ? ' selected' : ''}>All</option>
+          </select>
+        </div>`;
+
+      containerEl.querySelector('.pg-prev').addEventListener('click', () => {
+        if (currentPage > 1) { currentPage--; notify(); }
+      });
+      containerEl.querySelector('.pg-next').addEventListener('click', () => {
+        if (currentPage < pages) { currentPage++; notify(); }
+      });
+      containerEl.querySelectorAll('.pg-num').forEach(btn => {
+        btn.addEventListener('click', () => {
+          currentPage = Number(btn.dataset.page);
+          notify();
+        });
+      });
+      containerEl.querySelector('.pg-size-select').addEventListener('change', e => {
+        pageSize = e.target.value === 'all' ? 'all' : Number(e.target.value);
+        currentPage = 1;
+        notify();
+      });
+    }
+
+    function notify() {
+      renderControls();
+      if (typeof opts.onNavigate === 'function') opts.onNavigate();
+    }
+
+    return {
+      /** Slice `items` to the current page and refresh controls. Returns the page slice. */
+      paginate(items) {
+        totalItems = items.length;
+        renderControls();
+        if (pageSize === 'all') return items;
+        const start = (currentPage - 1) * pageSize;
+        return items.slice(start, start + pageSize);
+      },
+      /** Reset to page 1 (call before applying a new filter/sort). */
+      reset() {
+        currentPage = 1;
+      },
+      get currentPage() { return currentPage; },
+      get pageSize() { return pageSize; },
+    };
+  },
 };
