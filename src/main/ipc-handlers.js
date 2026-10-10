@@ -146,6 +146,8 @@ const {
   getRecurringSummary,
   checkIntegrity,
   getDbPath,
+  getRecoveryInfo,
+  verifyDatabaseHealth,
 } = require('./database');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
 const {
@@ -161,6 +163,7 @@ const {
   createBackupPayload,
   runNow: runAutoBackupNow,
   listAutoBackups,
+  getDefaultBackupsFolder,
 } = require('./auto-backup');
 
 const LOGO_DIR = () => path.join(app.getPath('userData'), 'logo');
@@ -2437,7 +2440,19 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('diagnostics:export', async () => {
+  ipcMain.handle('database:getRecoveryInfo', async () => {
+    return { ok: true, recovery: getRecoveryInfo() };
+  });
+
+  ipcMain.handle('database:verifyHealth', async () => {
+    return verifyDatabaseHealth();
+  });
+
+  ipcMain.handle('autobackup:getDefaultFolder', async () => {
+    return { ok: true, folder: getDefaultBackupsFolder() };
+  });
+
+  ipcMain.handle('diagnostics:export', async (event, clientErrors) => {
     try {
       const os = require('os');
       const profile = getCompanyProfile();
@@ -2446,6 +2461,7 @@ function registerIpcHandlers() {
       const integrity = checkIntegrity();
       const dbPath = getDbPath();
       const dbStats = fs.existsSync(dbPath) ? fs.statSync(dbPath) : null;
+      const recovery = getRecoveryInfo();
 
       const report = {
         exportedAt: new Date().toISOString(),
@@ -2465,12 +2481,14 @@ function registerIpcHandlers() {
           path: dbPath,
           sizeBytes: dbStats ? dbStats.size : 0,
           integrityCheck: integrity,
+          recoveryStatus: recovery,
         },
         storage: {
           attachmentsCount: totals.count,
           attachmentsSizeBytes: totals.totalSize,
           autoBackup: backupSettings,
         },
+        recentErrors: Array.isArray(clientErrors) ? clientErrors : [],
       };
 
       const result = await dialog.showSaveDialog({

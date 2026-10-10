@@ -52,25 +52,140 @@ function getDb() {
   return db;
 }
 
+let recoveryInfo = null;
+
+function getRecoveryInfo() {
+  return recoveryInfo;
+}
+
+function verifyDatabaseHealth() {
+  if (!db) return { ok: false, error: 'Database not initialized' };
+  try {
+    const integrity = checkIntegrity();
+    if (!integrity.ok) {
+      return { ok: false, error: `Integrity check failed: ${integrity.status || integrity.error}` };
+    }
+    const tables = [
+      'clients', 'quotes', 'invoices', 'items', 'payments',
+      'expenses', 'projects', 'time_entries', 'audit_log_entries', 'attachments'
+    ];
+    const counts = {};
+    for (const tbl of tables) {
+      try {
+        const res = db.exec(`SELECT COUNT(*) FROM ${tbl}`);
+        counts[tbl] = res && res[0] && res[0].values && res[0].values[0] ? res[0].values[0][0] : 0;
+      } catch (e) {
+        counts[tbl] = 0;
+      }
+    }
+    return {
+      ok: true,
+      status: 'ok',
+      tablesChecked: tables.length,
+      counts,
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 async function initializeDatabase() {
   const SQL = await loadSqlJs();
 
   const fileExists = fs.existsSync(DB_FILE);
+  let loadedSuccessfully = false;
 
   if (fileExists) {
-    const fileBuffer = fs.readFileSync(DB_FILE);
-    db = new SQL.Database(fileBuffer);
-    const integrity = checkIntegrity();
-    if (!integrity.ok) {
-      console.warn('[QuoteCraft] Database integrity check warning:', integrity.status);
+    try {
+      const fileBuffer = fs.readFileSync(DB_FILE);
+      if (fileBuffer.length > 0) {
+        db = new SQL.Database(fileBuffer);
+        const integrity = checkIntegrity();
+        if (integrity.ok) {
+          loadedSuccessfully = true;
+        } else {
+          console.warn('[QuoteCraft] Database integrity check failed:', integrity.status);
+        }
+      }
+    } catch (err) {
+      console.error('[QuoteCraft] Failed to load existing database file:', err.message);
     }
-  } else {
+  }
+
+  // If file exists but is corrupted/failed integrity, attempt auto-recovery from recent backups
+  if (fileExists && !loadedSuccessfully) {
+    const corruptBackupPath = `${DB_FILE}.corrupted-${Date.now()}`;
+    try {
+      fs.copyFileSync(DB_FILE, corruptBackupPath);
+    } catch (e) {}
+
+    const candidateDirs = [];
+    if (app && typeof app.getPath === 'function') {
+      candidateDirs.push(path.join(app.getPath('userData'), 'backups'));
+    }
+    candidateDirs.push(path.dirname(DB_FILE));
+
+    let restored = false;
+    for (const dir of candidateDirs) {
+      if (fs.existsSync(dir)) {
+        try {
+          const files = fs.readdirSync(dir)
+            .filter((f) => (f.endsWith('.json') || f.endsWith('.qcbackup')) && (f.includes('auto') || f.includes('backup') || f.includes('QuoteCraft')))
+            .map((f) => path.join(dir, f))
+            .sort((a, b) => {
+              try { return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs; } catch (e) { return 0; }
+            });
+
+          for (const backupPath of files) {
+            try {
+              const content = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+              if (content && content.database && typeof content.database === 'string') {
+                const recoveredBuffer = Buffer.from(content.database, 'base64');
+                const testDb = new SQL.Database(recoveredBuffer);
+                const testRes = testDb.exec('PRAGMA integrity_check');
+                const testStatus = testRes && testRes[0] && testRes[0].values && testRes[0].values[0] && testRes[0].values[0][0];
+                if (testStatus === 'ok') {
+                  db = testDb;
+                  saveToDisk();
+                  recoveryInfo = {
+                    recovered: true,
+                    recoveredAt: new Date().toISOString(),
+                    sourceBackup: path.basename(backupPath),
+                    corruptPreservedAs: path.basename(corruptBackupPath),
+                  };
+                  loadedSuccessfully = true;
+                  restored = true;
+                  console.warn(`[QuoteCraft] Self-healed: restored database from ${backupPath}`);
+                  break;
+                }
+              }
+            } catch (e) {
+              /* try next backup candidate */
+            }
+          }
+        } catch (e) {
+          /* skip unreadable dir */
+        }
+      }
+      if (restored) break;
+    }
+
+    if (!restored) {
+      console.warn('[QuoteCraft] No valid backup found. Initializing a clean database.');
+      db = new SQL.Database();
+      recoveryInfo = {
+        recovered: false,
+        error: 'Database was corrupted. Initialized fresh database.',
+        corruptPreservedAs: path.basename(corruptBackupPath),
+      };
+    }
+  } else if (!fileExists) {
     db = new SQL.Database();
   }
 
   createTables();
 
-  if (!fileExists) {
+  if (!fileExists || !loadedSuccessfully) {
     saveToDisk();
   }
 
@@ -8411,5 +8526,7 @@ module.exports = {
   getRecurringSummary,
   checkIntegrity,
   getDbPath,
+  getRecoveryInfo,
+  verifyDatabaseHealth,
 };
 

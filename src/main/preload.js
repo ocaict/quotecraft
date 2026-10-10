@@ -183,6 +183,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Diagnostics & System Health
   getDiagnostics: () => ipcRenderer.invoke('diagnostics:get'),
-  exportDiagnostics: () => ipcRenderer.invoke('diagnostics:export'),
+  exportDiagnostics: (clientErrors) => ipcRenderer.invoke('diagnostics:export', clientErrors),
+  getRecoveryInfo: () => ipcRenderer.invoke('database:getRecoveryInfo'),
+  verifyDatabaseHealth: () => ipcRenderer.invoke('database:verifyHealth'),
+  getDefaultAutoBackupFolder: () => ipcRenderer.invoke('autobackup:getDefaultFolder'),
 });
 

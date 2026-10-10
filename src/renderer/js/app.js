@@ -103,4 +103,62 @@
       });
     }
   });
+
+  // Global Error Boundary & Telemetry Ring Buffer (max 50 recent errors)
+  window.__QuoteCraftErrors = window.__QuoteCraftErrors || [];
+  window.addEventListener('error', (event) => {
+    try {
+      window.__QuoteCraftErrors.push({
+        type: 'error',
+        message: event.message || 'Unknown error',
+        filename: event.filename || '',
+        lineno: event.lineno,
+        colno: event.colno,
+        time: new Date().toISOString(),
+      });
+      if (window.__QuoteCraftErrors.length > 50) window.__QuoteCraftErrors.shift();
+    } catch (e) {}
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    try {
+      const reason = event.reason;
+      window.__QuoteCraftErrors.push({
+        type: 'unhandledrejection',
+        message: reason ? (reason.message || String(reason)) : 'Unhandled rejection',
+        stack: reason && reason.stack ? String(reason.stack) : '',
+        time: new Date().toISOString(),
+      });
+      if (window.__QuoteCraftErrors.length > 50) window.__QuoteCraftErrors.shift();
+    } catch (e) {}
+  });
+
+  // Check if database was auto-recovered on startup
+  async function checkDatabaseRecovery() {
+    try {
+      if (!window.electronAPI || !window.electronAPI.getRecoveryInfo) return;
+      const res = await window.electronAPI.getRecoveryInfo();
+      if (res && res.ok && res.recovery && res.recovery.recovered) {
+        const banner = document.getElementById('dbRecoveryBanner');
+        if (banner) {
+          banner.innerHTML =
+            '<div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">' +
+              '<span>⚠️ <strong>Database Self-Healed:</strong> QuoteCraft detected a corrupted database on startup and safely restored your data from your recent automatic backup (<strong>' +
+              (res.recovery.sourceBackup || 'latest backup') + '</strong>). Your previous file was preserved as <code>' +
+              (res.recovery.corruptPreservedAs || 'backup copy') + '</code>.</span>' +
+              '<button type="button" class="btn btn-ghost btn-small" id="dismissRecoveryBannerBtn" title="Dismiss" aria-label="Dismiss">&times;</button>' +
+            '</div>';
+          banner.classList.remove('hidden');
+          const dismissBtn = document.getElementById('dismissRecoveryBannerBtn');
+          if (dismissBtn) {
+            dismissBtn.addEventListener('click', () => banner.classList.add('hidden'));
+          }
+        }
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  checkDatabaseRecovery();
 })();

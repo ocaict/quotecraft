@@ -619,11 +619,40 @@
     }
   }
 
+  const abDefaultFolderBtn = document.getElementById('autobackupDefaultFolderBtn');
+
   if (abEnabled) {
-    abEnabled.addEventListener('change', () => {
+    abEnabled.addEventListener('change', async () => {
       abShowMsg('');
       abConfig.classList.toggle('hidden', !abEnabled.checked);
+      if (abEnabled.checked && !(abFolder.value || '').trim()) {
+        try {
+          const defRes = await window.electronAPI.getDefaultAutoBackupFolder();
+          if (defRes && defRes.ok && defRes.folder) {
+            abFolder.value = defRes.folder;
+            abStatus.dataset.saved = '';
+            await abRefreshRecent();
+          }
+        } catch (e) {}
+      }
       abUpdateStatus();
+    });
+  }
+
+  if (abDefaultFolderBtn) {
+    abDefaultFolderBtn.addEventListener('click', async () => {
+      abShowMsg('');
+      try {
+        const defRes = await window.electronAPI.getDefaultAutoBackupFolder();
+        if (defRes && defRes.ok && defRes.folder) {
+          abFolder.value = defRes.folder;
+          abStatus.dataset.saved = '';
+          abUpdateStatus();
+          await abRefreshRecent();
+        }
+      } catch (e) {
+        abShowMsg('Could not fetch default folder: ' + e.message, 'error');
+      }
     });
   }
 
@@ -782,11 +811,34 @@
     }
   }
 
+  const verifyDbBtn = document.getElementById('verifyDbBtn');
+  if (verifyDbBtn) {
+    verifyDbBtn.addEventListener('click', async () => {
+      verifyDbBtn.disabled = true;
+      verifyDbBtn.textContent = 'Verifying…';
+      try {
+        const res = await window.electronAPI.verifyDatabaseHealth();
+        if (res && res.ok) {
+          window.QuoteCraftUtils.showToast(`Database healthy: ${res.tablesChecked} tables intact, integrity check passed.`, 'success');
+          loadDiagnostics();
+        } else {
+          window.QuoteCraftUtils.showToast(res.error || 'Database integrity issue detected.', 'error');
+        }
+      } catch (err) {
+        window.QuoteCraftUtils.showToast('Verification failed: ' + err.message, 'error');
+      } finally {
+        verifyDbBtn.disabled = false;
+        verifyDbBtn.textContent = '🔍 Verify Database';
+      }
+    });
+  }
+
   if (exportDiagnosticsBtn) {
     exportDiagnosticsBtn.addEventListener('click', async () => {
       exportDiagnosticsBtn.disabled = true;
       try {
-        const res = await window.electronAPI.exportDiagnostics();
+        const clientErrs = window.__QuoteCraftErrors || [];
+        const res = await window.electronAPI.exportDiagnostics(clientErrs);
         if (res && res.ok && !res.cancelled) {
           window.QuoteCraftUtils.showToast('Diagnostics report saved to ' + res.savedPath, 'success');
         } else if (res && !res.ok) {

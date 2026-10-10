@@ -173,6 +173,9 @@
         </div>
       </div>
 
+      <!-- Database Recovery / Self-Healing Alert -->
+      <div id="dbRecoveryBanner" class="quote-old-version-notice hidden" style="margin-bottom:20px; border-left: 4px solid #d29922; background: rgba(210, 153, 34, 0.12); color: var(--text);"></div>
+
       <div id="dashboardRecurringBanner" class="quote-old-version-notice hidden" style="margin-bottom:20px;"></div>
 
       <!-- Reminders Due Today Card -->
@@ -3024,6 +3027,7 @@
                 <div class="backup-folder-row">
                   <input type="text" id="autobackupFolder" readonly placeholder="Choose a folder to store backups">
                   <button type="button" id="autobackupFolderBtn" class="btn btn-secondary">Choose folder</button>
+                  <button type="button" id="autobackupDefaultFolderBtn" class="btn btn-ghost" title="Use default AppData folder">Use Default</button>
                 </div>
                 <span class="hint">Older backups beyond the "keep" count are removed automatically, so a bad backup never wipes out your only good one.</span>
               </div>
@@ -3065,6 +3069,7 @@
           </div>
 
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button type="button" id="verifyDbBtn" class="btn btn-secondary">🔍 Verify Database</button>
             <button type="button" id="exportDiagnosticsBtn" class="btn btn-secondary">Export Diagnostic Report (.json)</button>
             <span class="hint">Includes non-sensitive system specs, database health, and logs.</span>
           </div>

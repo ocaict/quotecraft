@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { app } = require('electron');
 const {
   getDatabaseBuffer,
   getCompanyProfile,
@@ -12,6 +13,16 @@ const AUTO_PREFIX = 'quoteCraft-auto-';
 const AUTO_EXT = '.json';
 const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const BACKUP_VERSION = 2;
+
+const DEFAULT_BACKUPS_DIR = () =>
+  path.join(
+    app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(__dirname, '../../data'),
+    'backups'
+  );
+
+function getDefaultBackupsFolder() {
+  return DEFAULT_BACKUPS_DIR();
+}
 
 function createBackupPayload(profile) {
   const dbBytes = getDatabaseBuffer();
@@ -210,4 +221,5 @@ module.exports = {
   runOnCloseIfEnabled,
   startAutoBackupScheduler,
   stopAutoBackupScheduler,
+  getDefaultBackupsFolder,
 };
