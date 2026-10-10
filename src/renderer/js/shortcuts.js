@@ -94,6 +94,19 @@
   }
 
   function openShortcutsReference() {
+    const modal = document.getElementById('shortcutsModal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      const closeBtn = document.getElementById('shortcutsModalClose');
+      const doneBtn = document.getElementById('shortcutsModalDoneBtn');
+      const close = () => modal.classList.add('hidden');
+      if (closeBtn) closeBtn.onclick = close;
+      if (doneBtn) doneBtn.onclick = close;
+      modal.onclick = (e) => {
+        if (e.target === modal) close();
+      };
+      return;
+    }
     window.QuoteCraftUtils.goToPage('settings');
     const card = document.getElementById('shortcutsCard');
     if (card) {
@@ -168,8 +181,15 @@
       return;
     }
 
-    // Single-character shortcuts require no modifiers and must not fire while
-    // the user is typing in a field or interacting with a dialog.
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('shortcutsModal');
+      if (modal && !modal.classList.contains('hidden')) {
+        e.preventDefault();
+        modal.classList.add('hidden');
+        return;
+      }
+    }
+
     if (withModifier || e.altKey) return;
     if (isEditable(e.target)) return;
     if (anyModalOpen()) return;

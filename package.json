@@ -1,16 +1,17 @@
 {
   "name": "quotecraft",
   "productName": "QuoteCraft",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Professional quote and invoice management for freelancers and small businesses",
   "main": "src/main/main.js",
   "scripts": {
     "dev": "electron .",
     "test": "node scripts/run-all-tests.js",
     "dist": "electron-builder --win nsis",
+    "dist:win": "electron-builder --win nsis",
     "dist:dir": "electron-builder --win nsis --dir"
   },
-  "author": "",
+  "author": "QuoteCraft",
   "license": "MIT",
   "private": true,
   "dependencies": {

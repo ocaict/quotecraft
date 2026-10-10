@@ -471,7 +471,16 @@
     if (!listEl) return;
 
     if (projects.length === 0) {
-      listEl.innerHTML = '<p class="placeholder">No projects found. Create one to group quotes and invoices under a client job.</p>';
+      listEl.innerHTML = window.QuoteCraftUtils.emptyStateHTML({
+        icon: 'projects',
+        title: 'No projects yet',
+        message: 'Create a project to group quotes, invoices, and tracked time under a client job.',
+        actionLabel: '+ Add Project'
+      });
+      var emptyBtn = listEl.querySelector('[data-empty-action]');
+      if (emptyBtn) {
+        emptyBtn.addEventListener('click', openAddModal);
+      }
       return;
     }
 
@@ -619,6 +628,16 @@
 
   // ---------- Delete / archive ----------
   async function confirmDelete(id) {
+    var p = projects.find(function (item) { return item.id === id; });
+    var name = p ? p.name : 'this project';
+    var confirmed = await window.QuoteCraftUtils.confirmAction({
+      title: 'Delete this project?',
+      message: '"' + name + '" will be permanently removed. Projects with linked quotes or invoices cannot be deleted and can be archived instead.',
+      confirmText: 'Delete',
+      danger: true,
+    });
+    if (!confirmed) return;
+
     try {
       var res = await window.electronAPI.tryDeleteProject(id);
       if (res.ok) {

@@ -567,13 +567,42 @@
     });
   }
 
+  async function checkOnboarding(profileData) {
+    const banner = document.getElementById('onboardingBanner');
+    if (!banner) return;
+    const dismissed = localStorage.getItem('qc-onboarding-dismissed');
+    const isProfileEmpty = !profileData || !profileData.company_name || !profileData.company_name.trim();
+
+    if (isProfileEmpty && !dismissed) {
+      banner.classList.remove('hidden');
+      const setupBtn = document.getElementById('onboardingSetupBtn');
+      const dismissBtn = document.getElementById('onboardingDismissBtn');
+      if (setupBtn) {
+        setupBtn.onclick = () => {
+          window.QuoteCraftUtils.goToPage('settings');
+        };
+      }
+      if (dismissBtn) {
+        dismissBtn.onclick = () => {
+          banner.classList.add('hidden');
+          try { localStorage.setItem('qc-onboarding-dismissed', '1'); } catch (e) {}
+        };
+      }
+    } else {
+      banner.classList.add('hidden');
+    }
+  }
+
   async function init() {
+    let companyProf = null;
     try {
       const profile = await window.electronAPI.getCompanyProfile();
       if (profile.ok && profile.profile) {
+        companyProf = profile.profile;
         currencyCode = profile.profile.reporting_currency || profile.profile.default_currency || 'USD';
       }
     } catch (e) { /* keep default */ }
+    await checkOnboarding(companyProf);
     await checkDueRecurringDashboard();
     await checkDueRemindersDashboard();
     await loadStats();
@@ -581,6 +610,10 @@
 
   document.addEventListener('pagechange', async (e) => {
     if (e.detail === 'dashboard') {
+      try {
+        const prof = await window.electronAPI.getCompanyProfile();
+        await checkOnboarding(prof && prof.ok ? prof.profile : null);
+      } catch (e) {}
       await checkDueRecurringDashboard();
       await checkDueRemindersDashboard();
       loadStats();

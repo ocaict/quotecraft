@@ -191,7 +191,13 @@
     tableBody.innerHTML = '';
     if (!entries.length) {
       tableBody.innerHTML =
-        '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px;">No time entries found matching the selected criteria.</td></tr>';
+        '<tr><td colspan="9" style="text-align:center;padding:36px 16px;">' +
+        window.QuoteCraftUtils.emptyStateHTML({
+          icon: 'activity',
+          title: 'No time entries',
+          message: 'No time entries match the selected filters. Use the live timer or log manual time above.',
+        }) +
+        '</td></tr>';
       return;
     }
 
@@ -269,8 +275,11 @@
     weeklyViewContainer.innerHTML = '';
 
     if (!entries.length) {
-      weeklyViewContainer.innerHTML =
-        '<div class="card" style="text-align:center;color:var(--text-muted);padding:32px;">No time entries found matching the selected criteria.</div>';
+      weeklyViewContainer.innerHTML = window.QuoteCraftUtils.emptyStateHTML({
+        icon: 'activity',
+        title: 'No time entries',
+        message: 'No time entries match the selected filters. Use the live timer or log manual time above.',
+      });
       return;
     }
 

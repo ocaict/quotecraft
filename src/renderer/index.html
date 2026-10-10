@@ -158,6 +158,21 @@
         </div>
       </div>
 
+      <!-- Onboarding Welcome Banner (First Launch) -->
+      <div id="onboardingBanner" class="card onboarding-banner hidden" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid var(--accent); background: linear-gradient(90deg, rgba(88,166,255,0.08) 0%, var(--surface) 100%);">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="font-size: 28px; line-height: 1;">🚀</div>
+          <div>
+            <h3 style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600;">Welcome to QuoteCraft!</h3>
+            <p style="margin: 0; font-size: 13px; color: var(--text-muted);">Set up your company profile (business name, currency, logo, and payment terms) to start creating professional quotes and invoices.</p>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+          <button type="button" id="onboardingSetupBtn" class="btn btn-primary btn-small">Set Up Profile</button>
+          <button type="button" id="onboardingDismissBtn" class="btn btn-ghost btn-small" title="Dismiss" aria-label="Dismiss">&times;</button>
+        </div>
+      </div>
+
       <div id="dashboardRecurringBanner" class="quote-old-version-notice hidden" style="margin-bottom:20px;"></div>
 
       <!-- Reminders Due Today Card -->
@@ -3377,6 +3392,55 @@
   <div id="busyOverlay" class="busy-overlay hidden" aria-live="polite">
     <span class="busy-spinner" aria-hidden="true"></span>
     <span id="busyLabel">Working…</span>
+  </div>
+
+  <div id="shortcutsModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle">
+    <div class="modal modal-shortcuts" style="max-width: 540px;">
+      <div class="modal-header">
+        <h2 id="shortcutsModalTitle">⌨️ Keyboard Shortcuts</h2>
+        <button type="button" class="modal-close" id="shortcutsModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="subtitle" style="margin-bottom: 16px;">Work faster without leaving the keyboard. Shortcuts are paused while typing in text fields.</p>
+        <div class="shortcuts-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <div class="shortcut-row">
+            <span class="shortcut-kbd">Ctrl&nbsp;+&nbsp;K</span>
+            <span>Open Command Palette</span>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-kbd">N</span>
+            <span>New Quote</span>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-kbd">I</span>
+            <span>New Invoice</span>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-kbd">C</span>
+            <span>New Client</span>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-kbd">Ctrl&nbsp;+&nbsp;S</span>
+            <span>Save current form or dialog</span>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-kbd">/</span>
+            <span>Focus search on the current screen</span>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-kbd">?</span>
+            <span>Show this keyboard shortcuts overlay</span>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-kbd">Esc</span>
+            <span>Close open dialog or modal</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions" style="justify-content: flex-end;">
+        <button type="button" class="btn btn-secondary" id="shortcutsModalDoneBtn">Done</button>
+      </div>
+    </div>
   </div>
 
   <div id="confirmModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
