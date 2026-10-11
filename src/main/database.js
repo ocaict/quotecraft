@@ -376,6 +376,7 @@ function createTables() {
       quote_id        INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
       description     TEXT NOT NULL,
       quantity        REAL NOT NULL CHECK (quantity >= 0),
+      unit_label      TEXT NOT NULL DEFAULT '',
       unit_price      REAL NOT NULL CHECK (unit_price >= 0),
       tax_rate        REAL NOT NULL DEFAULT 0 CHECK (tax_rate >= 0),
       discount_type   TEXT NOT NULL DEFAULT 'none',
@@ -452,6 +453,7 @@ function createTables() {
       invoice_id      INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
       description     TEXT NOT NULL,
       quantity        REAL NOT NULL CHECK (quantity >= 0),
+      unit_label      TEXT NOT NULL DEFAULT '',
       unit_price      REAL NOT NULL CHECK (unit_price >= 0),
       tax_rate        REAL NOT NULL DEFAULT 0 CHECK (tax_rate >= 0),
       discount_type   TEXT NOT NULL DEFAULT 'none',
@@ -546,6 +548,18 @@ function createTables() {
     }
     if (expCols.has('client_id')) {
       db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_client_id ON expenses(client_id);`);
+    }
+  }
+
+  // Guard: ensure unit_label exists on quote_line_items and invoice_line_items
+  {
+    const qliCols = new Set(db.exec(`PRAGMA table_info(quote_line_items)`)[0].values.map((v) => v[1]));
+    if (!qliCols.has('unit_label')) {
+      db.run(`ALTER TABLE quote_line_items ADD COLUMN unit_label TEXT NOT NULL DEFAULT ''`);
+    }
+    const iliCols = new Set(db.exec(`PRAGMA table_info(invoice_line_items)`)[0].values.map((v) => v[1]));
+    if (!iliCols.has('unit_label')) {
+      db.run(`ALTER TABLE invoice_line_items ADD COLUMN unit_label TEXT NOT NULL DEFAULT ''`);
     }
   }
 
@@ -1447,6 +1461,24 @@ const MIGRATIONS = [
         if (!cpCols.has(col)) {
           db.run(`ALTER TABLE company_profile ADD COLUMN ${col} ${def}`);
         }
+      }
+    },
+  },
+  {
+    version: 44,
+    up: () => {
+      // Ensure unit_label exists on quote_line_items, invoice_line_items, and line_item_templates
+      const qliCols = new Set(db.exec(`PRAGMA table_info(quote_line_items)`)[0].values.map((v) => v[1]));
+      if (!qliCols.has('unit_label')) {
+        db.run(`ALTER TABLE quote_line_items ADD COLUMN unit_label TEXT NOT NULL DEFAULT ''`);
+      }
+      const iliCols = new Set(db.exec(`PRAGMA table_info(invoice_line_items)`)[0].values.map((v) => v[1]));
+      if (!iliCols.has('unit_label')) {
+        db.run(`ALTER TABLE invoice_line_items ADD COLUMN unit_label TEXT NOT NULL DEFAULT ''`);
+      }
+      const tplCols = new Set(db.exec(`PRAGMA table_info(line_item_templates)`)[0].values.map((v) => v[1]));
+      if (!tplCols.has('unit_label')) {
+        db.run(`ALTER TABLE line_item_templates ADD COLUMN unit_label TEXT NOT NULL DEFAULT ''`);
       }
     },
   },
