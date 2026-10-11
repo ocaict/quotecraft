@@ -221,5 +221,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   paystackHasSecretKey: () => ipcRenderer.invoke('paystack:hasSecretKey'),
   paystackGenerateLink: (invoiceId) => ipcRenderer.invoke('paystack:generateLink', invoiceId),
   paystackVerify: (invoiceId) => ipcRenderer.invoke('paystack:verify', invoiceId),
+
+  // Commercial Licensing
+  getLicense: () => ipcRenderer.invoke('license:get'),
+  activateLicense: (key) => ipcRenderer.invoke('license:activate', key),
+  deactivateLicense: () => ipcRenderer.invoke('license:deactivate'),
+  getLicenseFeatures: () => ipcRenderer.invoke('license:getFeatures'),
+
+  // Shell / Browser
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
 });
 

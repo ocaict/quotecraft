@@ -641,6 +641,20 @@ function createTables() {
       updated_at        TEXT NOT NULL
     );
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS license_info (
+      id              INTEGER PRIMARY KEY CHECK (id = 1),
+      license_key     TEXT DEFAULT NULL,
+      licensee_name   TEXT DEFAULT '',
+      licensee_email  TEXT DEFAULT '',
+      plan            TEXT DEFAULT '',
+      expiry_date     TEXT DEFAULT NULL,
+      issued_at       TEXT DEFAULT NULL,
+      activated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 const MIGRATIONS = [
@@ -1513,6 +1527,38 @@ const MIGRATIONS = [
       if (!invCols.has('paystack_reference')) {
         db.run(`ALTER TABLE invoices ADD COLUMN paystack_reference TEXT DEFAULT NULL`);
       }
+    },
+  },
+  {
+    version: 46,
+    up: () => {
+      // Ensure tax_rate and tax_lines exist on invoices table
+      const invCols = new Set(db.exec(`PRAGMA table_info(invoices)`)[0].values.map((v) => v[1]));
+      if (!invCols.has('tax_rate')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0`);
+      }
+      if (!invCols.has('tax_lines')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN tax_lines TEXT DEFAULT NULL`);
+      }
+    },
+  },
+  {
+    version: 47,
+    up: () => {
+      // Create license_info table for commercial licensing
+      db.run(`
+        CREATE TABLE IF NOT EXISTS license_info (
+          id              INTEGER PRIMARY KEY CHECK (id = 1),
+          license_key     TEXT DEFAULT NULL,
+          licensee_name   TEXT DEFAULT '',
+          licensee_email  TEXT DEFAULT '',
+          plan            TEXT DEFAULT '',
+          expiry_date     TEXT DEFAULT NULL,
+          issued_at       TEXT DEFAULT NULL,
+          activated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
     },
   },
 ];
@@ -8977,6 +9023,74 @@ function updateInvoicePaystackLink(invoiceId, url, reference) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// License Management
+// ---------------------------------------------------------------------------
+
+/**
+ * Retrieves the stored license information.
+ * @returns {{ license_key: string|null, licensee_name: string, licensee_email: string,
+ *             plan: string, expiry_date: string|null, issued_at: string|null,
+ *             activated_at: string } | null}
+ */
+function getLicenseInfo() {
+  try {
+    const res = db.exec(`SELECT * FROM license_info WHERE id = 1`);
+    if (!res || !res[0] || !res[0].values || !res[0].values.length) return null;
+    const cols = res[0].columns;
+    const row = res[0].values[0];
+    const obj = {};
+    cols.forEach((c, i) => { obj[c] = row[i]; });
+    return obj;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Saves license activation details to the database.
+ * @param {object} info
+ * @param {string} info.license_key
+ * @param {string} info.licensee_name
+ * @param {string} info.licensee_email
+ * @param {string} info.plan
+ * @param {string|null} info.expiry_date
+ * @param {string|null} info.issued_at
+ */
+function saveLicenseInfo({ license_key, licensee_name, licensee_email, plan, expiry_date, issued_at }) {
+  const now = new Date().toISOString();
+  const existing = getLicenseInfo();
+  if (existing) {
+    db.run(
+      `UPDATE license_info SET license_key=?, licensee_name=?, licensee_email=?, plan=?,
+       expiry_date=?, issued_at=?, updated_at=? WHERE id=1`,
+      [license_key, licensee_name || '', licensee_email || '', plan || '',
+       expiry_date || null, issued_at || null, now]
+    );
+  } else {
+    db.run(
+      `INSERT INTO license_info (id, license_key, licensee_name, licensee_email, plan,
+       expiry_date, issued_at, activated_at, updated_at)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [license_key, licensee_name || '', licensee_email || '', plan || '',
+       expiry_date || null, issued_at || null, now, now]
+    );
+  }
+  saveToDisk();
+}
+
+/**
+ * Clears all license information (deactivates the license).
+ */
+function clearLicenseInfo() {
+  try {
+    db.run(`DELETE FROM license_info WHERE id = 1`);
+    saveToDisk();
+  } catch (err) {
+    // Table may not exist on older databases before migration 47 runs
+  }
+}
+
 module.exports = {
   initializeDatabase,
   getDb,
@@ -9135,5 +9249,9 @@ module.exports = {
   isValidNuban,
   getPaystackSecretKey,
   updateInvoicePaystackLink,
+  getLicenseInfo,
+  saveLicenseInfo,
+  clearLicenseInfo,
 };
+
 

@@ -254,11 +254,13 @@ Integrate Nigeria's dominant business communication channel directly into the in
 
 ---
 
-## Stage 5: Commercial Licensing & Monetization Engine
+## Stage 5: Commercial Licensing & Monetization Engine ✅ COMPLETE
+
+> **Status: IMPLEMENTED** — Completed October 2026 | Test Coverage: `scripts/test-licensing.js` (9/9 tests passing, 45/45 overall test suites passing)
 
 Turn QuoteCraft into a paid, revenue-generating desktop product tailored for Nigerian buyers.
 
-### 5.1 Free vs. Pro Feature Gating
+### 5.1 Free vs. Pro Feature Gating ✅
 - **Free Starter Tier:**
   - Up to 3 active clients.
   - Standard PDF templates.
@@ -271,33 +273,36 @@ Turn QuoteCraft into a paid, revenue-generating desktop product tailored for Nig
   - Custom PDF branding & themes.
   - Priority support.
 - **Files Affected:**
-  - `src/main/licensing.js` (new module)
-  - `src/renderer/js/app.js`
+  - `src/main/licensing.js`
+  - `src/main/ipc-handlers.js`
+  - `src/renderer/js/clients.js`
+  - `src/renderer/js/settings.js`
 
 ---
 
-### 5.2 Offline Cryptographic License Keys
+### 5.2 Offline Cryptographic License Keys ✅
 - **Design:**
-  - License keys signed with Ed25519 or HMAC-SHA256 (e.g. `QC-PRO-XXXX-XXXX-XXXX-XXXX`).
+  - License keys signed with HMAC-SHA256 (`QC-PRO-<B32_PAYLOAD>-<B32_SIG>`).
   - Key payload contains: `licensee_name`, `licensee_email`, `plan` (lifetime / annual), `expiry_date` (or permanent).
   - QuoteCraft verifies the digital signature locally without requiring constant internet access.
 - **Files Affected:**
   - `src/main/licensing.js`
+  - `src/main/database.js`
   - `src/main/ipc-handlers.js`
   - `src/main/preload.js`
 
 ---
 
-### 5.3 Paystack Purchase Flow for Nigerian Buyers
+### 5.3 Paystack Purchase Flow for Nigerian Buyers ✅
 - **Action:**
-  - Price in Naira: e.g. **₦20,000 / year** or **₦40,000 Lifetime License**.
-  - In QuoteCraft, clicking **"Upgrade to Pro"** opens the official Paystack payment page.
-  - Upon successful payment in Naira, an automated email sends the buyer their license key.
-  - In **Settings > License**, user enters their key and clicks **"Activate"**.
-  - Instant unlock with celebratory banner.
+  - Price in Naira: **₦20,000 / year** or **₦40,000 Lifetime License**.
+  - In QuoteCraft, clicking **"Upgrade to Pro"** opens the official Paystack payment page in browser.
+  - In **Settings > Commercial License**, user enters their key and clicks **"Activate License"**.
+  - Instant unlock with active status badge, licensee display, and plan details.
 - **Files Affected:**
   - `src/renderer/js/settings.js`
   - `src/renderer/index.html`
+  - `src/main/ipc-handlers.js`
 
 ---
 

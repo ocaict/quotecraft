@@ -1236,7 +1236,30 @@
     }
   }
 
-  function openAddModal() {
+  async function openAddModal() {
+    try {
+      if (window.electronAPI && window.electronAPI.getLicense) {
+        const licRes = await window.electronAPI.getLicense();
+        const isPro = licRes && licRes.isPro;
+        if (!isPro && clients && clients.length >= 3) {
+          const wantUpgrade = await window.QuoteCraftUtils.confirmAction({
+            title: 'Free Plan Client Limit (3/3)',
+            message: 'QuoteCraft Free allows up to 3 clients. Upgrade to QuoteCraft Pro to unlock unlimited clients, automated Paystack payment links, 1-click WhatsApp sharing, and tax compliance tools.',
+            confirmText: 'Upgrade to Pro',
+            cancelText: 'Stay on Free',
+          });
+          if (wantUpgrade) {
+            window.QuoteCraftUtils.goToPage('settings');
+            const licCard = document.getElementById('licenseStatusBadge') || document.getElementById('licenseKeyInput');
+            if (licCard) licCard.scrollIntoView({ behavior: 'smooth' });
+          }
+          return;
+        }
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+
     editingId = null;
     clearAllErrors();
     form.reset();

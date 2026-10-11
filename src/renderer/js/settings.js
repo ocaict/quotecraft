@@ -1262,6 +1262,147 @@
   document.addEventListener('pagechange', (e) => {
     if (e.detail === 'settings') {
       loadPaymentPresets();
+      loadLicenseStatus();
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // License Management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Refreshes and renders the license status panel.
+   */
+  async function loadLicenseStatus() {
+    const badge = document.getElementById('licenseStatusBadge');
+    const activePanel = document.getElementById('licenseActivePanel');
+    const activeName = document.getElementById('licenseActiveName');
+    const activeEmail = document.getElementById('licenseActiveEmail');
+    const activePlan = document.getElementById('licenseActivePlan');
+    const activeIssued = document.getElementById('licenseActiveIssued');
+    const activeExpiry = document.getElementById('licenseActiveExpiry');
+    const expiryWrap = document.getElementById('licenseExpiryWrap');
+    const purchasePanel = document.getElementById('licensePurchasePanel');
+    const keyInput = document.getElementById('licenseKeyInput');
+
+    if (!window.electronAPI || typeof window.electronAPI.getLicense !== 'function') return;
+
+    try {
+      const res = await window.electronAPI.getLicense();
+      if (!res || !res.isPro || !res.license) {
+        // Free tier
+        if (badge) {
+          badge.textContent = '\uD83D\uDD12 Free Tier';
+          badge.style.background = 'rgba(107,114,128,0.15)';
+          badge.style.color = '#9ca3af';
+          badge.style.border = '1px solid rgba(107,114,128,0.3)';
+        }
+        if (activePanel) activePanel.style.display = 'none';
+        if (purchasePanel) purchasePanel.style.display = '';
+        if (keyInput) keyInput.value = '';
+      } else {
+        // Pro active
+        const lic = res.license;
+        if (badge) {
+          badge.textContent = '\u26A1 QuoteCraft Pro';
+          badge.style.background = 'rgba(16,185,129,0.15)';
+          badge.style.color = '#10b981';
+          badge.style.border = '1px solid rgba(16,185,129,0.4)';
+        }
+        if (activePanel) activePanel.style.display = '';
+        if (purchasePanel) purchasePanel.style.display = 'none';
+        if (activeName) activeName.textContent = `QuoteCraft Pro \u2014 Active`;
+        if (activeEmail) activeEmail.textContent = lic.licensee_email || '';
+        if (activePlan) activePlan.textContent = lic.plan === 'lifetime' ? 'Lifetime' : 'Annual';
+        if (activeIssued) {
+          activeIssued.textContent = lic.issued_at ? new Date(lic.issued_at).toLocaleDateString() : '\u2014';
+        }
+        if (expiryWrap && activeExpiry) {
+          if (lic.expiry_date) {
+            expiryWrap.style.display = '';
+            activeExpiry.textContent = new Date(lic.expiry_date).toLocaleDateString();
+          } else {
+            expiryWrap.style.display = 'none';
+          }
+        }
+        if (keyInput) keyInput.value = '';
+      }
+    } catch (err) {
+      console.error('[LicensePanel] Failed to load license status:', err);
+    }
+  }
+
+  const licenseActivateBtn = document.getElementById('licenseActivateBtn');
+  if (licenseActivateBtn) {
+    licenseActivateBtn.addEventListener('click', async () => {
+      const keyInput = document.getElementById('licenseKeyInput');
+      const msgEl = document.getElementById('licenseActivateMsg');
+      const key = keyInput ? keyInput.value.trim() : '';
+
+      if (!key) {
+        if (msgEl) { msgEl.textContent = 'Please enter your license key.'; msgEl.style.color = '#f87171'; }
+        return;
+      }
+
+      licenseActivateBtn.disabled = true;
+      licenseActivateBtn.textContent = '\u23F3 Activating\u2026';
+      if (msgEl) { msgEl.textContent = ''; }
+
+      try {
+        const res = await window.electronAPI.activateLicense(key);
+        if (res && res.ok) {
+          if (msgEl) {
+            msgEl.textContent = '\u2705 License activated successfully! Welcome to QuoteCraft Pro.';
+            msgEl.style.color = '#10b981';
+          }
+          window.QuoteCraftUtils.showToast('\u26A1 QuoteCraft Pro activated! All premium features are now unlocked.', 'success');
+          await loadLicenseStatus();
+          // Dispatch event so other parts of the app can update
+          document.dispatchEvent(new CustomEvent('licensechange', { detail: { isPro: true } }));
+        } else {
+          if (msgEl) {
+            msgEl.textContent = '\u274C ' + (res.message || 'Invalid license key. Please check and try again.');
+            msgEl.style.color = '#f87171';
+          }
+        }
+      } catch (err) {
+        if (msgEl) { msgEl.textContent = '\u274C Error: ' + err.message; msgEl.style.color = '#f87171'; }
+      } finally {
+        licenseActivateBtn.disabled = false;
+        licenseActivateBtn.textContent = '\u2705 Activate';
+      }
+    });
+  }
+
+  const licenseDeactivateBtn = document.getElementById('licenseDeactivateBtn');
+  if (licenseDeactivateBtn) {
+    licenseDeactivateBtn.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to remove your QuoteCraft Pro license? Pro features will be disabled until you re-activate.')) return;
+      try {
+        await window.electronAPI.deactivateLicense();
+        window.QuoteCraftUtils.showToast('License removed. You are now on the Free tier.', 'info');
+        await loadLicenseStatus();
+        document.dispatchEvent(new CustomEvent('licensechange', { detail: { isPro: false } }));
+      } catch (err) {
+        window.QuoteCraftUtils.showToast('Failed to remove license: ' + err.message, 'error');
+      }
+    });
+  }
+
+  const licenseUpgradeBtn = document.getElementById('licenseUpgradeBtn');
+  if (licenseUpgradeBtn) {
+    licenseUpgradeBtn.addEventListener('click', () => {
+      // Opens the official QuoteCraft purchase page in the default browser
+      const purchaseUrl = 'https://quotecraft.ng/upgrade';
+      if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
+        window.electronAPI.openExternal(purchaseUrl);
+      } else {
+        window.open(purchaseUrl, '_blank');
+      }
+      window.QuoteCraftUtils.showToast('Opening QuoteCraft Pro purchase page in your browser\u2026', 'info');
+    });
+  }
+
+  // Load license status on first settings page load
+  loadLicenseStatus();
 })();

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('./logger');
 const updater = require('./updater');
+const { verifyLicenseKey, PLAN_FEATURES, FREE_LIMITS } = require('./licensing');
 const {
   renderQuotePdf,
   renderInvoicePdf,
@@ -157,6 +158,9 @@ const {
   deletePaymentInstructionPreset,
   getPaystackSecretKey,
   updateInvoicePaystackLink,
+  getLicenseInfo,
+  saveLicenseInfo,
+  clearLicenseInfo,
 } = require('./database');
 const {
   validatePaystackKey,
@@ -509,6 +513,21 @@ function registerIpcHandlers() {
     }
 
     try {
+      const lic = getLicenseInfo();
+      const isPro = lic && lic.license_key ? verifyLicenseKey(lic.license_key).ok : false;
+      if (!isPro) {
+        const existingClients = getClients();
+        if (existingClients && existingClients.length >= FREE_LIMITS.MAX_CLIENTS) {
+          return {
+            ok: false,
+            errors: {
+              general: `Free Starter tier is limited to ${FREE_LIMITS.MAX_CLIENTS} clients. Please upgrade to QuoteCraft Pro for unlimited clients.`,
+            },
+            limitReached: true,
+          };
+        }
+      }
+
       const saved = addClient(client);
       return { ok: true, client: saved };
     } catch (err) {
@@ -2902,6 +2921,101 @@ function registerIpcHandlers() {
       }
     } catch (err) {
       logger.error('[paystack:verify] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // License Management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns the stored license info plus its current validity.
+   */
+  ipcMain.handle('license:get', async () => {
+    try {
+      const stored = getLicenseInfo();
+      if (!stored || !stored.license_key) {
+        return { ok: true, isPro: false, license: null };
+      }
+      const verification = verifyLicenseKey(stored.license_key);
+      return {
+        ok: true,
+        isPro: verification.ok === true && !verification.expired,
+        license: {
+          ...stored,
+          valid: verification.ok,
+          expired: verification.expired || false,
+          message: verification.message,
+        },
+      };
+    } catch (err) {
+      logger.error('[license:get] ' + err.message);
+      return { ok: false, error: err.message, isPro: false, license: null };
+    }
+  });
+
+  /**
+   * Activates a license key: verifies it, then persists if valid.
+   */
+  ipcMain.handle('license:activate', async (_event, keyString) => {
+    try {
+      if (!keyString || typeof keyString !== 'string') {
+        return { ok: false, message: 'Please enter a license key.' };
+      }
+      const result = verifyLicenseKey(keyString.trim());
+      if (!result.ok) {
+        return { ok: false, message: result.message };
+      }
+      saveLicenseInfo({
+        license_key: keyString.trim(),
+        licensee_name: result.licensee_name,
+        licensee_email: result.licensee_email,
+        plan: result.plan,
+        expiry_date: result.expiry_date || null,
+        issued_at: result.issued_at || null,
+      });
+      return { ok: true, message: result.message, license: result };
+    } catch (err) {
+      logger.error('[license:activate] ' + err.message);
+      return { ok: false, message: err.message };
+    }
+  });
+
+  /**
+   * Deactivates (removes) the stored license.
+   */
+  ipcMain.handle('license:deactivate', async () => {
+    try {
+      clearLicenseInfo();
+      return { ok: true };
+    } catch (err) {
+      logger.error('[license:deactivate] ' + err.message);
+      return { ok: false, message: err.message };
+    }
+  });
+
+  /**
+   * Returns the feature list for free/pro plans and free tier limits.
+   */
+  ipcMain.handle('license:getFeatures', async () => {
+    return { ok: true, features: PLAN_FEATURES, freeLimits: FREE_LIMITS };
+  });
+
+  /**
+   * Safely opens an external URL in the system's default browser.
+   */
+  ipcMain.handle('shell:openExternal', async (_event, url) => {
+    try {
+      if (typeof url !== 'string') return { ok: false, error: 'Invalid URL' };
+      const parsed = new URL(url);
+      if (['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
+        await shell.openExternal(url);
+        return { ok: true };
+      }
+      return { ok: false, error: 'Disallowed protocol' };
+    } catch (err) {
+      logger.error('[shell:openExternal] ' + err.message);
       return { ok: false, error: err.message };
     }
   });

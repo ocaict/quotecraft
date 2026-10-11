@@ -230,10 +230,21 @@ function createDocument({ title, author, subject, theme }) {
     doc.registerFont('QuoteCraft-Bold', fontBold);
     if (fs.existsSync(fontOblique)) {
       doc.registerFont('QuoteCraft-Oblique', fontOblique);
-      doc.registerFont('Helvetica-Oblique', fontOblique);
     }
-    doc.registerFont('Helvetica', fontRegular);
-    doc.registerFont('Helvetica-Bold', fontBold);
+    const origFont = doc.font.bind(doc);
+    doc.font = function (src, size) {
+      if (!src || src === 'Helvetica' || src === 'Helvetica-Regular') {
+        return origFont('QuoteCraft-Regular', size);
+      }
+      if (src === 'Helvetica-Bold') {
+        return origFont('QuoteCraft-Bold', size);
+      }
+      if (src === 'Helvetica-Oblique') {
+        return fs.existsSync(fontOblique) ? origFont('QuoteCraft-Oblique', size) : origFont('QuoteCraft-Regular', size);
+      }
+      return origFont(src, size);
+    };
+    doc.font('QuoteCraft-Regular');
   }
 
   const chunks = [];
@@ -585,41 +596,58 @@ function drawTextSection(ctx, title, body) {
 function drawBankDetailsSection(ctx, bankInfo) {
   const { doc, W } = ctx;
   if (!bankInfo) return;
-  if (ctx.y + 60 > ctx.pageBottom) {
-    doc.addPage();
-    ctx.y = doc.y;
-  }
 
-  let lines = [];
   let title = '';
+  const rows = [];
   if (bankInfo.type === 'nuban') {
     title = 'DIRECT BANK TRANSFER (NGN)';
-    if (bankInfo.bankName) lines.push(`Bank: ${bankInfo.bankName}`);
-    if (bankInfo.accountNumber) lines.push(`Account Number: ${bankInfo.accountNumber}`);
-    if (bankInfo.accountName) lines.push(`Account Name: ${bankInfo.accountName}`);
+    if (bankInfo.bankName) rows.push(['Bank', bankInfo.bankName]);
+    if (bankInfo.accountNumber) rows.push(['Account Number', bankInfo.accountNumber]);
+    if (bankInfo.accountName) rows.push(['Account Name', bankInfo.accountName]);
   } else if (bankInfo.type === 'domiciliary') {
     title = `DOMICILIARY WIRE TRANSFER (${bankInfo.currency})`;
-    if (bankInfo.bankName) lines.push(`Bank: ${bankInfo.bankName}`);
-    if (bankInfo.accountNumber) lines.push(`Account / IBAN: ${bankInfo.accountNumber}`);
-    if (bankInfo.accountName) lines.push(`Beneficiary Name: ${bankInfo.accountName}`);
-    if (bankInfo.swiftCode) lines.push(`SWIFT / BIC: ${bankInfo.swiftCode}`);
-    if (bankInfo.intermediaryBank) lines.push(`Intermediary Bank: ${bankInfo.intermediaryBank}`);
+    if (bankInfo.bankName) rows.push(['Bank', bankInfo.bankName]);
+    if (bankInfo.accountNumber) rows.push(['Account / IBAN', bankInfo.accountNumber]);
+    if (bankInfo.accountName) rows.push(['Beneficiary Name', bankInfo.accountName]);
+    if (bankInfo.swiftCode) rows.push(['SWIFT / BIC', bankInfo.swiftCode]);
+    if (bankInfo.intermediaryBank) rows.push(['Intermediary Bank', bankInfo.intermediaryBank]);
   } else if (bankInfo.type === 'generic') {
     title = 'PAYMENT INSTRUCTIONS / BANK DETAILS';
   }
 
-  if (bankInfo.notes) {
-    lines.push(bankInfo.notes);
+  const hasNotes = bankInfo.notes && String(bankInfo.notes).trim();
+  if (rows.length === 0 && !hasNotes) return;
+
+  const boxPad = 10;
+  const lineH = 14;
+  const contentH = 14 + rows.length * lineH + (hasNotes ? 18 : 0);
+  const totalBoxH = contentH + boxPad * 2;
+
+  if (ctx.y + totalBoxH > ctx.pageBottom) {
+    doc.addPage();
+    ctx.y = doc.y;
   }
 
-  const body = lines.join('\n');
-  if (!body.trim()) return;
+  const boxY = ctx.y;
+  doc.roundedRect(MARGIN, boxY, W, totalBoxH, 4).fill(COLORS.altFill || '#F8FAFC');
+  doc.roundedRect(MARGIN, boxY, W, totalBoxH, 4).strokeColor(COLORS.line || '#E2E8F0').lineWidth(0.75).stroke();
 
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.muted).text(title, MARGIN, ctx.y, { lineGap: 0 });
-  ctx.y = doc.y + 4;
-  doc.font('Helvetica').fontSize(9).fillColor(COLORS.ink);
-  doc.text(body.trim(), MARGIN, ctx.y, { width: W, lineGap: 2 });
-  ctx.y = doc.y + 10;
+  let textY = boxY + boxPad;
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLORS.primary || COLORS.ink).text(title, MARGIN + boxPad, textY);
+  textY += 15;
+
+  for (const [k, v] of rows) {
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLORS.muted).text(`${k}:`, MARGIN + boxPad, textY, { width: 110 });
+    doc.font(k.includes('Account Number') ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(COLORS.ink).text(v, MARGIN + boxPad + 115, textY, { width: W - boxPad * 2 - 115 });
+    textY += lineH;
+  }
+
+  if (hasNotes) {
+    doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted).text(String(bankInfo.notes).trim(), MARGIN + boxPad, textY, { width: W - boxPad * 2 });
+    textY += 14;
+  }
+
+  ctx.y = boxY + totalBoxH + 12;
 }
 
 function drawPaystackPaymentCallout(ctx, payUrl) {
