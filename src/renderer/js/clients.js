@@ -207,6 +207,13 @@
       phoneInput.placeholder = 'Phone';
       phoneInput.value = row.phone || '';
       phoneInput.addEventListener('input', () => { row.phone = phoneInput.value; });
+      phoneInput.addEventListener('blur', () => {
+        if (phoneInput.value && window.QuoteCraftUtils && window.QuoteCraftUtils.normalizeNigerianPhone) {
+          const norm = window.QuoteCraftUtils.normalizeNigerianPhone(phoneInput.value);
+          phoneInput.value = norm;
+          row.phone = norm;
+        }
+      });
 
       // Primary radio
       const primaryWrap = document.createElement('div');
@@ -278,7 +285,7 @@
       name: String(r.name || '').trim(),
       role: String(r.role || '').trim(),
       email: String(r.email || '').trim(),
-      phone: String(r.phone || '').trim(),
+      phone: window.QuoteCraftUtils ? window.QuoteCraftUtils.normalizeNigerianPhone(String(r.phone || '')) : String(r.phone || '').trim(),
       is_primary: !!r.is_primary ? 1 : 0,
     }));
   }
@@ -1192,7 +1199,7 @@
       name: form.elements['name'].value,
       company_name: form.elements['company_name'].value,
       email: form.elements['email'].value,
-      phone: form.elements['phone'].value,
+      phone: window.QuoteCraftUtils ? window.QuoteCraftUtils.normalizeNigerianPhone(form.elements['phone'].value) : form.elements['phone'].value,
       address_line1: form.elements['address_line1'].value,
       address_line2: form.elements['address_line2'].value,
       city: form.elements['city'].value,
@@ -1358,6 +1365,15 @@
   modal.addEventListener('click', (e) => {
     if (e.target === modal) closeModal();
   });
+
+  if (form && form.elements['phone']) {
+    form.elements['phone'].addEventListener('blur', () => {
+      const val = form.elements['phone'].value;
+      if (val && window.QuoteCraftUtils && window.QuoteCraftUtils.normalizeNigerianPhone) {
+        form.elements['phone'].value = window.QuoteCraftUtils.normalizeNigerianPhone(val);
+      }
+    });
+  }
 
   document.getElementById('clientDeleteClose').addEventListener('click', closeDeleteDialog);
   document.getElementById('clientDeleteCancel').addEventListener('click', closeDeleteDialog);

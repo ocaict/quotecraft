@@ -155,7 +155,15 @@ const {
   createPaymentInstructionPreset,
   updatePaymentInstructionPreset,
   deletePaymentInstructionPreset,
+  getPaystackSecretKey,
+  updateInvoicePaystackLink,
 } = require('./database');
+const {
+  validatePaystackKey,
+  initializeTransaction,
+  verifyTransaction,
+  buildReference,
+} = require('./paystack');
 const { sendTestEmail, sendDocumentEmail } = require('./email-service');
 const {
   ALLOWED_EXTENSIONS,
@@ -2392,7 +2400,7 @@ function registerIpcHandlers() {
     }
   });
 
-  // ---------- Shell: Open External URLs ----------
+  // ---------- Shell: Open External URLs & Reveal in Folder ----------
   ipcMain.handle('shell:openExternal', async (event, url) => {
     try {
       const allowed = [
@@ -2403,13 +2411,64 @@ function registerIpcHandlers() {
         'https://ethereal.email',
       ];
       const isAllowed = allowed.some((prefix) => url.startsWith(prefix));
-      if (!isAllowed && !url.startsWith('https://')) {
-        return { ok: false, error: 'Only https:// URLs may be opened externally.' };
+      if (!isAllowed && !url.startsWith('https://') && !url.startsWith('whatsapp://')) {
+        return { ok: false, error: 'Only https:// or whatsapp:// URLs may be opened externally.' };
       }
       await shell.openExternal(url);
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('shell:showItemInFolder', async (event, filePath) => {
+    try {
+      if (!filePath || typeof filePath !== 'string') {
+        return { ok: false, error: 'Invalid file path.' };
+      }
+      if (!fs.existsSync(filePath)) {
+        return { ok: false, error: 'File does not exist on disk.' };
+      }
+      shell.showItemInFolder(filePath);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('invoices:generateAndRevealPdf', async (event, invoiceId) => {
+    try {
+      const invoice = getInvoice(invoiceId);
+      if (!invoice) return { ok: false, errors: { general: 'Invoice not found.' } };
+      const client = getClient(invoice.client_id);
+      const profile = getCompanyProfile();
+      const buffer = await renderInvoicePdf(invoice, client, profile);
+      const safeNumber = String(invoice.invoice_number || 'invoice').replace(/[^\w-]+/g, '_');
+      const tempDir = app.getPath('temp');
+      const filePath = path.join(tempDir, `Invoice_${safeNumber}.pdf`);
+      fs.writeFileSync(filePath, buffer);
+      shell.showItemInFolder(filePath);
+      return { ok: true, filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not reveal PDF: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('quotes:generateAndRevealPdf', async (event, quoteId) => {
+    try {
+      const quote = getQuote(quoteId);
+      if (!quote) return { ok: false, errors: { general: 'Quote not found.' } };
+      const client = getClient(quote.client_id);
+      const profile = getCompanyProfile();
+      const buffer = await renderQuotePdf(quote, client, profile);
+      const safeNumber = String(quote.quote_number || 'quote').replace(/[^\w-]+/g, '_');
+      const tempDir = app.getPath('temp');
+      const filePath = path.join(tempDir, `Quote_${safeNumber}.pdf`);
+      fs.writeFileSync(filePath, buffer);
+      shell.showItemInFolder(filePath);
+      return { ok: true, filePath };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not reveal PDF: ${err.message}` } };
     }
   });
 
@@ -2695,6 +2754,154 @@ function registerIpcHandlers() {
       return { ok: true, cancelled: false, savedPath: result.filePath };
     } catch (err) {
       logger.error('[data:exportAll] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Paystack Payment Gateway Handlers
+  // -------------------------------------------------------------------------
+  ipcMain.handle('paystack:testConnection', async (event, customKey) => {
+    try {
+      const key = (customKey && typeof customKey === 'string' && customKey.trim())
+        ? customKey.trim()
+        : getPaystackSecretKey();
+      if (!key) {
+        return { ok: false, message: 'No Paystack secret key provided or configured.' };
+      }
+      return await validatePaystackKey(key);
+    } catch (err) {
+      logger.error('[paystack:testConnection] ' + err.message);
+      return { ok: false, message: err.message };
+    }
+  });
+
+  ipcMain.handle('paystack:hasSecretKey', async () => {
+    try {
+      const key = getPaystackSecretKey();
+      return { ok: true, hasKey: Boolean(key) };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('paystack:generateLink', async (event, invoiceId) => {
+    try {
+      const id = Number(invoiceId);
+      if (!id || isNaN(id)) {
+        return { ok: false, error: 'Invalid invoice ID.' };
+      }
+      const invoice = getInvoice(id);
+      if (!invoice) {
+        return { ok: false, error: 'Invoice not found.' };
+      }
+      const profile = getCompanyProfile();
+      if (!profile || !profile.paystack_enabled) {
+        return { ok: false, error: 'Paystack is not enabled in Company Settings.' };
+      }
+      const secretKey = getPaystackSecretKey();
+      if (!secretKey) {
+        return { ok: false, error: 'Paystack secret key is not configured.' };
+      }
+      const balanceDue = Number(invoice.balance_due != null ? invoice.balance_due : invoice.total);
+      if (balanceDue <= 0) {
+        return { ok: false, error: 'Invoice has no balance due.' };
+      }
+
+      const client = invoice.client_id ? getClient(invoice.client_id) : null;
+      const email = invoice.client_email || (client && client.email) || profile.email;
+      if (!email) {
+        return { ok: false, error: 'Customer email is required to generate a Paystack payment link.' };
+      }
+
+      const currency = invoice.currency || profile.default_currency || 'NGN';
+      const reference = buildReference(invoice.invoice_number || invoice.id);
+      const amountKobo = Math.round(balanceDue * 100);
+
+      const res = await initializeTransaction({
+        secretKey,
+        email,
+        amountKobo,
+        reference,
+        currency,
+        metadata: {
+          invoice_id: id,
+          invoice_number: invoice.invoice_number,
+        },
+      });
+
+      if (!res.ok) {
+        return { ok: false, error: res.message || 'Failed to initialise Paystack transaction.' };
+      }
+
+      updateInvoicePaystackLink(id, res.url, res.reference);
+      return { ok: true, url: res.url, reference: res.reference };
+    } catch (err) {
+      logger.error('[paystack:generateLink] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('paystack:verify', async (event, invoiceId) => {
+    try {
+      const id = Number(invoiceId);
+      if (!id || isNaN(id)) {
+        return { ok: false, error: 'Invalid invoice ID.' };
+      }
+      const invoice = getInvoice(id);
+      if (!invoice) {
+        return { ok: false, error: 'Invoice not found.' };
+      }
+      if (!invoice.paystack_reference) {
+        return { ok: false, error: 'This invoice does not have a Paystack transaction reference.' };
+      }
+      const secretKey = getPaystackSecretKey();
+      if (!secretKey) {
+        return { ok: false, error: 'Paystack secret key is not configured.' };
+      }
+
+      const res = await verifyTransaction(secretKey, invoice.paystack_reference);
+      if (!res.ok) {
+        return { ok: false, error: res.message || 'Payment verification failed.' };
+      }
+
+      if (res.status === 'success') {
+        const amountPaid = res.amountKobo ? Math.round(res.amountKobo) / 100 : Number(invoice.balance_due);
+        const paymentDate = res.paidAt ? res.paidAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
+
+        const payRes = addPayment(id, {
+          amount: amountPaid,
+          payment_date: paymentDate,
+          payment_method: 'Paystack',
+          reference_number: invoice.paystack_reference,
+          notes: `Verified via Paystack (${res.currency || 'NGN'} ${amountPaid.toLocaleString()})`,
+        });
+
+        if (!payRes.ok) {
+          return {
+            ok: true,
+            status: 'success',
+            alreadyRecorded: true,
+            message: 'Transaction is confirmed paid on Paystack.',
+            invoice: getInvoice(id),
+          };
+        }
+
+        return {
+          ok: true,
+          status: 'success',
+          message: `Payment of ${res.currency || 'NGN'} ${amountPaid.toLocaleString()} verified and recorded!`,
+          invoice: payRes.invoice,
+        };
+      } else {
+        return {
+          ok: false,
+          status: res.status,
+          message: `Paystack transaction status is '${res.status}'. Payment not completed.`,
+        };
+      }
+    } catch (err) {
+      logger.error('[paystack:verify] ' + err.message);
       return { ok: false, error: err.message };
     }
   });

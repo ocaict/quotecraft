@@ -248,6 +248,10 @@ function createTables() {
       dom_account_number TEXT DEFAULT '',
       dom_swift_code  TEXT DEFAULT '',
       dom_intermediary_bank TEXT DEFAULT '',
+      paystack_public_key   TEXT DEFAULT '',
+      paystack_secret_key_encrypted TEXT DEFAULT '',
+      paystack_enabled      INTEGER NOT NULL DEFAULT 0,
+      paystack_page_url     TEXT DEFAULT '',
       default_currency TEXT NOT NULL DEFAULT 'USD',
       reporting_currency TEXT NOT NULL DEFAULT 'USD',
       default_tax_rate REAL NOT NULL DEFAULT 0,
@@ -428,6 +432,8 @@ function createTables() {
       original_quote_total REAL DEFAULT NULL,
       deposit_invoice_id INTEGER DEFAULT NULL REFERENCES invoices(id),
       is_final_generated INTEGER NOT NULL DEFAULT 0,
+      paystack_url      TEXT DEFAULT NULL,
+      paystack_reference TEXT DEFAULT NULL,
       created_at      TEXT NOT NULL,
       updated_at      TEXT NOT NULL
     );
@@ -1482,6 +1488,33 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 45,
+    up: () => {
+      // Add Paystack payment gateway fields to company_profile
+      const cpCols = new Set(db.exec(`PRAGMA table_info(company_profile)`)[0].values.map((v) => v[1]));
+      const paystackCpFields = [
+        ['paystack_public_key', "TEXT DEFAULT ''"],
+        ['paystack_secret_key_encrypted', "TEXT DEFAULT ''"],
+        ['paystack_enabled', 'INTEGER NOT NULL DEFAULT 0'],
+        ['paystack_page_url', "TEXT DEFAULT ''"],
+      ];
+      for (const [col, def] of paystackCpFields) {
+        if (!cpCols.has(col)) {
+          db.run(`ALTER TABLE company_profile ADD COLUMN ${col} ${def}`);
+        }
+      }
+
+      // Add Paystack checkout URL and reference to invoices
+      const invCols = new Set(db.exec(`PRAGMA table_info(invoices)`)[0].values.map((v) => v[1]));
+      if (!invCols.has('paystack_url')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN paystack_url TEXT DEFAULT NULL`);
+      }
+      if (!invCols.has('paystack_reference')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN paystack_reference TEXT DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -1541,6 +1574,11 @@ function getCompanyProfile() {
   profile.dom_account_number = profile.dom_account_number || '';
   profile.dom_swift_code = profile.dom_swift_code || '';
   profile.dom_intermediary_bank = profile.dom_intermediary_bank || '';
+  profile.paystack_public_key = profile.paystack_public_key || '';
+  profile.paystack_enabled = profile.paystack_enabled ? 1 : 0;
+  profile.paystack_page_url = profile.paystack_page_url || '';
+  // Never return the encrypted secret key to the renderer
+  delete profile.paystack_secret_key_encrypted;
   return profile;
 }
 
@@ -1571,6 +1609,23 @@ function saveCompanyProfile(profile) {
     dom_account_number: profile.dom_account_number !== undefined ? profile.dom_account_number : (existing && existing.dom_account_number) || '',
     dom_swift_code: profile.dom_swift_code !== undefined ? profile.dom_swift_code : (existing && existing.dom_swift_code) || '',
     dom_intermediary_bank: profile.dom_intermediary_bank !== undefined ? profile.dom_intermediary_bank : (existing && existing.dom_intermediary_bank) || '',
+    paystack_public_key: profile.paystack_public_key !== undefined ? profile.paystack_public_key : (existing && existing.paystack_public_key) || '',
+    paystack_secret_key_encrypted: (() => {
+      // Only update the secret key if a new plaintext value was supplied
+      if (profile._paystack_secret_key_plain !== undefined && profile._paystack_secret_key_plain !== null) {
+        if (String(profile._paystack_secret_key_plain).trim() === '') return '';
+        return encryptSecret(String(profile._paystack_secret_key_plain).trim());
+      }
+      // Preserve existing encrypted value
+      const rawExisting = (() => {
+        if (!existing) return '';
+        const res2 = db.exec('SELECT paystack_secret_key_encrypted FROM company_profile WHERE id = 1');
+        return (res2 && res2[0] && res2[0].values && res2[0].values[0] && res2[0].values[0][0]) || '';
+      })();
+      return rawExisting;
+    })(),
+    paystack_enabled: profile.paystack_enabled !== undefined ? (Number(profile.paystack_enabled) ? 1 : 0) : (existing && existing.paystack_enabled ? 1 : 0),
+    paystack_page_url: profile.paystack_page_url !== undefined ? profile.paystack_page_url : (existing && existing.paystack_page_url) || '',
     default_currency: defCurrency,
     reporting_currency: profile.reporting_currency || (existing && existing.reporting_currency) || defCurrency,
     default_tax_rate: Number(profile.default_tax_rate || 0),
@@ -1613,7 +1668,9 @@ function saveCompanyProfile(profile) {
         date_format = ?, decimal_separator = ?, cac_number = ?, tin = ?,
         bank_name = ?, account_number = ?, account_name = ?,
         dom_bank_name = ?, dom_account_name = ?, dom_account_number = ?,
-        dom_swift_code = ?, dom_intermediary_bank = ?, updated_at = ?
+        dom_swift_code = ?, dom_intermediary_bank = ?,
+        paystack_public_key = ?, paystack_secret_key_encrypted = ?,
+        paystack_enabled = ?, paystack_page_url = ?, updated_at = ?
        WHERE id = 1`,
       [
         fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
@@ -1626,7 +1683,9 @@ function saveCompanyProfile(profile) {
         fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin,
         fields.bank_name, fields.account_number, fields.account_name,
         fields.dom_bank_name, fields.dom_account_name, fields.dom_account_number,
-        fields.dom_swift_code, fields.dom_intermediary_bank, now,
+        fields.dom_swift_code, fields.dom_intermediary_bank,
+        fields.paystack_public_key, fields.paystack_secret_key_encrypted,
+        fields.paystack_enabled, fields.paystack_page_url, now,
       ]
     );
   } else {
@@ -1639,8 +1698,10 @@ function saveCompanyProfile(profile) {
         credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, pdf_theme,
         number_padding, number_include_year, date_format, decimal_separator, cac_number, tin,
         bank_name, account_number, account_name, dom_bank_name, dom_account_name, dom_account_number,
-        dom_swift_code, dom_intermediary_bank, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        dom_swift_code, dom_intermediary_bank,
+        paystack_public_key, paystack_secret_key_encrypted, paystack_enabled, paystack_page_url,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         1, fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
@@ -1652,7 +1713,9 @@ function saveCompanyProfile(profile) {
         fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin,
         fields.bank_name, fields.account_number, fields.account_name,
         fields.dom_bank_name, fields.dom_account_name, fields.dom_account_number,
-        fields.dom_swift_code, fields.dom_intermediary_bank, now, now,
+        fields.dom_swift_code, fields.dom_intermediary_bank,
+        fields.paystack_public_key, fields.paystack_secret_key_encrypted,
+        fields.paystack_enabled, fields.paystack_page_url, now, now,
       ]
     );
   }
@@ -8882,6 +8945,38 @@ function getPaymentBankDetails(profile, currency) {
   return null;
 }
 
+/**
+ * Returns the decrypted Paystack secret key from the company_profile row.
+ * This is intentionally a separate function that never sends the key to
+ * the renderer — only the main process (ipc-handlers) calls it.
+ */
+function getPaystackSecretKey() {
+  const res = db.exec('SELECT paystack_secret_key_encrypted FROM company_profile WHERE id = 1');
+  if (!res.length || !res[0].values.length || !res[0].values[0][0]) return '';
+  return decryptSecret(String(res[0].values[0][0]));
+}
+
+/**
+ * Persists a Paystack checkout URL and transaction reference on an invoice.
+ *
+ * @param {number} invoiceId
+ * @param {string} url         - Paystack authorization_url
+ * @param {string} reference   - Transaction reference
+ * @returns {{ ok: boolean, message?: string }}
+ */
+function updateInvoicePaystackLink(invoiceId, url, reference) {
+  try {
+    db.run(
+      `UPDATE invoices SET paystack_url = ?, paystack_reference = ?, updated_at = ? WHERE id = ?`,
+      [url || null, reference || null, new Date().toISOString(), Number(invoiceId)]
+    );
+    saveToDisk();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: err.message };
+  }
+}
+
 module.exports = {
   initializeDatabase,
   getDb,
@@ -9038,5 +9133,7 @@ module.exports = {
   getPaymentBankDetails,
   NIGERIAN_BANKS,
   isValidNuban,
+  getPaystackSecretKey,
+  updateInvoicePaystackLink,
 };
 

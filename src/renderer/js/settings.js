@@ -129,6 +129,9 @@
       dom_account_number: '',
       dom_swift_code: '',
       dom_intermediary_bank: '',
+      paystack_enabled: 0,
+      paystack_public_key: '',
+      paystack_page_url: '',
       default_currency: 'USD',
       reporting_currency: 'USD',
       date_format: 'MMM D, YYYY',
@@ -180,6 +183,23 @@
     }
     currentLogoPath = data.logo_path || null;
     updateLogoDisplay(currentLogoPath);
+
+    const paystackSecretInput = document.getElementById('_paystack_secret_key_plain');
+    if (paystackSecretInput) {
+      paystackSecretInput.value = '';
+    }
+    const paystackKeyBadge = document.getElementById('paystackKeyStatusBadge');
+    if (window.electronAPI && window.electronAPI.paystackHasSecretKey) {
+      window.electronAPI.paystackHasSecretKey().then((res) => {
+        if (res && res.hasKey) {
+          if (paystackKeyBadge) paystackKeyBadge.style.display = 'inline-block';
+          if (paystackSecretInput) paystackSecretInput.placeholder = '•••••••••••••••• (Key saved - enter new key to replace)';
+        } else {
+          if (paystackKeyBadge) paystackKeyBadge.style.display = 'none';
+          if (paystackSecretInput) paystackSecretInput.placeholder = 'sk_live_... or sk_test_...';
+        }
+      }).catch(() => {});
+    }
   }
 
   async function loadSettings() {
@@ -265,6 +285,46 @@
           nubanHint.textContent = `${accountNumberInput.value.length}/10 digits entered.`;
           nubanHint.style.color = '';
         }
+      }
+    });
+  }
+
+  const paystackTestBtn = document.getElementById('paystackTestBtn');
+  const paystackTestStatus = document.getElementById('paystackTestStatus');
+  if (paystackTestBtn) {
+    paystackTestBtn.addEventListener('click', async () => {
+      const secretInput = document.getElementById('_paystack_secret_key_plain');
+      const customKey = secretInput ? secretInput.value.trim() : '';
+
+      paystackTestBtn.disabled = true;
+      if (paystackTestStatus) {
+        paystackTestStatus.textContent = 'Testing connection with Paystack...';
+        paystackTestStatus.style.color = 'var(--text-muted)';
+      }
+
+      try {
+        const res = await window.electronAPI.paystackTestConnection(customKey || null);
+        if (res.ok) {
+          if (paystackTestStatus) {
+            paystackTestStatus.textContent = '✓ ' + (res.message || 'Connected successfully!');
+            paystackTestStatus.style.color = '#10b981';
+          }
+          window.QuoteCraftUtils.showToast(res.message || 'Connected to Paystack!', 'success');
+        } else {
+          if (paystackTestStatus) {
+            paystackTestStatus.textContent = '✗ ' + (res.message || 'Connection failed.');
+            paystackTestStatus.style.color = '#ef4444';
+          }
+          window.QuoteCraftUtils.showToast(res.message || 'Paystack test failed.', 'error');
+        }
+      } catch (err) {
+        if (paystackTestStatus) {
+          paystackTestStatus.textContent = '✗ ' + err.message;
+          paystackTestStatus.style.color = '#ef4444';
+        }
+        window.QuoteCraftUtils.showToast('Test failed: ' + err.message, 'error');
+      } finally {
+        paystackTestBtn.disabled = false;
       }
     });
   }

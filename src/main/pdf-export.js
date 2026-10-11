@@ -622,6 +622,31 @@ function drawBankDetailsSection(ctx, bankInfo) {
   ctx.y = doc.y + 10;
 }
 
+function drawPaystackPaymentCallout(ctx, payUrl) {
+  const { doc, W } = ctx;
+  if (!payUrl) return;
+  if (ctx.y + 45 > ctx.pageBottom) {
+    doc.addPage();
+    ctx.y = doc.y;
+  }
+  const boxY = ctx.y;
+  const boxH = 38;
+  doc.rect(MARGIN, boxY, W, boxH).fill('#F0F9FF');
+  doc.rect(MARGIN, boxY, W, boxH).strokeColor('#0284C7').lineWidth(1).stroke();
+
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#0369A1');
+  doc.text('ONLINE PAYMENT AVAILABLE (Debit Cards \u2022 Bank Transfer \u2022 USSD)', MARGIN + 10, boxY + 7);
+
+  doc.font('Helvetica').fontSize(8.5).fillColor('#0F172A');
+  doc.text('Pay online securely: ', MARGIN + 10, boxY + 21, { continued: true });
+  doc.font('Helvetica-Bold').fillColor('#0284C7').text(payUrl, {
+    link: payUrl,
+    underline: true,
+  });
+
+  ctx.y = boxY + boxH + 12;
+}
+
 function drawStampOnFirstPage(ctx, text, color) {
   const { doc } = ctx;
   const cx = doc.page.width / 2;
@@ -898,6 +923,11 @@ function renderInvoicePdf(invoice, client, profile, opts) {
     drawBankDetailsSection(ctx, bankInfo);
   }
 
+  const paystackUrl = invoice.paystack_url || (profile && profile.paystack_enabled ? profile.paystack_page_url : null);
+  if (paystackUrl && status !== 'paid') {
+    drawPaystackPaymentCallout(ctx, paystackUrl);
+  }
+
   if (invoice.notes || invoice.terms) {
     const blocks = [];
     if (invoice.notes) blocks.push(invoice.notes);
@@ -1045,19 +1075,19 @@ function buildPrintNotesHtml(notesTerms) {
   </div>`;
 }
 
-function buildPrintBankDetailsHtml(bankInfo) {
-  if (!bankInfo) return '';
-  if (bankInfo.type === 'nuban') {
-    return `<div class="bank-callout-print nuban">
+function buildPrintBankDetailsHtml(bankInfo, paystackUrl) {
+  if (!bankInfo && !paystackUrl) return '';
+  let html = '';
+  if (bankInfo && bankInfo.type === 'nuban') {
+    html = `<div class="bank-callout-print nuban">
       <div class="bank-callout-title">DIRECT BANK TRANSFER (${escapeHtml(bankInfo.currency || 'NGN')})</div>
       <div class="bank-callout-row"><span class="b-lbl">Bank:</span> <strong>${escapeHtml(bankInfo.bankName || '—')}</strong></div>
       <div class="bank-callout-row"><span class="b-lbl">Account Number:</span> <strong class="b-acc">${escapeHtml(bankInfo.accountNumber || '—')}</strong></div>
       <div class="bank-callout-row"><span class="b-lbl">Account Name:</span> <strong>${escapeHtml(bankInfo.accountName || '—')}</strong></div>
       ${bankInfo.notes ? `<div class="bank-callout-notes">${escapeHtml(bankInfo.notes)}</div>` : ''}
     </div>`;
-  }
-  if (bankInfo.type === 'domiciliary') {
-    return `<div class="bank-callout-print dom">
+  } else if (bankInfo && bankInfo.type === 'domiciliary') {
+    html = `<div class="bank-callout-print dom">
       <div class="bank-callout-title">INTERNATIONAL WIRE / DOMICILIARY TRANSFER (${escapeHtml(bankInfo.currency)})</div>
       <div class="bank-callout-row"><span class="b-lbl">Bank Name:</span> <strong>${escapeHtml(bankInfo.bankName || '—')}</strong></div>
       <div class="bank-callout-row"><span class="b-lbl">Account / IBAN:</span> <strong class="b-acc">${escapeHtml(bankInfo.accountNumber || '—')}</strong></div>
@@ -1066,14 +1096,20 @@ function buildPrintBankDetailsHtml(bankInfo) {
       ${bankInfo.intermediaryBank ? `<div class="bank-callout-row"><span class="b-lbl">Intermediary Bank:</span> <strong>${escapeHtml(bankInfo.intermediaryBank)}</strong></div>` : ''}
       ${bankInfo.notes ? `<div class="bank-callout-notes">${escapeHtml(bankInfo.notes)}</div>` : ''}
     </div>`;
-  }
-  if (bankInfo.type === 'generic' && bankInfo.notes) {
-    return `<div class="bank-callout-print generic">
+  } else if (bankInfo && bankInfo.type === 'generic' && bankInfo.notes) {
+    html = `<div class="bank-callout-print generic">
       <div class="bank-callout-title">PAYMENT INSTRUCTIONS / BANK DETAILS</div>
       <div class="bank-callout-notes">${escapeHtml(bankInfo.notes)}</div>
     </div>`;
   }
-  return '';
+
+  if (paystackUrl) {
+    html += `<div class="bank-callout-print paystack" style="border-left-color: #00c3f5; background: #F0F9FF; margin-top: 10px;">
+      <div class="bank-callout-title" style="color: #0284c7;">ONLINE PAYMENT (DEBIT CARDS / USSD / BANK TRANSFER)</div>
+      <div class="bank-callout-row"><span class="b-lbl">Pay Online:</span> <a href="${escapeHtml(paystackUrl)}" target="_blank" style="color: #0284c7; font-weight: bold; text-decoration: underline;">${escapeHtml(paystackUrl)}</a></div>
+    </div>`;
+  }
+  return html;
 }
 
 function buildPrintAcceptanceHtml(quote, profile) {
@@ -1141,6 +1177,7 @@ function renderDocumentPrintHtml(opts) {
     extraRows,
     notesTerms,
     bankInfo,
+    paystackUrl,
     footerLeft,
     acceptanceHtml,
     stamp,
@@ -1254,7 +1291,7 @@ ${buildPrintHeaderHtml({ profile, businessName, pageLabel, docNumber, metaRows }
 ${buildPrintClientHtml(clientLabel, client, contact)}
 ${buildPrintItemsHtml(items, currency)}
 ${buildPrintTotalsHtml(totalRows, grandLabel, grandValue, extraRows)}
-${buildPrintBankDetailsHtml(bankInfo)}
+${buildPrintBankDetailsHtml(bankInfo, paystackUrl)}
 ${buildPrintNotesHtml(notesTerms)}
 ${acceptanceHtml || ''}
 <div class="doc-footer"><span>${escapeHtml(footerLeft)}</span></div>
@@ -1359,6 +1396,7 @@ function renderInvoicePrintHtml(invoice, client, profile) {
   else if (status === 'overdue') stamp = { text: 'OVERDUE', color: '#B91C1C' };
 
   const bankInfo = getPaymentBankDetails(profile, currency);
+  const paystackUrl = invoice.paystack_url || (profile && profile.paystack_enabled ? profile.paystack_page_url : null);
 
   return renderDocumentPrintHtml({
     pageLabel: docLabel,
@@ -1376,6 +1414,7 @@ function renderInvoicePrintHtml(invoice, client, profile) {
     grandValue: finalGrandValue,
     extraRows,
     bankInfo,
+    paystackUrl: status !== 'paid' ? paystackUrl : null,
     notesTerms,
     footerLeft: `Prepared by ${businessName}`,
     acceptanceHtml: '',
@@ -2687,6 +2726,26 @@ function renderInvoiceHtml(invoice, client, profile) {
     }
   }
 
+  const paystackUrl = invoice.paystack_url || (profile && profile.paystack_enabled ? profile.paystack_page_url : null);
+  let paystackHtml = '';
+  if (paystackUrl && status !== 'paid') {
+    const payBalance = balance > 0.0001 ? balance : invoice.total;
+    paystackHtml = `
+      <div class="paystack-online-card" style="margin-bottom: 24px; padding: 18px 22px; background: linear-gradient(135deg, #091e3a 0%, #0c2d53 100%); border: 1px solid #00c3f5; border-radius: 8px; color: #fff; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #00c3f5; font-weight: 700; margin-bottom: 4px;">Instant Online Payment</div>
+          <div style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">Pay securely via Debit Card, Bank Transfer or USSD</div>
+          <div style="font-size: 13px; color: #94a3b8;">Instant automated receipt and payment confirmation via Paystack.</div>
+        </div>
+        <div>
+          <a href="${escapeHtml(paystackUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #00c3f5; color: #001e2b; font-weight: 700; font-size: 14px; padding: 10px 22px; border-radius: 6px; text-decoration: none; box-shadow: 0 4px 12px rgba(0, 195, 245, 0.3);">
+            💳 Pay Online Now (${escapeHtml(money(payBalance, currency))})
+          </a>
+        </div>
+      </div>
+    `;
+  }
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3073,6 +3132,8 @@ function renderInvoiceHtml(invoice, client, profile) {
         ${extraTotalsHtml}
       </div>
     </div>
+
+    ${paystackHtml}
 
     ${bankHtml}
 

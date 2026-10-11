@@ -99,6 +99,7 @@
   const detailExportBtn = document.getElementById('detailExportBtn');
   const detailPrintBtn = document.getElementById('detailPrintBtn');
   const detailSendEmailBtn = document.getElementById('detailSendEmailBtn');
+  const quoteWhatsAppBtn = document.getElementById('quoteWhatsAppBtn');
   const detailStatusSelect = document.getElementById('detailStatusSelect');
   const detailConvertBtn = document.getElementById('detailConvertBtn');
   const detailConvertResult = document.getElementById('detailConvertResult');
@@ -136,6 +137,7 @@
   const btnSharePrint = document.getElementById('btnSharePrint');
   const btnShareDownloadHtml = document.getElementById('btnShareDownloadHtml');
   const btnShareSendEmail = document.getElementById('btnShareSendEmail');
+  const btnShareQuoteWhatsApp = document.getElementById('btnShareQuoteWhatsApp');
   const shareInstructionsText = document.getElementById('shareInstructionsText');
   const btnCopyShareInstructions = document.getElementById('btnCopyShareInstructions');
 
@@ -2361,6 +2363,13 @@
     });
   }
 
+  if (btnShareQuoteWhatsApp) {
+    btnShareQuoteWhatsApp.addEventListener('click', () => {
+      closeShareModal();
+      if (quoteWhatsAppBtn) quoteWhatsAppBtn.click();
+    });
+  }
+
   if (btnCopyShareInstructions) {
     btnCopyShareInstructions.addEventListener('click', async () => {
       const text = shareInstructionsText ? shareInstructionsText.textContent : '';
@@ -2472,6 +2481,27 @@
         }
       } catch (err) {
         toast('Could not initiate email: ' + err.message, 'error');
+      }
+    });
+  }
+
+  if (quoteWhatsAppBtn) {
+    quoteWhatsAppBtn.addEventListener('click', async () => {
+      if (!currentDetailId) return;
+      try {
+        const res = await window.electronAPI.getQuote(currentDetailId);
+        if (!res.ok || !res.quote) {
+          toast('Quote not found.', 'error');
+          return;
+        }
+        if (window.QuoteCraftWhatsApp) {
+          window.QuoteCraftWhatsApp.openShareModal({
+            documentType: 'quote',
+            doc: res.quote,
+          });
+        }
+      } catch (err) {
+        toast('Could not initiate WhatsApp share: ' + err.message, 'error');
       }
     });
   }

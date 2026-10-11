@@ -651,4 +651,45 @@ window.QuoteCraftUtils = {
       get pageSize() { return pageSize; },
     };
   },
+
+  normalizeNigerianPhone(phone) {
+    if (window.QuoteCraftConstants && window.QuoteCraftConstants.normalizeNigerianPhone) {
+      return window.QuoteCraftConstants.normalizeNigerianPhone(phone);
+    }
+    if (!phone || typeof phone !== 'string') return '';
+    const trimmed = phone.trim();
+    const stripped = trimmed.replace(/[\s\-()]/g, '');
+    if (!stripped) return '';
+    if (stripped.startsWith('+234')) {
+      const rest = stripped.substring(4);
+      if (rest.startsWith('0') && rest.length === 11) return '+234' + rest.substring(1);
+      return stripped;
+    }
+    if (/^0\d{10}$/.test(stripped)) return '+234' + stripped.substring(1);
+    if (/^234\d{10}$/.test(stripped)) return '+' + stripped;
+    if (/^[789][01]\d{8}$/.test(stripped)) return '+234' + stripped;
+    return trimmed;
+  },
+
+  formatWhatsAppPhone(phone) {
+    if (window.QuoteCraftConstants && window.QuoteCraftConstants.formatWhatsAppPhone) {
+      return window.QuoteCraftConstants.formatWhatsAppPhone(phone);
+    }
+    const normalized = this.normalizeNigerianPhone(phone);
+    return normalized.replace(/\D/g, '');
+  },
+
+  buildWhatsAppInvoiceMessage(opts) {
+    if (window.QuoteCraftConstants && window.QuoteCraftConstants.buildWhatsAppInvoiceMessage) {
+      return window.QuoteCraftConstants.buildWhatsAppInvoiceMessage(opts);
+    }
+    return '';
+  },
+
+  buildWhatsAppQuoteMessage(opts) {
+    if (window.QuoteCraftConstants && window.QuoteCraftConstants.buildWhatsAppQuoteMessage) {
+      return window.QuoteCraftConstants.buildWhatsAppQuoteMessage(opts);
+    }
+    return '';
+  },
 };

@@ -147,6 +147,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendDocumentEmail: (payload) => ipcRenderer.invoke('email:sendDocument', payload),
   getDocumentEmailLogs: (documentType, documentId) => ipcRenderer.invoke('email:getDocumentLogs', documentType, documentId),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
+  revealInvoicePdf: (invoiceId) => ipcRenderer.invoke('invoices:generateAndRevealPdf', invoiceId),
+  revealQuotePdf: (quoteId) => ipcRenderer.invoke('quotes:generateAndRevealPdf', quoteId),
 
   getReminderRules: () => ipcRenderer.invoke('reminders:getRules'),
   saveReminderRule: (rule) => ipcRenderer.invoke('reminders:saveRule', rule),
@@ -212,5 +215,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Data Portability / GDPR Export
   exportAllData: () => ipcRenderer.invoke('data:exportAll'),
+
+  // Paystack Payment Gateway
+  paystackTestConnection: (secretKey) => ipcRenderer.invoke('paystack:testConnection', secretKey),
+  paystackHasSecretKey: () => ipcRenderer.invoke('paystack:hasSecretKey'),
+  paystackGenerateLink: (invoiceId) => ipcRenderer.invoke('paystack:generateLink', invoiceId),
+  paystackVerify: (invoiceId) => ipcRenderer.invoke('paystack:verify', invoiceId),
 });
 

@@ -20,12 +20,22 @@
   const invoiceShareHtmlBtn = document.getElementById('invoiceShareHtmlBtn');
   const invoicePrintBtn = document.getElementById('invoicePrintBtn');
   const invoiceSendEmailBtn = document.getElementById('invoiceSendEmailBtn');
+  const invoiceWhatsAppBtn = document.getElementById('invoiceWhatsAppBtn');
   const invoiceRecurringBtn = document.getElementById('invoiceRecurringBtn');
   const invoiceRecordPaymentBtn = document.getElementById('invoiceRecordPaymentBtn');
   const invoiceDetailStatusSelect = document.getElementById('invoiceDetailStatusSelect');
   const invoiceIssueCreditBtn = document.getElementById('invoiceIssueCreditBtn');
   const invoiceDuplicateBtn = document.getElementById('invoiceDuplicateBtn');
   const invoicePreviewBtn = document.getElementById('invoicePreviewBtn');
+  const invoicePaystackGenerateBtn = document.getElementById('invoicePaystackGenerateBtn');
+  const invoicePaystackVerifyBtn = document.getElementById('invoicePaystackVerifyBtn');
+  const invoicePaystackCard = document.getElementById('invoicePaystackCard');
+  const invoicePaystackStatusBadge = document.getElementById('invoicePaystackStatusBadge');
+  const invoicePaystackUrlInput = document.getElementById('invoicePaystackUrlInput');
+  const invoicePaystackCopyBtn = document.getElementById('invoicePaystackCopyBtn');
+  const invoicePaystackOpenBtn = document.getElementById('invoicePaystackOpenBtn');
+  const invoicePaystackCardVerifyBtn = document.getElementById('invoicePaystackCardVerifyBtn');
+  const invoicePaystackRefDisplay = document.getElementById('invoicePaystackRefDisplay');
 
   const creditNoteModal = document.getElementById('creditNoteModal');
   const creditNoteForm = document.getElementById('creditNoteForm');
@@ -1017,6 +1027,8 @@
     if (window.QuoteCraftDocumentEmail && emailListEl) {
       window.QuoteCraftDocumentEmail.renderEmailActivityList(emailListEl, inv.email_logs);
     }
+
+    renderPaystackSection(inv, invCurr);
   }
 
   function renderRecurringSection(profile) {
@@ -1758,6 +1770,140 @@
   invoiceRecordPaymentBtn.addEventListener('click', () => {
     if (currentInvoiceId) openPaymentModal(currentInvoiceId);
   });
+
+  // ---------- Paystack Handlers & Section ----------
+  async function renderPaystackSection(inv, invCurr) {
+    if (!invoicePaystackCard && !invoicePaystackGenerateBtn) return;
+    const balance = Number(inv.balance_due != null ? inv.balance_due : inv.total) || 0;
+    const isPaid = balance <= 0.0001;
+
+    let paystackEnabled = false;
+    try {
+      const pRes = await window.electronAPI.getCompanyProfile();
+      if (pRes && pRes.ok && pRes.profile && pRes.profile.paystack_enabled) {
+        paystackEnabled = true;
+      }
+    } catch (_) {}
+
+    const hasLink = Boolean(inv.paystack_url);
+    const hasRef = Boolean(inv.paystack_reference);
+
+    if (invoicePaystackGenerateBtn) {
+      if (paystackEnabled && !isPaid) {
+        invoicePaystackGenerateBtn.classList.remove('hidden');
+        invoicePaystackGenerateBtn.textContent = hasLink ? '🔄 Re-generate Link' : '💳 Paystack Link';
+      } else {
+        invoicePaystackGenerateBtn.classList.add('hidden');
+      }
+    }
+
+    if (invoicePaystackVerifyBtn) {
+      if (hasRef && !isPaid) {
+        invoicePaystackVerifyBtn.classList.remove('hidden');
+      } else {
+        invoicePaystackVerifyBtn.classList.add('hidden');
+      }
+    }
+
+    if (invoicePaystackCard) {
+      if (hasLink) {
+        invoicePaystackCard.classList.remove('hidden');
+        if (invoicePaystackUrlInput) invoicePaystackUrlInput.value = inv.paystack_url;
+        if (invoicePaystackRefDisplay) {
+          invoicePaystackRefDisplay.textContent = `Paystack Ref: ${inv.paystack_reference || 'N/A'}`;
+        }
+        if (invoicePaystackStatusBadge) {
+          if (isPaid) {
+            invoicePaystackStatusBadge.textContent = 'Paid & Settled';
+            invoicePaystackStatusBadge.style.color = '#10b981';
+            invoicePaystackStatusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+          } else {
+            invoicePaystackStatusBadge.textContent = 'Awaiting Payment';
+            invoicePaystackStatusBadge.style.color = '#00c3f5';
+            invoicePaystackStatusBadge.style.background = 'rgba(0, 195, 245, 0.15)';
+          }
+        }
+        if (invoicePaystackCardVerifyBtn) {
+          invoicePaystackCardVerifyBtn.style.display = isPaid ? 'none' : '';
+        }
+      } else {
+        invoicePaystackCard.classList.add('hidden');
+      }
+    }
+  }
+
+  async function handlePaystackGenerate() {
+    if (!currentInvoiceId) return;
+    if (invoicePaystackGenerateBtn) invoicePaystackGenerateBtn.disabled = true;
+    window.QuoteCraftUtils.showBusy('Generating Paystack payment link…');
+    try {
+      const res = await window.electronAPI.paystackGenerateLink(currentInvoiceId);
+      if (res.ok) {
+        toast('Paystack payment link generated successfully!', 'success');
+        await loadInvoices();
+        await openDetail(currentInvoiceId);
+      } else {
+        toast(res.error || 'Failed to generate Paystack link.', 'error');
+      }
+    } catch (err) {
+      toast('Failed to generate Paystack link: ' + err.message, 'error');
+    } finally {
+      window.QuoteCraftUtils.hideBusy();
+      if (invoicePaystackGenerateBtn) invoicePaystackGenerateBtn.disabled = false;
+    }
+  }
+
+  async function handlePaystackVerify() {
+    if (!currentInvoiceId) return;
+    if (invoicePaystackVerifyBtn) invoicePaystackVerifyBtn.disabled = true;
+    if (invoicePaystackCardVerifyBtn) invoicePaystackCardVerifyBtn.disabled = true;
+    window.QuoteCraftUtils.showBusy('Verifying transaction with Paystack…');
+    try {
+      const res = await window.electronAPI.paystackVerify(currentInvoiceId);
+      if (res.ok) {
+        toast(res.message || 'Payment verified and recorded!', 'success');
+        await loadInvoices();
+        await openDetail(currentInvoiceId);
+      } else {
+        toast(res.message || res.error || 'Payment not verified.', 'warning');
+      }
+    } catch (err) {
+      toast('Verification error: ' + err.message, 'error');
+    } finally {
+      window.QuoteCraftUtils.hideBusy();
+      if (invoicePaystackVerifyBtn) invoicePaystackVerifyBtn.disabled = false;
+      if (invoicePaystackCardVerifyBtn) invoicePaystackCardVerifyBtn.disabled = false;
+    }
+  }
+
+  if (invoicePaystackGenerateBtn) {
+    invoicePaystackGenerateBtn.addEventListener('click', handlePaystackGenerate);
+  }
+  if (invoicePaystackVerifyBtn) {
+    invoicePaystackVerifyBtn.addEventListener('click', handlePaystackVerify);
+  }
+  if (invoicePaystackCardVerifyBtn) {
+    invoicePaystackCardVerifyBtn.addEventListener('click', handlePaystackVerify);
+  }
+  if (invoicePaystackCopyBtn) {
+    invoicePaystackCopyBtn.addEventListener('click', () => {
+      if (invoicePaystackUrlInput && invoicePaystackUrlInput.value) {
+        navigator.clipboard.writeText(invoicePaystackUrlInput.value);
+        toast('Paystack link copied to clipboard!', 'success');
+      }
+    });
+  }
+  if (invoicePaystackOpenBtn) {
+    invoicePaystackOpenBtn.addEventListener('click', () => {
+      if (invoicePaystackUrlInput && invoicePaystackUrlInput.value) {
+        if (window.electronAPI && window.electronAPI.openExternal) {
+          window.electronAPI.openExternal(invoicePaystackUrlInput.value);
+        } else {
+          window.open(invoicePaystackUrlInput.value, '_blank');
+        }
+      }
+    });
+  }
   if (invoiceRecurringBtn) {
     invoiceRecurringBtn.addEventListener('click', openRecurringModal);
   }
@@ -1897,6 +2043,27 @@
         }
       } catch (err) {
         toast('Could not initiate email: ' + err.message, 'error');
+      }
+    });
+  }
+
+  if (invoiceWhatsAppBtn) {
+    invoiceWhatsAppBtn.addEventListener('click', async () => {
+      if (!currentInvoiceId) return;
+      try {
+        const res = await window.electronAPI.getInvoice(currentInvoiceId);
+        if (!res.ok || !res.invoice) {
+          toast('Invoice not found.', 'error');
+          return;
+        }
+        if (window.QuoteCraftWhatsApp) {
+          window.QuoteCraftWhatsApp.openShareModal({
+            documentType: 'invoice',
+            doc: res.invoice,
+          });
+        }
+      } catch (err) {
+        toast('Could not initiate WhatsApp share: ' + err.message, 'error');
       }
     });
   }

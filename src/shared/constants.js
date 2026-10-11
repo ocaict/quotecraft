@@ -164,6 +164,132 @@ function getPaymentBankDetails(profile, currency) {
   return null;
 }
 
+function formatWhatsAppMoney(amount, currencyCode) {
+  const code = currencyCode || 'NGN';
+  const curr = CURRENCIES.find((c) => c.code === code);
+  const symbol = curr ? curr.symbol : (code ? code + ' ' : '₦');
+  const num = Number(amount || 0);
+  const formatted = num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${symbol}${formatted}`;
+}
+
+function normalizeNigerianPhone(phone) {
+  if (!phone || typeof phone !== 'string') return '';
+  const trimmed = phone.trim();
+  const stripped = trimmed.replace(/[\s\-()]/g, '');
+  if (!stripped) return '';
+
+  if (stripped.startsWith('+234')) {
+    const rest = stripped.substring(4);
+    if (rest.startsWith('0') && rest.length === 11) {
+      return '+234' + rest.substring(1);
+    }
+    return stripped;
+  }
+
+  if (/^0\d{10}$/.test(stripped)) {
+    return '+234' + stripped.substring(1);
+  }
+
+  if (/^234\d{10}$/.test(stripped)) {
+    return '+' + stripped;
+  }
+
+  if (/^[789][01]\d{8}$/.test(stripped)) {
+    return '+234' + stripped;
+  }
+
+  return trimmed;
+}
+
+function formatWhatsAppPhone(phone) {
+  if (!phone || typeof phone !== 'string') return '';
+  const normalized = normalizeNigerianPhone(phone);
+  return normalized.replace(/\D/g, '');
+}
+
+function buildWhatsAppInvoiceMessage({ invoice, client, profile, paymentLink } = {}) {
+  if (!invoice) return '';
+  const clientName = (client && (client.name || client.company_name)) || 'Valued Customer';
+  const businessName = (profile && (profile.business_name || profile.name)) || 'our team';
+  const invoiceNum = invoice.invoice_number || 'Invoice';
+  const currency = invoice.currency || (profile && profile.default_currency) || 'NGN';
+  const totalStr = formatWhatsAppMoney(invoice.total || 0, currency);
+
+  const lines = [
+    `Hello ${clientName},`,
+    '',
+    `Here is Invoice ${invoiceNum} for ${totalStr} from ${businessName}.`,
+    '',
+  ];
+
+  if (invoice.date_due) {
+    lines.push(`• Due Date: ${invoice.date_due}`);
+  }
+
+  const payLink = paymentLink || invoice.payment_link;
+  if (payLink) {
+    lines.push(`• Pay Online (Card/Transfer/USSD): ${payLink}`);
+  }
+
+  const bankDetails = getPaymentBankDetails(profile, currency);
+  if (bankDetails) {
+    if (bankDetails.type === 'nuban' && bankDetails.accountNumber) {
+      lines.push(`• Bank Transfer: ${bankDetails.bankName || 'Bank'} | ${bankDetails.accountNumber} | ${bankDetails.accountName || businessName}`);
+    } else if (bankDetails.type === 'domiciliary' && bankDetails.accountNumber) {
+      const swift = bankDetails.swiftCode ? ` (SWIFT: ${bankDetails.swiftCode})` : '';
+      lines.push(`• Bank Transfer: ${bankDetails.bankName || 'Bank'} | ${bankDetails.accountNumber} | ${bankDetails.accountName || businessName}${swift}`);
+    } else if (bankDetails.notes) {
+      lines.push(`• Bank Transfer: ${bankDetails.notes.replace(/\r?\n/g, ' ')}`);
+    }
+  }
+
+  lines.push('');
+  lines.push('The detailed PDF invoice has been attached. Thank you for your business!');
+
+  return lines.join('\n');
+}
+
+function buildWhatsAppQuoteMessage({ quote, client, profile } = {}) {
+  if (!quote) return '';
+  const clientName = (client && (client.name || client.company_name)) || 'Valued Customer';
+  const businessName = (profile && (profile.business_name || profile.name)) || 'our team';
+  const quoteNum = quote.quote_number || 'Quote';
+  const currency = quote.currency || (profile && profile.default_currency) || 'NGN';
+  const totalStr = formatWhatsAppMoney(quote.total || 0, currency);
+
+  const lines = [
+    `Hello ${clientName},`,
+    '',
+    `Here is Quote ${quoteNum} for ${totalStr} from ${businessName}.`,
+    '',
+  ];
+
+  if (quote.valid_until) {
+    lines.push(`• Valid Until: ${quote.valid_until}`);
+  }
+
+  const bankDetails = getPaymentBankDetails(profile, currency);
+  if (bankDetails) {
+    if (bankDetails.type === 'nuban' && bankDetails.accountNumber) {
+      lines.push(`• Bank Transfer: ${bankDetails.bankName || 'Bank'} | ${bankDetails.accountNumber} | ${bankDetails.accountName || businessName}`);
+    } else if (bankDetails.type === 'domiciliary' && bankDetails.accountNumber) {
+      const swift = bankDetails.swiftCode ? ` (SWIFT: ${bankDetails.swiftCode})` : '';
+      lines.push(`• Bank Transfer: ${bankDetails.bankName || 'Bank'} | ${bankDetails.accountNumber} | ${bankDetails.accountName || businessName}${swift}`);
+    } else if (bankDetails.notes) {
+      lines.push(`• Bank Transfer: ${bankDetails.notes.replace(/\r?\n/g, ' ')}`);
+    }
+  }
+
+  lines.push('');
+  lines.push('The detailed PDF quote has been attached. Please let us know if you have any questions or wish to proceed!');
+
+  return lines.join('\n');
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     QUOTE_STATUSES,
@@ -173,5 +299,27 @@ if (typeof module !== 'undefined') {
     NIGERIAN_BANKS,
     isValidNuban,
     getPaymentBankDetails,
+    formatWhatsAppMoney,
+    normalizeNigerianPhone,
+    formatWhatsAppPhone,
+    buildWhatsAppInvoiceMessage,
+    buildWhatsAppQuoteMessage,
+  };
+}
+
+if (typeof window !== 'undefined') {
+  window.QuoteCraftConstants = {
+    QUOTE_STATUSES,
+    INVOICE_STATUSES,
+    SEQUENCE_PREFIXES,
+    CURRENCIES,
+    NIGERIAN_BANKS,
+    isValidNuban,
+    getPaymentBankDetails,
+    formatWhatsAppMoney,
+    normalizeNigerianPhone,
+    formatWhatsAppPhone,
+    buildWhatsAppInvoiceMessage,
+    buildWhatsAppQuoteMessage,
   };
 }

@@ -1047,6 +1047,7 @@
             <button type="button" id="detailExportBtn" class="btn btn-secondary">Download PDF</button>
             <button type="button" id="detailPrintBtn" class="btn btn-secondary" title="Open the system print dialog for this quote">🖨 Print</button>
             <button type="button" id="detailSendEmailBtn" class="btn btn-secondary">✉️ Send by Email</button>
+            <button type="button" id="quoteWhatsAppBtn" class="btn btn-secondary" title="Share quote via WhatsApp with pre-formatted message">💬 Share via WhatsApp</button>
             <button type="button" id="detailConvertBtn" class="btn btn-primary">Convert to Invoice</button>
             <button type="button" id="detailBackBtn" class="btn btn-secondary">Back to quotes</button>
           </div>
@@ -1472,8 +1473,11 @@
             <button type="button" id="invoicePrintBtn" class="btn btn-secondary" title="Open the system print dialog for this invoice">🖨 Print</button>
             <button type="button" id="invoiceDuplicateBtn" class="btn btn-secondary" title="Create a new Draft invoice with the same client and line items but a fresh number and today's date">Duplicate</button>
             <button type="button" id="invoiceSendEmailBtn" class="btn btn-secondary">✉️ Send by Email</button>
+            <button type="button" id="invoiceWhatsAppBtn" class="btn btn-secondary" title="Share invoice via WhatsApp with pre-formatted message">💬 Share via WhatsApp</button>
             <button type="button" id="invoiceRecurringBtn" class="btn btn-secondary">Make Recurring</button>
             <button type="button" id="invoiceIssueCreditBtn" class="btn btn-secondary">Issue Credit Note</button>
+            <button type="button" id="invoicePaystackGenerateBtn" class="btn btn-secondary hidden" title="Generate Paystack online payment link">💳 Paystack Link</button>
+            <button type="button" id="invoicePaystackVerifyBtn" class="btn btn-secondary hidden" title="Verify Paystack payment">🔄 Verify Paystack</button>
             <button type="button" id="invoiceRecordPaymentBtn" class="btn btn-primary">Record Payment</button>
             <button type="button" id="invoiceBackBtn" class="btn btn-secondary">Back to invoices</button>
           </div>
@@ -1655,6 +1659,23 @@
         <div class="card">
           <h2>Terms</h2>
           <p id="invoiceDetailTerms" class="detail-terms">—</p>
+        </div>
+
+        <div id="invoicePaystackCard" class="card hidden">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h2 style="margin:0; display:flex; align-items:center; gap:8px;">
+              <span>💳 Paystack Online Payment</span>
+              <span id="invoicePaystackStatusBadge" class="badge" style="background: rgba(0, 195, 245, 0.15); color: #00c3f5; font-size: 11px;">Active Link</span>
+            </h2>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:0 0 12px 0;">Share this dynamic checkout link with your client to receive payment via debit card, bank transfer, or USSD.</p>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <input type="text" id="invoicePaystackUrlInput" readonly style="flex:1; min-width:240px; padding:6px 10px; font-size:13px; font-family:monospace; background:var(--bg-input, #1e293b); color:var(--text); border:1px solid var(--border); border-radius:4px;">
+            <button type="button" id="invoicePaystackCopyBtn" class="btn btn-secondary btn-small">📋 Copy Link</button>
+            <button type="button" id="invoicePaystackOpenBtn" class="btn btn-secondary btn-small">🌐 Open in Browser</button>
+            <button type="button" id="invoicePaystackCardVerifyBtn" class="btn btn-primary btn-small">🔄 Verify Payment</button>
+          </div>
+          <div style="margin-top:8px; font-size:11px; color:var(--text-muted);" id="invoicePaystackRefDisplay"></div>
         </div>
 
         <div class="card">
@@ -2814,6 +2835,57 @@
           </div>
         </div>
 
+        <div class="card" id="paystackIntegrationCard">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+            <div>
+              <h2 style="margin: 0; padding-bottom: 0; border-bottom: none; display: flex; align-items: center; gap: 8px;">
+                <span>💳 Paystack Online Payments</span>
+                <span class="badge" style="background: rgba(0, 195, 245, 0.15); color: #00c3f5; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(0, 195, 245, 0.3);">Nigerian Cards &amp; USSD</span>
+              </h2>
+              <p class="subtitle" style="margin: 4px 0 0 0;">Allow your clients to pay invoices directly via debit card, bank transfer, and USSD with automated verification.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <label class="toggle-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 500;">
+                <input type="checkbox" id="paystack_enabled" name="paystack_enabled">
+                <span>Enable Paystack</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="paystackFieldsContainer">
+            <div class="form-row">
+              <div class="field">
+                <label for="paystack_public_key">Paystack Public Key</label>
+                <input type="text" id="paystack_public_key" name="paystack_public_key" placeholder="pk_live_... or pk_test_...">
+                <span class="hint">Found in Paystack Dashboard &gt; Settings &gt; API Keys &amp; Webhooks.</span>
+                <span class="field-error" data-error-for="paystack_public_key"></span>
+              </div>
+              <div class="field">
+                <label for="_paystack_secret_key_plain">Paystack Secret Key</label>
+                <div style="position: relative;">
+                  <input type="password" id="_paystack_secret_key_plain" name="_paystack_secret_key_plain" placeholder="sk_live_... or sk_test_...">
+                  <span id="paystackKeyStatusBadge" style="display: none; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #10b981;">Saved &amp; Encrypted</span>
+                </div>
+                <span class="hint">Stored encrypted locally with AES-256-GCM. Leave blank to keep existing key.</span>
+                <span class="field-error" data-error-for="_paystack_secret_key_plain"></span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field field-span-2">
+                <label for="paystack_page_url">Paystack Payment Page URL (Optional Fallback)</label>
+                <input type="url" id="paystack_page_url" name="paystack_page_url" placeholder="https://paystack.com/pay/your-business">
+                <span class="hint">If dynamic API payment link generation fails or is offline, this payment page URL will be used instead.</span>
+                <span class="field-error" data-error-for="paystack_page_url"></span>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px;">
+              <button type="button" id="paystackTestBtn" class="btn btn-secondary btn-small">🔌 Test Connection</button>
+              <span id="paystackTestStatus" style="font-size: 12px; color: var(--text-muted);"></span>
+            </div>
+          </div>
+        </div>
 
         <div class="card" id="paymentPresetsCard">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
@@ -4529,6 +4601,15 @@
             </div>
             <button type="button" class="btn btn-secondary btn-small" id="btnShareSendEmail">Send Email</button>
           </div>
+
+          <div class="share-option-card">
+            <div class="share-option-icon">💬</div>
+            <div class="share-option-content">
+              <h4>Share via WhatsApp</h4>
+              <p>Send a pre-formatted summary directly to the client on WhatsApp with instant PDF drag-and-drop.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-small" id="btnShareQuoteWhatsApp">Share WhatsApp</button>
+          </div>
         </div>
 
         <div class="share-instructions-preview">
@@ -4542,6 +4623,58 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" id="shareQuoteModalCloseBtn">Close</button>
       </div>
+    </div>
+  </div>
+
+  <div id="whatsappModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="whatsappModalTitle">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 id="whatsappModalTitle">💬 Share via WhatsApp</h2>
+        <button type="button" class="modal-close" id="whatsappModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="whatsappForm" class="modal-form" novalidate>
+        <p class="hint" style="margin-bottom: 14px;">
+          Send a pre-formatted message with document details, due dates, Paystack online payment link, and bank account information directly to your client via WhatsApp.
+        </p>
+
+        <div class="form-row">
+          <div class="field field-required">
+            <label for="whatsappPhoneInput">Recipient WhatsApp Number</label>
+            <input type="tel" id="whatsappPhoneInput" placeholder="e.g. 0803 123 4567 or +234..." required autocomplete="off">
+            <span class="hint" id="whatsappPhoneHint">Normalized: <span id="whatsappNormalizedPhone" style="font-weight:600;color:#16a34a;">—</span></span>
+            <span class="field-error" data-error-for="whatsapp_phone" id="whatsappPhoneError"></span>
+          </div>
+          <div class="field" id="whatsappContactSelectField">
+            <label for="whatsappContactSelect">Select Contact (optional)</label>
+            <select id="whatsappContactSelect">
+              <option value="">Primary Client Contact</option>
+            </select>
+            <span class="hint">Pre-fill phone number from client contacts.</span>
+          </div>
+        </div>
+
+        <div class="field field-required">
+          <label for="whatsappMessageText">Message Template (Editable)</label>
+          <textarea id="whatsappMessageText" rows="9" style="font-family: inherit; font-size: 13px; line-height: 1.5;" placeholder="Compose your WhatsApp message…"></textarea>
+          <span class="hint">Review or customize this message before launching WhatsApp.</span>
+        </div>
+
+        <div class="whatsapp-pdf-delivery-banner" style="background: var(--bg-secondary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 6px; padding: 12px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div>
+            <div style="font-weight: 600; font-size: 13px;">📎 PDF Attachment Delivery</div>
+            <div style="font-size: 12px; color: var(--text-muted, #64748b);">Reveal PDF in File Explorer to drag-and-drop straight into WhatsApp.</div>
+          </div>
+          <button type="button" id="whatsappRevealPdfBtn" class="btn btn-secondary btn-small" title="Generate PDF and highlight it in Windows Explorer">📂 Reveal PDF</button>
+        </div>
+
+        <div class="modal-actions" style="display:flex; justify-content: space-between; align-items: center;">
+          <button type="button" class="btn btn-ghost" id="whatsappCancelBtn">Cancel</button>
+          <div style="display:flex; gap: 8px;">
+            <button type="button" id="whatsappCopyBtn" class="btn btn-secondary" title="Copy message text to clipboard">📋 Copy Text</button>
+            <button type="submit" id="whatsappSendBtn" class="btn btn-primary" style="background-color: #25D366; border-color: #25D366; color: #fff;">💬 Open WhatsApp</button>
+          </div>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -4948,6 +5081,7 @@
   </div>
   <!-- ── End Onboarding Wizard ─────────────────────────────────────────────── -->
 
+  <script src="../shared/constants.js"></script>
   <script src="js/currencies.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/drafts.js"></script>
@@ -4957,6 +5091,7 @@
   <script src="js/projects.js"></script>
   <script src="js/items.js"></script>
   <script src="js/document-email.js"></script>
+  <script src="js/whatsapp-share.js"></script>
   <script src="js/quotes.js"></script>
   <script src="js/invoices.js"></script>
   <script src="js/dashboard.js"></script>
