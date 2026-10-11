@@ -1,7 +1,7 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
-const { CURRENCIES } = require('../shared/constants');
+const { CURRENCIES, getPaymentBankDetails } = require('../shared/constants');
 
 const PAGE_SIZE = 'A4';
 const MARGIN = 48;
@@ -582,6 +582,46 @@ function drawTextSection(ctx, title, body) {
   doc.text(String(body).trim(), MARGIN, ctx.y, { width: W, lineGap: 2 });
 }
 
+function drawBankDetailsSection(ctx, bankInfo) {
+  const { doc, W } = ctx;
+  if (!bankInfo) return;
+  if (ctx.y + 60 > ctx.pageBottom) {
+    doc.addPage();
+    ctx.y = doc.y;
+  }
+
+  let lines = [];
+  let title = '';
+  if (bankInfo.type === 'nuban') {
+    title = 'DIRECT BANK TRANSFER (NGN)';
+    if (bankInfo.bankName) lines.push(`Bank: ${bankInfo.bankName}`);
+    if (bankInfo.accountNumber) lines.push(`Account Number: ${bankInfo.accountNumber}`);
+    if (bankInfo.accountName) lines.push(`Account Name: ${bankInfo.accountName}`);
+  } else if (bankInfo.type === 'domiciliary') {
+    title = `DOMICILIARY WIRE TRANSFER (${bankInfo.currency})`;
+    if (bankInfo.bankName) lines.push(`Bank: ${bankInfo.bankName}`);
+    if (bankInfo.accountNumber) lines.push(`Account / IBAN: ${bankInfo.accountNumber}`);
+    if (bankInfo.accountName) lines.push(`Beneficiary Name: ${bankInfo.accountName}`);
+    if (bankInfo.swiftCode) lines.push(`SWIFT / BIC: ${bankInfo.swiftCode}`);
+    if (bankInfo.intermediaryBank) lines.push(`Intermediary Bank: ${bankInfo.intermediaryBank}`);
+  } else if (bankInfo.type === 'generic') {
+    title = 'PAYMENT INSTRUCTIONS / BANK DETAILS';
+  }
+
+  if (bankInfo.notes) {
+    lines.push(bankInfo.notes);
+  }
+
+  const body = lines.join('\n');
+  if (!body.trim()) return;
+
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.muted).text(title, MARGIN, ctx.y, { lineGap: 0 });
+  ctx.y = doc.y + 4;
+  doc.font('Helvetica').fontSize(9).fillColor(COLORS.ink);
+  doc.text(body.trim(), MARGIN, ctx.y, { width: W, lineGap: 2 });
+  ctx.y = doc.y + 10;
+}
+
 function drawStampOnFirstPage(ctx, text, color) {
   const { doc } = ctx;
   const cx = doc.page.width / 2;
@@ -853,6 +893,11 @@ function renderInvoicePdf(invoice, client, profile, opts) {
     extra: extraRows,
   });
 
+  const bankInfo = getPaymentBankDetails(profile, currency);
+  if (bankInfo) {
+    drawBankDetailsSection(ctx, bankInfo);
+  }
+
   if (invoice.notes || invoice.terms) {
     const blocks = [];
     if (invoice.notes) blocks.push(invoice.notes);
@@ -1000,6 +1045,37 @@ function buildPrintNotesHtml(notesTerms) {
   </div>`;
 }
 
+function buildPrintBankDetailsHtml(bankInfo) {
+  if (!bankInfo) return '';
+  if (bankInfo.type === 'nuban') {
+    return `<div class="bank-callout-print nuban">
+      <div class="bank-callout-title">DIRECT BANK TRANSFER (${escapeHtml(bankInfo.currency || 'NGN')})</div>
+      <div class="bank-callout-row"><span class="b-lbl">Bank:</span> <strong>${escapeHtml(bankInfo.bankName || '—')}</strong></div>
+      <div class="bank-callout-row"><span class="b-lbl">Account Number:</span> <strong class="b-acc">${escapeHtml(bankInfo.accountNumber || '—')}</strong></div>
+      <div class="bank-callout-row"><span class="b-lbl">Account Name:</span> <strong>${escapeHtml(bankInfo.accountName || '—')}</strong></div>
+      ${bankInfo.notes ? `<div class="bank-callout-notes">${escapeHtml(bankInfo.notes)}</div>` : ''}
+    </div>`;
+  }
+  if (bankInfo.type === 'domiciliary') {
+    return `<div class="bank-callout-print dom">
+      <div class="bank-callout-title">INTERNATIONAL WIRE / DOMICILIARY TRANSFER (${escapeHtml(bankInfo.currency)})</div>
+      <div class="bank-callout-row"><span class="b-lbl">Bank Name:</span> <strong>${escapeHtml(bankInfo.bankName || '—')}</strong></div>
+      <div class="bank-callout-row"><span class="b-lbl">Account / IBAN:</span> <strong class="b-acc">${escapeHtml(bankInfo.accountNumber || '—')}</strong></div>
+      <div class="bank-callout-row"><span class="b-lbl">Beneficiary:</span> <strong>${escapeHtml(bankInfo.accountName || '—')}</strong></div>
+      ${bankInfo.swiftCode ? `<div class="bank-callout-row"><span class="b-lbl">SWIFT / BIC:</span> <strong>${escapeHtml(bankInfo.swiftCode)}</strong></div>` : ''}
+      ${bankInfo.intermediaryBank ? `<div class="bank-callout-row"><span class="b-lbl">Intermediary Bank:</span> <strong>${escapeHtml(bankInfo.intermediaryBank)}</strong></div>` : ''}
+      ${bankInfo.notes ? `<div class="bank-callout-notes">${escapeHtml(bankInfo.notes)}</div>` : ''}
+    </div>`;
+  }
+  if (bankInfo.type === 'generic' && bankInfo.notes) {
+    return `<div class="bank-callout-print generic">
+      <div class="bank-callout-title">PAYMENT INSTRUCTIONS / BANK DETAILS</div>
+      <div class="bank-callout-notes">${escapeHtml(bankInfo.notes)}</div>
+    </div>`;
+  }
+  return '';
+}
+
 function buildPrintAcceptanceHtml(quote, profile) {
   const acceptMethodLabels = {
     email: 'Email reply',
@@ -1064,6 +1140,7 @@ function renderDocumentPrintHtml(opts) {
     grandValue,
     extraRows,
     notesTerms,
+    bankInfo,
     footerLeft,
     acceptanceHtml,
     stamp,
@@ -1130,6 +1207,21 @@ function renderDocumentPrintHtml(opts) {
   .notes { margin-top: 26px; page-break-inside: avoid; }
   .notes-title { font-size: 8pt; font-weight: bold; color: #6B7280; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; }
   .notes-body { font-size: 9pt; color: #1F2937; white-space: pre-wrap; }
+  .bank-callout-print {
+    margin-top: 20px;
+    padding: 10px 14px;
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-left: 3.5px solid #059669;
+    page-break-inside: avoid;
+  }
+  .bank-callout-print.dom { border-left-color: #2563EB; }
+  .bank-callout-title { font-size: 8pt; font-weight: bold; color: #1F2937; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .bank-callout-row { font-size: 9pt; color: #1F2937; margin-bottom: 2px; }
+  .bank-callout-row .b-lbl { color: #6B7280; font-size: 8pt; text-transform: uppercase; margin-right: 4px; }
+  .bank-callout-row .b-acc { font-family: monospace; font-size: 9.5pt; color: #047857; }
+  .bank-callout-print.dom .bank-callout-row .b-acc { color: #1D4ED8; }
+  .bank-callout-notes { font-size: 8.5pt; color: #4B5563; margin-top: 6px; padding-top: 4px; border-top: 0.5px dashed #E5E7EB; white-space: pre-wrap; }
   .acceptance { margin-top: 26px; page-break-inside: avoid; }
   .acceptance.accepted { background: #F0FDF4; border: 1px solid #86EFAC; padding: 14px 16px; }
   .acceptance.accepted .accept-title { color: #166534; }
@@ -1162,6 +1254,7 @@ ${buildPrintHeaderHtml({ profile, businessName, pageLabel, docNumber, metaRows }
 ${buildPrintClientHtml(clientLabel, client, contact)}
 ${buildPrintItemsHtml(items, currency)}
 ${buildPrintTotalsHtml(totalRows, grandLabel, grandValue, extraRows)}
+${buildPrintBankDetailsHtml(bankInfo)}
 ${buildPrintNotesHtml(notesTerms)}
 ${acceptanceHtml || ''}
 <div class="doc-footer"><span>${escapeHtml(footerLeft)}</span></div>
@@ -1265,6 +1358,8 @@ function renderInvoicePrintHtml(invoice, client, profile) {
   if (status === 'paid') stamp = { text: 'PAID', color: '#166534' };
   else if (status === 'overdue') stamp = { text: 'OVERDUE', color: '#B91C1C' };
 
+  const bankInfo = getPaymentBankDetails(profile, currency);
+
   return renderDocumentPrintHtml({
     pageLabel: docLabel,
     docNumber: invoice.invoice_number || '',
@@ -1280,6 +1375,7 @@ function renderInvoicePrintHtml(invoice, client, profile) {
     grandLabel: finalGrandLabel,
     grandValue: finalGrandValue,
     extraRows,
+    bankInfo,
     notesTerms,
     footerLeft: `Prepared by ${businessName}`,
     acceptanceHtml: '',
@@ -2518,7 +2614,78 @@ function renderInvoiceHtml(invoice, client, profile) {
     `;
   }
 
-  const paymentDetails = (profile && profile.payment_details) || '';
+  const bankInfo = getPaymentBankDetails(profile, currency);
+  let bankHtml = '';
+  if (bankInfo) {
+    if (bankInfo.type === 'nuban') {
+      bankHtml = `
+        <div class="bank-callout-card nuban">
+          <div class="bank-callout-header">
+            <span class="bank-callout-badge">Direct Bank Transfer</span>
+            <span class="bank-callout-cur">${escapeHtml(currency)}</span>
+          </div>
+          <div class="bank-callout-grid">
+            <div class="bank-cell">
+              <span class="b-lbl">Bank</span>
+              <strong class="b-val">${escapeHtml(bankInfo.bankName || '—')}</strong>
+            </div>
+            <div class="bank-cell">
+              <span class="b-lbl">Account Number</span>
+              <strong class="b-val b-acc">${escapeHtml(bankInfo.accountNumber || '—')}</strong>
+            </div>
+            <div class="bank-cell b-full">
+              <span class="b-lbl">Account Name</span>
+              <strong class="b-val">${escapeHtml(bankInfo.accountName || '—')}</strong>
+            </div>
+          </div>
+          ${bankInfo.notes ? `<div class="bank-notes">${escapeHtml(bankInfo.notes)}</div>` : ''}
+        </div>
+      `;
+    } else if (bankInfo.type === 'domiciliary') {
+      bankHtml = `
+        <div class="bank-callout-card domiciliary">
+          <div class="bank-callout-header">
+            <span class="bank-callout-badge">Domiciliary Wire Transfer</span>
+            <span class="bank-callout-cur">${escapeHtml(bankInfo.currency)}</span>
+          </div>
+          <div class="bank-callout-grid">
+            <div class="bank-cell">
+              <span class="b-lbl">Bank Name</span>
+              <strong class="b-val">${escapeHtml(bankInfo.bankName || '—')}</strong>
+            </div>
+            <div class="bank-cell">
+              <span class="b-lbl">Account / IBAN</span>
+              <strong class="b-val b-acc">${escapeHtml(bankInfo.accountNumber || '—')}</strong>
+            </div>
+            <div class="bank-cell">
+              <span class="b-lbl">Beneficiary Name</span>
+              <strong class="b-val">${escapeHtml(bankInfo.accountName || '—')}</strong>
+            </div>
+            ${bankInfo.swiftCode ? `
+              <div class="bank-cell">
+                <span class="b-lbl">SWIFT / BIC</span>
+                <strong class="b-val b-swift">${escapeHtml(bankInfo.swiftCode)}</strong>
+              </div>
+            ` : ''}
+            ${bankInfo.intermediaryBank ? `
+              <div class="bank-cell b-full">
+                <span class="b-lbl">Intermediary Bank</span>
+                <strong class="b-val">${escapeHtml(bankInfo.intermediaryBank)}</strong>
+              </div>
+            ` : ''}
+          </div>
+          ${bankInfo.notes ? `<div class="bank-notes">${escapeHtml(bankInfo.notes)}</div>` : ''}
+        </div>
+      `;
+    } else if (bankInfo.type === 'generic') {
+      bankHtml = `
+        <div class="payment-instructions">
+          <h4>Payment Instructions / Bank Details</h4>
+          <p>${escapeHtml(bankInfo.notes)}</p>
+        </div>
+      `;
+    }
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -2709,6 +2876,85 @@ function renderInvoiceHtml(invoice, client, profile) {
     .status-badge-pill.partial { background: #FEF3C7; color: #D97706; }
     .status-badge-pill.due { background: #DBEAFE; color: #2563EB; }
     .status-message { font-size: 13.5px; line-height: 1.5; }
+    .bank-callout-card {
+      background: #F8FAFC;
+      border: 1px solid #CBD5E1;
+      border-left: 4px solid #059669;
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+    }
+    .bank-callout-card.domiciliary {
+      border-left-color: #2563EB;
+    }
+    .bank-callout-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed #E2E8F0;
+    }
+    .bank-callout-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #0F172A;
+    }
+    .bank-callout-cur {
+      font-size: 11px;
+      font-weight: 700;
+      background: #E2E8F0;
+      color: #475569;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .bank-callout-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .bank-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .bank-cell.b-full {
+      grid-column: 1 / -1;
+    }
+    .bank-cell .b-lbl {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748B;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .bank-cell .b-val {
+      font-size: 14px;
+      color: #0F172A;
+    }
+    .bank-cell .b-acc {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+      color: #047857;
+    }
+    .bank-callout-card.domiciliary .bank-cell .b-acc {
+      color: #1D4ED8;
+    }
+    .bank-cell .b-swift {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      letter-spacing: 0.04em;
+    }
+    .bank-notes {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed #E2E8F0;
+      font-size: 12.5px;
+      color: #475569;
+      white-space: pre-wrap;
+    }
     .payment-instructions {
       background: #F8FAFC;
       border: 1px solid #E2E8F0;
@@ -2828,12 +3074,7 @@ function renderInvoiceHtml(invoice, client, profile) {
       </div>
     </div>
 
-    ${paymentDetails ? `
-      <div class="payment-instructions">
-        <h4>Payment Instructions / Bank Details</h4>
-        <p>${escapeHtml(paymentDetails)}</p>
-      </div>
-    ` : ''}
+    ${bankHtml}
 
     ${invoice.notes || invoice.terms ? `
       <div class="notes-terms">
@@ -2864,6 +3105,7 @@ module.exports = {
   renderInvoiceHtml,
   renderQuotePrintHtml,
   renderInvoicePrintHtml,
+  getPaymentBankDetails,
   money,
   formatAmount,
   setPdfLocale,

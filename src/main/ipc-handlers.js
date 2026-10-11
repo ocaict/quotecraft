@@ -379,6 +379,20 @@ function validateProfile(profile) {
     errors.quote_prefix = 'Quote prefix may only contain letters, numbers, and dashes.';
   }
 
+  if (profile.account_number && String(profile.account_number).trim()) {
+    const acc = String(profile.account_number).trim();
+    if (!/^\d{10}$/.test(acc)) {
+      errors.account_number = 'Account number must be a 10-digit NUBAN.';
+    }
+  }
+
+  if (profile.dom_swift_code && String(profile.dom_swift_code).trim()) {
+    const swift = String(profile.dom_swift_code).trim();
+    if (!/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/.test(swift)) {
+      errors.dom_swift_code = 'SWIFT / BIC code must be 8 or 11 alphanumeric characters.';
+    }
+  }
+
   return errors;
 }
 

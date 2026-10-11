@@ -2692,16 +2692,128 @@
           </div>
         </div>
 
-        <div class="card">
-          <h2>Payments</h2>
+        <div class="card" id="bankingSettingsCard">
+          <h2>Bank & Payment Details (Direct Transfer)</h2>
+          <p class="subtitle" style="margin: 0 0 16px 0; color: var(--text-muted); font-size: 13px;">
+            Configure your Nigerian NUBAN and foreign Domiciliary accounts. Invoices automatically display the appropriate bank details depending on whether you bill in NGN or foreign currency (USD, GBP, EUR).
+          </p>
+
+          <h3 style="font-size: 14px; font-weight: 600; margin: 12px 0 10px; color: var(--text-heading); display: flex; align-items: center; gap: 8px;">
+            <span>🇳🇬 Nigerian Bank Account (NUBAN)</span>
+            <span style="font-size: 11px; background: rgba(16, 185, 129, 0.12); color: #059669; padding: 2px 8px; border-radius: 4px; font-weight: 600;">For NGN Invoices</span>
+          </h3>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="bank_name">Bank Name</label>
+              <input list="nigerianBanksList" id="bank_name" name="bank_name" placeholder="Select or type bank (e.g. Access Bank, GTBank, Zenith)">
+              <datalist id="nigerianBanksList">
+                <option value="Access Bank">
+                <option value="Citibank Nigeria">
+                <option value="Ecobank Nigeria">
+                <option value="Fidelity Bank">
+                <option value="First Bank of Nigeria">
+                <option value="First City Monument Bank (FCMB)">
+                <option value="Guaranty Trust Bank (GTBank)">
+                <option value="Heritage Bank">
+                <option value="Jaiz Bank">
+                <option value="Keystone Bank">
+                <option value="Kuda Bank">
+                <option value="Lotus Bank">
+                <option value="Moniepoint MFB">
+                <option value="OPay">
+                <option value="Optimus Bank">
+                <option value="PalmPay">
+                <option value="Parallex Bank">
+                <option value="Polaris Bank">
+                <option value="Premium Trust Bank">
+                <option value="Providus Bank">
+                <option value="Stanbic IBTC Bank">
+                <option value="Standard Chartered Bank">
+                <option value="Sterling Bank">
+                <option value="SunTrust Bank">
+                <option value="TAJ Bank">
+                <option value="Titan Trust Bank">
+                <option value="Union Bank of Nigeria">
+                <option value="United Bank for Africa (UBA)">
+                <option value="Unity Bank">
+                <option value="VBank (VFD MFB)">
+                <option value="Wema Bank (ALAT)">
+                <option value="Zenith Bank">
+              </datalist>
+              <span class="field-error" data-error-for="bank_name"></span>
+            </div>
+            <div class="field">
+              <label for="account_number">NUBAN Account Number</label>
+              <input type="text" id="account_number" name="account_number" maxlength="10" placeholder="10-digit NUBAN (e.g. 0123456789)">
+              <span class="hint" id="nubanValidationHint">10 digits, validated on save.</span>
+              <span class="field-error" data-error-for="account_number"></span>
+            </div>
+          </div>
+
           <div class="form-row">
             <div class="field field-span-2">
-              <label for="payment_details">Payment details</label>
-              <textarea id="payment_details" name="payment_details" rows="3" placeholder="e.g. Bank: Acme Bank, Account: 1234567890, Sort code: 00-00-00"></textarea>
-              <span class="hint">Shown on invoice PDFs. Include bank account details or how the client should pay (optional).</span>
+              <label for="account_name">Account Name (Beneficiary)</label>
+              <input type="text" id="account_name" name="account_name" placeholder="e.g. Acme Tech Solutions Ltd or John Doe">
+              <span class="field-error" data-error-for="account_name"></span>
+            </div>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+
+          <h3 style="font-size: 14px; font-weight: 600; margin: 12px 0 6px; color: var(--text-heading); display: flex; align-items: center; gap: 8px;">
+            <span>🌐 Domiciliary Account (USD / GBP / EUR Wire)</span>
+            <span style="font-size: 11px; background: rgba(59, 130, 246, 0.12); color: #2563EB; padding: 2px 8px; border-radius: 4px; font-weight: 600;">For Foreign Currency Invoices</span>
+          </h3>
+          <p class="subtitle" style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 12px;">
+            Automatically included when billing international clients in USD, GBP, or EUR.
+          </p>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="dom_bank_name">Domiciliary Bank Name</label>
+              <input type="text" id="dom_bank_name" name="dom_bank_name" placeholder="e.g. Guaranty Trust Bank (Dom) or Zenith Bank">
+              <span class="field-error" data-error-for="dom_bank_name"></span>
+            </div>
+            <div class="field">
+              <label for="dom_account_number">Account / IBAN Number</label>
+              <input type="text" id="dom_account_number" name="dom_account_number" placeholder="e.g. 0123456789 or IBAN">
+              <span class="field-error" data-error-for="dom_account_number"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="dom_account_name">Beneficiary Name</label>
+              <input type="text" id="dom_account_name" name="dom_account_name" placeholder="e.g. Acme Tech Solutions Ltd">
+              <span class="field-error" data-error-for="dom_account_name"></span>
+            </div>
+            <div class="field">
+              <label for="dom_swift_code">SWIFT / BIC Code</label>
+              <input type="text" id="dom_swift_code" name="dom_swift_code" placeholder="e.g. GTBINGLA or ZEIBNGLA">
+              <span class="field-error" data-error-for="dom_swift_code"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="dom_intermediary_bank">Intermediary Bank / Routing (Optional)</label>
+              <input type="text" id="dom_intermediary_bank" name="dom_intermediary_bank" placeholder="e.g. Citibank New York / SWIFT: CITIUS33 (Optional for USD clearing)">
+              <span class="field-error" data-error-for="dom_intermediary_bank"></span>
+            </div>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="payment_details">Additional Payment Instructions / Fallback Notes</label>
+              <textarea id="payment_details" name="payment_details" rows="2" placeholder="e.g. Payment due within 14 days of invoice. Send proof of transfer to billing@example.com"></textarea>
+              <span class="hint">Appended to bank transfer callout or shown as fallback if specific bank fields are empty.</span>
             </div>
           </div>
         </div>
+
 
         <div class="card" id="paymentPresetsCard">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">

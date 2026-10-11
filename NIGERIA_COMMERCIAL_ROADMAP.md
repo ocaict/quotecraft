@@ -91,11 +91,13 @@ Ensure invoices meet legal and accounting standards required by Nigerian corpora
 ---
 
 
-## Stage 2: NUBAN & Domiciliary Multi-Bank Accounts
+## Stage 2: NUBAN & Domiciliary Multi-Bank Accounts ✅ COMPLETE
+
+> **Status: IMPLEMENTED** — Completed October 2026 | Test Coverage: `scripts/test-stage2-nigeria.js` (10/10 tests passing)
 
 Eliminate back-and-forth messaging with clients asking "Please send your account number."
 
-### 2.1 Dedicated NUBAN Bank Details
+### 2.1 Dedicated NUBAN Bank Details ✅
 - **Action:**
   - Add dedicated banking fields to `company_profile`:
     - `bank_name` (dropdown of top Nigerian commercial banks + fintechs: Access, GTBank, Zenith, UBA, First Bank, Kuda, Moniepoint, OPay, etc.)
@@ -104,13 +106,14 @@ Eliminate back-and-forth messaging with clients asking "Please send your account
   - Render a styled **"Direct Bank Transfer"** callout box on PDF invoices with account details highlighted.
 - **Files Affected:**
   - `src/main/database.js`
+  - `src/shared/constants.js`
   - `src/renderer/index.html`
   - `src/renderer/js/settings.js`
   - `src/main/pdf-export.js`
 
 ---
 
-### 2.2 Domiciliary Account (USD / GBP / EUR) Support
+### 2.2 Domiciliary Account (USD / GBP / EUR) Support ✅
 - **Problem:** Nigerian tech freelancers, creators, and export consultants bill foreign clients in USD/GBP/EUR, requiring international wire details (SWIFT/BIC, IBAN, Intermediary Bank).
 - **Action:**
   - Add optional Domiciliary Bank details in **Settings > Company Profile**.
@@ -119,6 +122,9 @@ Eliminate back-and-forth messaging with clients asking "Please send your account
     - If invoice currency is `USD`, `GBP`, or `EUR` &rarr; automatically render Domiciliary wire instructions (Bank, Account Name, Account Number, SWIFT/BIC).
 - **Files Affected:**
   - `src/main/database.js`
+  - `src/shared/constants.js`
+  - `src/renderer/index.html`
+  - `src/renderer/js/settings.js`
   - `src/main/pdf-export.js`
 
 ---

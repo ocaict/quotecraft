@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { app } = require('electron');
 const { encryptSecret, decryptSecret, getStorageMechanismName } = require('./secure-storage');
+const { NIGERIAN_BANKS, isValidNuban } = require('../shared/constants');
 
 const DB_DIR = app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(__dirname, '../../data');
 const DB_FILE = process.env.TEST_DB_PATH || path.join(DB_DIR, 'quotecraft.sqlite');
@@ -239,6 +240,14 @@ function createTables() {
       tax_id          TEXT DEFAULT '',
       cac_number      TEXT DEFAULT '',
       tin             TEXT DEFAULT '',
+      bank_name       TEXT DEFAULT '',
+      account_number  TEXT DEFAULT '',
+      account_name    TEXT DEFAULT '',
+      dom_bank_name   TEXT DEFAULT '',
+      dom_account_name TEXT DEFAULT '',
+      dom_account_number TEXT DEFAULT '',
+      dom_swift_code  TEXT DEFAULT '',
+      dom_intermediary_bank TEXT DEFAULT '',
       default_currency TEXT NOT NULL DEFAULT 'USD',
       reporting_currency TEXT NOT NULL DEFAULT 'USD',
       default_tax_rate REAL NOT NULL DEFAULT 0,
@@ -1419,6 +1428,28 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 43,
+    up: () => {
+      // Add Nigerian NUBAN & Domiciliary multi-bank fields to company_profile
+      const cpCols = new Set(db.exec(`PRAGMA table_info(company_profile)`)[0].values.map((v) => v[1]));
+      const bankFields = [
+        ['bank_name', "TEXT DEFAULT ''"],
+        ['account_number', "TEXT DEFAULT ''"],
+        ['account_name', "TEXT DEFAULT ''"],
+        ['dom_bank_name', "TEXT DEFAULT ''"],
+        ['dom_account_name', "TEXT DEFAULT ''"],
+        ['dom_account_number', "TEXT DEFAULT ''"],
+        ['dom_swift_code', "TEXT DEFAULT ''"],
+        ['dom_intermediary_bank', "TEXT DEFAULT ''"],
+      ];
+      for (const [col, def] of bankFields) {
+        if (!cpCols.has(col)) {
+          db.run(`ALTER TABLE company_profile ADD COLUMN ${col} ${def}`);
+        }
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -1470,6 +1501,14 @@ function getCompanyProfile() {
   profile.decimal_separator = profile.decimal_separator || '.';
   profile.cac_number = profile.cac_number || '';
   profile.tin = profile.tin || profile.tax_id || '';
+  profile.bank_name = profile.bank_name || '';
+  profile.account_number = profile.account_number || '';
+  profile.account_name = profile.account_name || '';
+  profile.dom_bank_name = profile.dom_bank_name || '';
+  profile.dom_account_name = profile.dom_account_name || '';
+  profile.dom_account_number = profile.dom_account_number || '';
+  profile.dom_swift_code = profile.dom_swift_code || '';
+  profile.dom_intermediary_bank = profile.dom_intermediary_bank || '';
   return profile;
 }
 
@@ -1492,6 +1531,14 @@ function saveCompanyProfile(profile) {
     tax_id: profile.tax_id || '',
     cac_number: profile.cac_number !== undefined ? profile.cac_number : (existing && existing.cac_number) || '',
     tin: profile.tin !== undefined ? profile.tin : (existing && existing.tin) || (profile.tax_id || (existing && existing.tax_id) || ''),
+    bank_name: profile.bank_name !== undefined ? profile.bank_name : (existing && existing.bank_name) || '',
+    account_number: profile.account_number !== undefined ? profile.account_number : (existing && existing.account_number) || '',
+    account_name: profile.account_name !== undefined ? profile.account_name : (existing && existing.account_name) || '',
+    dom_bank_name: profile.dom_bank_name !== undefined ? profile.dom_bank_name : (existing && existing.dom_bank_name) || '',
+    dom_account_name: profile.dom_account_name !== undefined ? profile.dom_account_name : (existing && existing.dom_account_name) || '',
+    dom_account_number: profile.dom_account_number !== undefined ? profile.dom_account_number : (existing && existing.dom_account_number) || '',
+    dom_swift_code: profile.dom_swift_code !== undefined ? profile.dom_swift_code : (existing && existing.dom_swift_code) || '',
+    dom_intermediary_bank: profile.dom_intermediary_bank !== undefined ? profile.dom_intermediary_bank : (existing && existing.dom_intermediary_bank) || '',
     default_currency: defCurrency,
     reporting_currency: profile.reporting_currency || (existing && existing.reporting_currency) || defCurrency,
     default_tax_rate: Number(profile.default_tax_rate || 0),
@@ -1531,7 +1578,10 @@ function saveCompanyProfile(profile) {
         quote_start_number = ?, default_terms = ?, payment_details = ?,
         credit_note_prefix = ?, credit_note_start_number = ?, default_quote_acceptance_instructions = ?,
         pdf_theme = ?, number_padding = ?, number_include_year = ?,
-        date_format = ?, decimal_separator = ?, cac_number = ?, tin = ?, updated_at = ?
+        date_format = ?, decimal_separator = ?, cac_number = ?, tin = ?,
+        bank_name = ?, account_number = ?, account_name = ?,
+        dom_bank_name = ?, dom_account_name = ?, dom_account_number = ?,
+        dom_swift_code = ?, dom_intermediary_bank = ?, updated_at = ?
        WHERE id = 1`,
       [
         fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
@@ -1541,7 +1591,10 @@ function saveCompanyProfile(profile) {
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
         fields.pdf_theme, fields.number_padding, fields.number_include_year,
-        fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin, now,
+        fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin,
+        fields.bank_name, fields.account_number, fields.account_name,
+        fields.dom_bank_name, fields.dom_account_name, fields.dom_account_number,
+        fields.dom_swift_code, fields.dom_intermediary_bank, now,
       ]
     );
   } else {
@@ -1552,8 +1605,10 @@ function saveCompanyProfile(profile) {
         reporting_currency, default_tax_rate, default_hourly_rate, invoice_prefix, invoice_start_number, quote_prefix,
         quote_start_number, default_terms, payment_details,
         credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, pdf_theme,
-        number_padding, number_include_year, date_format, decimal_separator, cac_number, tin, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        number_padding, number_include_year, date_format, decimal_separator, cac_number, tin,
+        bank_name, account_number, account_name, dom_bank_name, dom_account_name, dom_account_number,
+        dom_swift_code, dom_intermediary_bank, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         1, fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
@@ -1562,7 +1617,10 @@ function saveCompanyProfile(profile) {
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
         fields.pdf_theme, fields.number_padding, fields.number_include_year,
-        fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin, now, now,
+        fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin,
+        fields.bank_name, fields.account_number, fields.account_name,
+        fields.dom_bank_name, fields.dom_account_name, fields.dom_account_number,
+        fields.dom_swift_code, fields.dom_intermediary_bank, now, now,
       ]
     );
   }
@@ -8726,6 +8784,72 @@ function getAuditLogEntries({ recordType, from, to, limit = 500 } = {}) {
   return rowsToArray(res);
 }
 
+function getPaymentBankDetails(profile, currency) {
+  if (!profile) return null;
+  const curr = String(currency || profile.default_currency || 'USD').toUpperCase();
+  const isForeign = ['USD', 'GBP', 'EUR'].includes(curr);
+
+  const hasDom = Boolean(
+    (profile.dom_account_number && String(profile.dom_account_number).trim()) ||
+    (profile.dom_bank_name && String(profile.dom_bank_name).trim())
+  );
+  const hasNuban = Boolean(
+    (profile.account_number && String(profile.account_number).trim()) ||
+    (profile.bank_name && String(profile.bank_name).trim())
+  );
+
+  if (isForeign && hasDom) {
+    return {
+      type: 'domiciliary',
+      title: 'International Wire / Domiciliary Transfer',
+      currency: curr,
+      bankName: profile.dom_bank_name || '',
+      accountNumber: profile.dom_account_number || '',
+      accountName: profile.dom_account_name || profile.business_name || '',
+      swiftCode: profile.dom_swift_code || '',
+      intermediaryBank: profile.dom_intermediary_bank || '',
+      notes: profile.payment_details || '',
+    };
+  }
+
+  if (hasNuban) {
+    return {
+      type: 'nuban',
+      title: 'Direct Bank Transfer',
+      currency: curr,
+      bankName: profile.bank_name || '',
+      accountNumber: profile.account_number || '',
+      accountName: profile.account_name || profile.business_name || '',
+      notes: profile.payment_details || '',
+    };
+  }
+
+  if (hasDom) {
+    return {
+      type: 'domiciliary',
+      title: 'International Wire / Domiciliary Transfer',
+      currency: curr,
+      bankName: profile.dom_bank_name || '',
+      accountNumber: profile.dom_account_number || '',
+      accountName: profile.dom_account_name || profile.business_name || '',
+      swiftCode: profile.dom_swift_code || '',
+      intermediaryBank: profile.dom_intermediary_bank || '',
+      notes: profile.payment_details || '',
+    };
+  }
+
+  if (profile.payment_details && String(profile.payment_details).trim()) {
+    return {
+      type: 'generic',
+      title: 'Payment Instructions / Bank Details',
+      currency: curr,
+      notes: profile.payment_details,
+    };
+  }
+
+  return null;
+}
+
 module.exports = {
   initializeDatabase,
   getDb,
@@ -8879,5 +9003,8 @@ module.exports = {
   deletePaymentInstructionPreset,
   setInvoiceWhtCredit,
   computeDocumentTotals,
+  getPaymentBankDetails,
+  NIGERIAN_BANKS,
+  isValidNuban,
 };
 

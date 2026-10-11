@@ -119,6 +119,16 @@
       quote_start_number: 1,
       credit_note_prefix: 'CN-',
       credit_note_start_number: 1,
+      cac_number: '',
+      tin: '',
+      bank_name: '',
+      account_number: '',
+      account_name: '',
+      dom_bank_name: '',
+      dom_account_name: '',
+      dom_account_number: '',
+      dom_swift_code: '',
+      dom_intermediary_bank: '',
       default_currency: 'USD',
       reporting_currency: 'USD',
       date_format: 'MMM D, YYYY',
@@ -238,6 +248,26 @@
     currentLogoPath = null;
     updateLogoDisplay(null);
   });
+
+  const accountNumberInput = document.getElementById('account_number');
+  const nubanHint = document.getElementById('nubanValidationHint');
+  if (accountNumberInput) {
+    accountNumberInput.addEventListener('input', () => {
+      accountNumberInput.value = accountNumberInput.value.replace(/\D/g, '').slice(0, 10);
+      if (nubanHint) {
+        if (!accountNumberInput.value) {
+          nubanHint.textContent = '10 digits, validated on save.';
+          nubanHint.style.color = '';
+        } else if (accountNumberInput.value.length === 10) {
+          nubanHint.textContent = '✓ 10-digit NUBAN entered.';
+          nubanHint.style.color = '#059669';
+        } else {
+          nubanHint.textContent = `${accountNumberInput.value.length}/10 digits entered.`;
+          nubanHint.style.color = '';
+        }
+      }
+    });
+  }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
