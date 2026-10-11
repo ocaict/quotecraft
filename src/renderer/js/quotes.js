@@ -2116,6 +2116,16 @@
     clearFieldError('tax_rate');
   });
 
+  const quoteSet75VatBtn = document.getElementById('quoteSet75VatBtn');
+  if (quoteSet75VatBtn) {
+    quoteSet75VatBtn.addEventListener('click', () => {
+      taxRateInput.value = '7.5';
+      recalcTotals();
+      clearFieldError('tax_rate');
+      window.QuoteCraftUtils.showToast('Quote tax set to 7.5% (Nigerian statutory VAT)', 'info');
+    });
+  }
+
   if (quoteTaxLinesEnabled) {
     quoteTaxLinesEnabled.addEventListener('change', () => {
       if (quoteTaxLinesSection) {

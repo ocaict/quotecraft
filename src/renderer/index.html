@@ -956,7 +956,10 @@
                 <span class="field-error" data-error-for="discount_value"></span>
               </div>
               <div class="field">
-                <label for="taxRate">Default Tax rate (%)</label>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <label for="taxRate" style="margin:0;">Default Tax rate (%)</label>
+                  <button type="button" id="quoteSet75VatBtn" class="btn btn-ghost btn-xs" style="padding: 2px 6px; font-size: 11px;">🇳🇬 7.5% VAT</button>
+                </div>
                 <input type="number" id="taxRate" name="tax_rate" min="0" max="100" step="0.01" placeholder="0">
                 <span class="field-error" data-error-for="tax_rate"></span>
                 <span class="hint">Applied to new rows by default. Editable per line item (0% for tax-exempt).</span>
@@ -1366,10 +1369,22 @@
                 <span class="field-error" data-error-for="discount_value"></span>
               </div>
               <div class="field">
-                <label for="invoiceTaxRate">Default Tax rate (%)</label>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <label for="invoiceTaxRate" style="margin:0;">Default Tax rate (%)</label>
+                  <button type="button" id="invoiceSet75VatBtn" class="btn btn-ghost btn-xs" style="padding: 2px 6px; font-size: 11px;">🇳🇬 7.5% VAT</button>
+                </div>
                 <input type="number" id="invoiceTaxRate" name="tax_rate" min="0" max="100" step="0.01" placeholder="0">
                 <span class="field-error" data-error-for="tax_rate"></span>
                 <span class="hint">Applied to new rows by default. Editable per line item.</span>
+              </div>
+              <div class="field">
+                <label for="invoiceWhtRate">Withholding Tax (WHT)</label>
+                <select id="invoiceWhtRate" name="wht_rate">
+                  <option value="0">None (0%)</option>
+                  <option value="5">5% — Goods & Contracts</option>
+                  <option value="10">10% — Professional Services & Agency</option>
+                </select>
+                <span class="hint">Deducted at source by corporate clients in Nigeria.</span>
               </div>
             </div>
 
@@ -1394,9 +1409,17 @@
                 <span id="invoiceTotalsDiscount" class="total-value">0.00</span>
               </div>
               <div id="invoiceTotalsTaxBreakdown" class="tax-breakdown-list"></div>
-              <div class="total-row grand-total">
-                <span>Grand total</span>
+              <div class="total-row">
+                <span>Gross total</span>
                 <span id="invoiceTotalsGrand" class="total-value">0.00</span>
+              </div>
+              <div id="invoiceTotalsWhtRow" class="total-row hidden" style="color: var(--color-warning, #d97706);">
+                <span id="invoiceTotalsWhtLabel">Less WHT (0%)</span>
+                <span id="invoiceTotalsWht" class="total-value">-0.00</span>
+              </div>
+              <div class="total-row grand-total">
+                <span>Net payable</span>
+                <span id="invoiceTotalsNetPayable" class="total-value">0.00</span>
               </div>
             </div>
           </div>
@@ -1582,9 +1605,17 @@
               <span id="invoiceDetailDiscount" class="total-value">0.00</span>
             </div>
             <div id="invoiceDetailTaxBreakdown" class="tax-breakdown-list"></div>
-            <div class="total-row grand-total">
-              <span>Total</span>
+            <div class="total-row">
+              <span>Gross total</span>
               <span id="invoiceDetailTotal" class="total-value">0.00</span>
+            </div>
+            <div class="total-row hidden" id="invoiceDetailWhtRow" style="color: var(--color-warning, #d97706);">
+              <span id="invoiceDetailWhtLabel">Less WHT</span>
+              <span id="invoiceDetailWht" class="total-value">-0.00</span>
+            </div>
+            <div class="total-row grand-total" id="invoiceDetailNetPayableRow">
+              <span>Net payable</span>
+              <span id="invoiceDetailNetPayable" class="total-value">0.00</span>
             </div>
             <div class="total-row">
               <span>Amount paid</span>
@@ -1602,6 +1633,22 @@
               <span>Balance due</span>
               <span id="invoiceDetailBalance" class="total-value">0.00</span>
             </div>
+          </div>
+        </div>
+
+        <div id="invoiceWhtCard" class="card hidden">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>🇳🇬 WHT Credit Certificate (FIRS)</h2>
+            <span id="invoiceWhtStatusBadge" class="badge">Pending</span>
+          </div>
+          <p style="font-size:12px; color:var(--color-muted, #64748b); margin:4px 0 10px 0;">Track Withholding Tax credit certificates issued by corporate clients for annual FIRS filing.</p>
+          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:500;">
+              <input type="checkbox" id="invoiceWhtReceivedCheck" style="width:auto; cursor:pointer;">
+              <span>Certificate Received from Client</span>
+            </label>
+            <input type="text" id="invoiceWhtRefInput" placeholder="Certificate / Credit Note Ref #" style="max-width:240px; padding:6px 10px; font-size:13px;">
+            <button type="button" id="invoiceSaveWhtBtn" class="btn btn-secondary btn-sm">Save Status</button>
           </div>
         </div>
 
@@ -2556,10 +2603,18 @@
             </div>
 
             <div class="field">
-              <label for="tax_id">Tax ID / registration number</label>
-              <input type="text" id="tax_id" name="tax_id" placeholder="Optional">
-              <span class="field-error" data-error-for="tax_id"></span>
+              <label for="cac_number">CAC Registration (RC / BN Number)</label>
+              <input type="text" id="cac_number" name="cac_number" placeholder="e.g. RC 1234567 or BN 9876543">
+              <span class="field-error" data-error-for="cac_number"></span>
             </div>
+
+            <div class="field">
+              <label for="tin">Tax Identification Number (TIN)</label>
+              <input type="text" id="tin" name="tin" placeholder="e.g. 12345678-0001">
+              <span class="field-error" data-error-for="tin"></span>
+            </div>
+
+            <input type="hidden" id="tax_id" name="tax_id">
           </div>
 
           <div class="field">
@@ -2680,7 +2735,10 @@
 
           <div class="form-row">
             <div class="field">
-              <label for="default_tax_rate">Default tax rate (%)</label>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label for="default_tax_rate" style="margin:0;">Default tax rate (%)</label>
+                <button type="button" id="setDefault75VatBtn" class="btn btn-ghost btn-xs" style="padding: 2px 6px; font-size: 11px;">🇳🇬 7.5% Nigerian VAT</button>
+              </div>
               <input type="number" id="default_tax_rate" name="default_tax_rate" min="0" max="100" step="0.01" value="0">
               <span class="field-error" data-error-for="default_tax_rate"></span>
             </div>

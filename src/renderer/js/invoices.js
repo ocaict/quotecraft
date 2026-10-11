@@ -99,10 +99,27 @@
   const invoiceDiscountValue = document.getElementById('invoiceDiscountValue');
   const invoiceDiscountLabel = document.getElementById('invoiceDiscountLabel');
   const invoiceTaxRate = document.getElementById('invoiceTaxRate');
+  const invoiceSet75VatBtn = document.getElementById('invoiceSet75VatBtn');
+  const invoiceWhtRate = document.getElementById('invoiceWhtRate');
   const invoiceTotalsSubtotal = document.getElementById('invoiceTotalsSubtotal');
   const invoiceTotalsDiscount = document.getElementById('invoiceTotalsDiscount');
   const invoiceTotalsTaxBreakdown = document.getElementById('invoiceTotalsTaxBreakdown');
   const invoiceTotalsGrand = document.getElementById('invoiceTotalsGrand');
+  const invoiceTotalsWhtRow = document.getElementById('invoiceTotalsWhtRow');
+  const invoiceTotalsWhtLabel = document.getElementById('invoiceTotalsWhtLabel');
+  const invoiceTotalsWht = document.getElementById('invoiceTotalsWht');
+  const invoiceTotalsNetPayable = document.getElementById('invoiceTotalsNetPayable');
+
+  const invoiceDetailWhtRow = document.getElementById('invoiceDetailWhtRow');
+  const invoiceDetailWhtLabel = document.getElementById('invoiceDetailWhtLabel');
+  const invoiceDetailWht = document.getElementById('invoiceDetailWht');
+  const invoiceDetailNetPayableRow = document.getElementById('invoiceDetailNetPayableRow');
+  const invoiceDetailNetPayable = document.getElementById('invoiceDetailNetPayable');
+  const invoiceWhtCard = document.getElementById('invoiceWhtCard');
+  const invoiceWhtStatusBadge = document.getElementById('invoiceWhtStatusBadge');
+  const invoiceWhtReceivedCheck = document.getElementById('invoiceWhtReceivedCheck');
+  const invoiceWhtRefInput = document.getElementById('invoiceWhtRefInput');
+  const invoiceSaveWhtBtn = document.getElementById('invoiceSaveWhtBtn');
   const invoiceFormNotes = document.getElementById('invoiceFormNotes');
   const invoiceFormTerms = document.getElementById('invoiceFormTerms');
   const saveInvoiceBtn = document.getElementById('saveInvoiceBtn');
@@ -896,6 +913,42 @@
     renderInvoiceTaxBreakdown(invTaxBreakdownEl, inv.line_items, inv.subtotal, inv.discount_amount, invCurr, inv.tax_lines);
 
     document.getElementById('invoiceDetailTotal').textContent = money(inv.total, invCurr);
+
+    const whtRate = Number(inv.wht_rate) || 0;
+    const whtAmount = Number(inv.wht_amount) || 0;
+    if (invoiceDetailWhtRow && invoiceDetailNetPayableRow) {
+      if (whtRate > 0 || whtAmount > 0) {
+        invoiceDetailWhtRow.classList.remove('hidden');
+        if (invoiceDetailWhtLabel) invoiceDetailWhtLabel.textContent = `Less WHT (${whtRate}%)`;
+        if (invoiceDetailWht) invoiceDetailWht.textContent = `−${money(whtAmount, invCurr)}`;
+        invoiceDetailNetPayableRow.classList.remove('hidden');
+        const netPayable = Math.max(0, Math.round(((Number(inv.total) || 0) - whtAmount) * 100) / 100);
+        if (invoiceDetailNetPayable) invoiceDetailNetPayable.textContent = money(netPayable, invCurr);
+      } else {
+        invoiceDetailWhtRow.classList.add('hidden');
+        invoiceDetailNetPayableRow.classList.add('hidden');
+      }
+    }
+
+    if (invoiceWhtCard) {
+      if (whtRate > 0 || whtAmount > 0) {
+        invoiceWhtCard.classList.remove('hidden');
+        if (invoiceWhtReceivedCheck) invoiceWhtReceivedCheck.checked = Boolean(inv.wht_credit_received);
+        if (invoiceWhtRefInput) invoiceWhtRefInput.value = inv.wht_credit_note_ref || '';
+        if (invoiceWhtStatusBadge) {
+          if (inv.wht_credit_received) {
+            invoiceWhtStatusBadge.textContent = 'Certificate Received';
+            invoiceWhtStatusBadge.className = 'badge status-paid';
+          } else {
+            invoiceWhtStatusBadge.textContent = 'Pending Certificate';
+            invoiceWhtStatusBadge.className = 'badge status-partially_paid';
+          }
+        }
+      } else {
+        invoiceWhtCard.classList.add('hidden');
+      }
+    }
+
     document.getElementById('invoiceDetailPaid').textContent = money(inv.amount_paid, invCurr);
     const credited = Number(inv.amount_credited) || 0;
     const netPaid = Math.max(0, Math.round(((Number(inv.amount_paid) || 0) - credited) * 100) / 100);
@@ -1852,6 +1905,32 @@
     changeInvoiceStatus(invoiceDetailStatusSelect.value);
   });
 
+  if (invoiceSaveWhtBtn) {
+    invoiceSaveWhtBtn.addEventListener('click', async () => {
+      if (!currentInvoiceId) return;
+      const received = invoiceWhtReceivedCheck ? invoiceWhtReceivedCheck.checked : false;
+      const ref = invoiceWhtRefInput ? invoiceWhtRefInput.value.trim() : '';
+      try {
+        window.QuoteCraftUtils.showBusy('Updating WHT certificate…');
+        const res = await window.electronAPI.setInvoiceWhtCredit(currentInvoiceId, {
+          wht_credit_received: received,
+          wht_credit_note_ref: ref,
+        });
+        if (res && res.ok) {
+          toast('WHT certificate record updated.', 'success');
+          await loadInvoices();
+          await openDetail(currentInvoiceId);
+        } else {
+          toast(res && res.errors && res.errors.general ? res.errors.general : 'Could not update WHT certificate status.', 'error');
+        }
+      } catch (err) {
+        toast('Could not update WHT certificate: ' + err.message, 'error');
+      } finally {
+        window.QuoteCraftUtils.hideBusy();
+      }
+    });
+  }
+
   generateFinalInvoiceBtn?.addEventListener('click', handleGenerateFinalInvoice);
 
   window.addEventListener('qc-open-invoice', (e) => {
@@ -2013,9 +2092,29 @@
 
     const grandTotalCents = Math.max(0, subtotalCents - docDiscCents + totalTaxCents);
 
+    // Calculate Withholding Tax (WHT)
+    // In Nigerian tax practice, WHT is deducted from the pre-tax net subtotal
+    const netSubtotalCents = Math.max(0, subtotalCents - docDiscCents);
+    const whtRate = invoiceWhtRate ? Number(invoiceWhtRate.value) || 0 : 0;
+    const whtAmountCents = whtRate > 0 ? Math.round(netSubtotalCents * whtRate / 100) : 0;
+    const netPayableCents = Math.max(0, grandTotalCents - whtAmountCents);
+
     if (invoiceTotalsSubtotal) invoiceTotalsSubtotal.textContent = window.QuoteCraftUtils.formatCurrency(subtotalCents / 100, formCurrencyCode);
     if (invoiceTotalsDiscount) invoiceTotalsDiscount.textContent = window.QuoteCraftUtils.formatCurrency(docDiscCents / 100, formCurrencyCode);
     if (invoiceTotalsGrand) invoiceTotalsGrand.textContent = window.QuoteCraftUtils.formatCurrency(grandTotalCents / 100, formCurrencyCode);
+
+    if (invoiceTotalsWhtRow && invoiceTotalsWht && invoiceTotalsWhtLabel) {
+      if (whtRate > 0) {
+        invoiceTotalsWhtRow.classList.remove('hidden');
+        invoiceTotalsWhtLabel.textContent = `Less WHT (${whtRate}%)`;
+        invoiceTotalsWht.textContent = `−${window.QuoteCraftUtils.formatCurrency(whtAmountCents / 100, formCurrencyCode)}`;
+      } else {
+        invoiceTotalsWhtRow.classList.add('hidden');
+      }
+    }
+    if (invoiceTotalsNetPayable) {
+      invoiceTotalsNetPayable.textContent = window.QuoteCraftUtils.formatCurrency(netPayableCents / 100, formCurrencyCode);
+    }
 
     renderInvoiceTaxBreakdown(invoiceTotalsTaxBreakdown, lineItemsData, subtotalCents / 100, docDiscCents / 100, formCurrencyCode, currentTaxLines);
 
@@ -2025,6 +2124,9 @@
       tax_amount: totalTaxCents / 100,
       tax_lines: currentTaxLines,
       total: grandTotalCents / 100,
+      wht_rate: whtRate,
+      wht_amount: whtAmountCents / 100,
+      net_payable: netPayableCents / 100,
       line_items: lineItemsData,
     };
   }
@@ -2355,6 +2457,7 @@
     if (invoiceDiscountType) invoiceDiscountType.value = 'none';
     if (invoiceDiscountValue) invoiceDiscountValue.value = '';
     if (invoiceTaxRate && !(invoiceTaxRate.value)) invoiceTaxRate.value = '';
+    if (invoiceWhtRate) invoiceWhtRate.value = '0';
     updateInvoiceDiscountControls();
 
     // Line items: one blank row
@@ -2420,6 +2523,7 @@
       invoiceDiscountValue.value = (inv.discount_value !== undefined && inv.discount_value !== null && inv.discount_type && inv.discount_type !== 'none') ? inv.discount_value : '';
     }
     if (invoiceTaxRate) invoiceTaxRate.value = inv.tax_rate || 0;
+    if (invoiceWhtRate) invoiceWhtRate.value = String(inv.wht_rate || 0);
     updateInvoiceDiscountControls();
 
     // Populate line items
@@ -2503,6 +2607,7 @@
       discount_type: invoiceDiscountType ? invoiceDiscountType.value : 'none',
       discount_value: invoiceDiscountValue ? invoiceDiscountValue.value : '',
       tax_rate: invoiceTaxRate ? invoiceTaxRate.value : '',
+      wht_rate: invoiceWhtRate ? invoiceWhtRate.value : '0',
       tax_lines_enabled: invoiceTaxLinesEnabled ? invoiceTaxLinesEnabled.checked : false,
       tax_lines: taxLines,
       line_items: rows,
@@ -2524,6 +2629,7 @@
     if (invoiceDiscountType) invoiceDiscountType.value = d.discount_type || 'none';
     if (invoiceDiscountValue) invoiceDiscountValue.value = d.discount_value || '';
     if (invoiceTaxRate) invoiceTaxRate.value = d.tax_rate || '';
+    if (invoiceWhtRate) invoiceWhtRate.value = d.wht_rate || '0';
 
     if (d.currency && invoiceFormCurrency) {
       formCurrencyCode = d.currency;
@@ -2652,6 +2758,15 @@
       }
     }
 
+    const whtRateStr = invoiceWhtRate ? invoiceWhtRate.value : '0';
+    if (whtRateStr !== '') {
+      const wr = Number(whtRateStr);
+      if (isNaN(wr) || wr < 0 || wr > 100) {
+        toast('Withholding tax rate must be between 0 and 100.', 'error');
+        return false;
+      }
+    }
+
     const discType = invoiceDiscountType ? invoiceDiscountType.value : 'none';
     if (discType !== 'none') {
       const discStr = invoiceDiscountValue ? invoiceDiscountValue.value : '';
@@ -2733,6 +2848,8 @@
       tax: totals.tax_amount,
       subtotal: totals.subtotal,
       total: totals.total,
+      wht_rate: totals.wht_rate || 0,
+      wht_amount: totals.wht_amount || 0,
     };
 
     window.QuoteCraftUtils.showBusy(isNew ? 'Creating invoice…' : 'Saving invoice…');
@@ -2808,6 +2925,27 @@
   }
   if (invoiceTaxRate) {
     invoiceTaxRate.addEventListener('input', recalcInvoiceTotals);
+  }
+  if (invoiceSet75VatBtn) {
+    invoiceSet75VatBtn.addEventListener('click', () => {
+      if (invoiceTaxRate) {
+        invoiceTaxRate.value = '7.5';
+        setInvoiceFieldError('tax_rate', '');
+      }
+      if (invoiceItemsBody) {
+        const lineTaxInputs = invoiceItemsBody.querySelectorAll('input[name="item_tax_rate"]');
+        lineTaxInputs.forEach((inp) => {
+          if (!inp.value || Number(inp.value) === 0) {
+            inp.value = '7.5';
+          }
+        });
+      }
+      recalcInvoiceTotals();
+      window.QuoteCraftUtils.showToast('Tax set to 7.5% (Nigerian statutory VAT)', 'info');
+    });
+  }
+  if (invoiceWhtRate) {
+    invoiceWhtRate.addEventListener('change', recalcInvoiceTotals);
   }
   if (invoiceTaxLinesEnabled) {
     invoiceTaxLinesEnabled.addEventListener('change', () => {

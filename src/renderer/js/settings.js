@@ -1156,6 +1156,17 @@
     });
   }
 
+  const setDefault75VatBtn = document.getElementById('setDefault75VatBtn');
+  if (setDefault75VatBtn) {
+    setDefault75VatBtn.addEventListener('click', () => {
+      const defTaxInput = document.getElementById('default_tax_rate');
+      if (defTaxInput) {
+        defTaxInput.value = '7.5';
+        window.QuoteCraftUtils.showToast('Default tax rate set to 7.5% (Nigerian statutory VAT)', 'info');
+      }
+    });
+  }
+
   loadDiagnostics();
   loadPaymentPresets();
   document.addEventListener('pagechange', (e) => {

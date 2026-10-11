@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportInvoicesPdfBatch: (ids) => ipcRenderer.invoke('invoices:exportPdfBatch', ids),
   setInvoiceStatus: (id, status) => ipcRenderer.invoke('invoices:setStatus', id, status),
   markInvoicesSentBatch: (ids) => ipcRenderer.invoke('invoices:markSentBatch', ids),
+  setInvoiceWhtCredit: (id, payload) => ipcRenderer.invoke('invoices:setWhtCredit', id, payload),
   recordPayment: (id, payment) => ipcRenderer.invoke('invoices:recordPayment', id, payment),
   getInvoicePayments: (id) => ipcRenderer.invoke('invoices:payments', id),
   getPaymentMethods: () => ipcRenderer.invoke('invoices:methods'),

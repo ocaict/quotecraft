@@ -237,6 +237,8 @@ function createTables() {
       email           TEXT DEFAULT '',
       website         TEXT DEFAULT '',
       tax_id          TEXT DEFAULT '',
+      cac_number      TEXT DEFAULT '',
+      tin             TEXT DEFAULT '',
       default_currency TEXT NOT NULL DEFAULT 'USD',
       reporting_currency TEXT NOT NULL DEFAULT 'USD',
       default_tax_rate REAL NOT NULL DEFAULT 0,
@@ -394,6 +396,10 @@ function createTables() {
       total           REAL NOT NULL DEFAULT 0,
       amount_paid     REAL NOT NULL DEFAULT 0,
       balance_due     REAL NOT NULL DEFAULT 0,
+      wht_rate        REAL NOT NULL DEFAULT 0,
+      wht_amount      REAL NOT NULL DEFAULT 0,
+      wht_credit_received INTEGER NOT NULL DEFAULT 0,
+      wht_credit_note_ref TEXT DEFAULT '',
       discount_type   TEXT NOT NULL DEFAULT 'none',
       discount_value  REAL NOT NULL DEFAULT 0,
       tax_rate        REAL NOT NULL DEFAULT 0,
@@ -1386,6 +1392,33 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 42,
+    up: () => {
+      // Add Nigerian business profile (CAC, TIN) & invoice Withholding Tax (WHT) fields
+      const cpCols = new Set(db.exec(`PRAGMA table_info(company_profile)`)[0].values.map((v) => v[1]));
+      if (!cpCols.has('cac_number')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN cac_number TEXT DEFAULT ''`);
+      }
+      if (!cpCols.has('tin')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN tin TEXT DEFAULT ''`);
+      }
+
+      const invCols = new Set(db.exec(`PRAGMA table_info(invoices)`)[0].values.map((v) => v[1]));
+      if (!invCols.has('wht_rate')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN wht_rate REAL DEFAULT 0`);
+      }
+      if (!invCols.has('wht_amount')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN wht_amount REAL DEFAULT 0`);
+      }
+      if (!invCols.has('wht_credit_received')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN wht_credit_received INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!invCols.has('wht_credit_note_ref')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN wht_credit_note_ref TEXT DEFAULT ''`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -1435,6 +1468,8 @@ function getCompanyProfile() {
   profile.number_include_year = profile.number_include_year != null ? Number(profile.number_include_year) : 1;
   profile.date_format = profile.date_format || 'MMM D, YYYY';
   profile.decimal_separator = profile.decimal_separator || '.';
+  profile.cac_number = profile.cac_number || '';
+  profile.tin = profile.tin || profile.tax_id || '';
   return profile;
 }
 
@@ -1455,6 +1490,8 @@ function saveCompanyProfile(profile) {
     email: profile.email || '',
     website: profile.website || '',
     tax_id: profile.tax_id || '',
+    cac_number: profile.cac_number !== undefined ? profile.cac_number : (existing && existing.cac_number) || '',
+    tin: profile.tin !== undefined ? profile.tin : (existing && existing.tin) || (profile.tax_id || (existing && existing.tax_id) || ''),
     default_currency: defCurrency,
     reporting_currency: profile.reporting_currency || (existing && existing.reporting_currency) || defCurrency,
     default_tax_rate: Number(profile.default_tax_rate || 0),
@@ -1494,7 +1531,7 @@ function saveCompanyProfile(profile) {
         quote_start_number = ?, default_terms = ?, payment_details = ?,
         credit_note_prefix = ?, credit_note_start_number = ?, default_quote_acceptance_instructions = ?,
         pdf_theme = ?, number_padding = ?, number_include_year = ?,
-        date_format = ?, decimal_separator = ?, updated_at = ?
+        date_format = ?, decimal_separator = ?, cac_number = ?, tin = ?, updated_at = ?
        WHERE id = 1`,
       [
         fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
@@ -1504,7 +1541,7 @@ function saveCompanyProfile(profile) {
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
         fields.pdf_theme, fields.number_padding, fields.number_include_year,
-        fields.date_format, fields.decimal_separator, now,
+        fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin, now,
       ]
     );
   } else {
@@ -1515,8 +1552,8 @@ function saveCompanyProfile(profile) {
         reporting_currency, default_tax_rate, default_hourly_rate, invoice_prefix, invoice_start_number, quote_prefix,
         quote_start_number, default_terms, payment_details,
         credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, pdf_theme,
-        number_padding, number_include_year, date_format, decimal_separator, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        number_padding, number_include_year, date_format, decimal_separator, cac_number, tin, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         1, fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
@@ -1525,7 +1562,7 @@ function saveCompanyProfile(profile) {
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
         fields.pdf_theme, fields.number_padding, fields.number_include_year,
-        fields.date_format, fields.decimal_separator, now, now,
+        fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin, now, now,
       ]
     );
   }
@@ -4691,12 +4728,20 @@ function computeDocumentTotals(data, lineItems) {
 
   const grandTotalCents = Math.max(0, subtotalCents - docDiscCents + totalTaxCents);
 
+  const whtRate = Math.max(0, Number(data && data.wht_rate) || 0);
+  const netSubtotalCents = Math.max(0, subtotalCents - docDiscCents);
+  const whtCents = whtRate > 0 ? Math.round(netSubtotalCents * whtRate / 100) : 0;
+  const netPayableCents = Math.max(0, grandTotalCents - whtCents);
+
   return {
     subtotal: subtotalCents / 100,
     discount_amount: docDiscCents / 100,
     tax_amount: totalTaxCents / 100,
     tax_lines: taxLines,
     total: grandTotalCents / 100,
+    wht_rate: whtRate,
+    wht_amount: whtCents / 100,
+    net_payable: netPayableCents / 100,
     lineItems: lines.map((l) => ({
       description: l.description,
       quantity: l.quantity,
@@ -4869,10 +4914,12 @@ function computeInvoiceBalance(invoiceId) {
   );
   const paid = Number(res[0].values[0][0]) || 0;
   const credited = computeCreditedTotal(invoiceId);
-  const invoice = rowToObject(db.exec('SELECT total FROM invoices WHERE id = ?', [invoiceId]));
-  const total = Number(invoice.total) || 0;
-  const balance = Math.max(0, Math.round((total - paid + credited) * 100) / 100);
-  return { total, paid: Math.round(paid * 100) / 100, credited: Math.round(credited * 100) / 100, balance };
+  const invoice = rowToObject(db.exec('SELECT total, wht_amount FROM invoices WHERE id = ?', [invoiceId]));
+  const total = Number(invoice ? invoice.total : 0) || 0;
+  const wht = Number(invoice ? invoice.wht_amount : 0) || 0;
+  const payableBasis = Math.max(0, total - wht);
+  const balance = Math.max(0, Math.round((payableBasis - paid + credited) * 100) / 100);
+  return { total, paid: Math.round(paid * 100) / 100, credited: Math.round(credited * 100) / 100, balance, wht, netPayable: payableBasis };
 }
 
 function refreshInvoiceBalance(invoice) {
@@ -5011,12 +5058,17 @@ function updateInvoice(id, data, lineItems) {
     : (String(data.date_due) || null);
 
   const totals = computeDocumentTotals(
-    { ...data, tax_lines: data.tax_lines !== undefined ? data.tax_lines : existing.tax_lines },
+    {
+      ...data,
+      wht_rate: data.wht_rate !== undefined ? data.wht_rate : existing.wht_rate,
+      tax_lines: data.tax_lines !== undefined ? data.tax_lines : existing.tax_lines,
+    },
     lineItems
   );
   const total = totals.total;
   const credited = computeCreditedTotal(id);
-  const balanceDue = Math.max(0, Math.round((total + credited) * 100) / 100);
+  const effectivePayable = Math.max(0, total - totals.wht_amount);
+  const balanceDue = Math.max(0, Math.round((effectivePayable + credited) * 100) / 100);
 
   db.run('BEGIN');
   try {
@@ -5024,7 +5076,8 @@ function updateInvoice(id, data, lineItems) {
       `UPDATE invoices SET
         client_id = ?, contact_id = ?, project_id = ?, date_created = ?, date_due = ?,
         subtotal = ?, discount_amount = ?, discount_type = ?,
-        discount_value = ?, tax_rate = ?, tax_lines = ?, tax_amount = ?, total = ?, balance_due = ?,
+        discount_value = ?, tax_rate = ?, tax_lines = ?, tax_amount = ?, total = ?,
+        wht_rate = ?, wht_amount = ?, balance_due = ?,
         currency = ?, exchange_rate = ?, notes = ?, terms = ?, updated_at = ?
        WHERE id = ?`,
       [
@@ -5041,6 +5094,8 @@ function updateInvoice(id, data, lineItems) {
         totals.tax_lines ? JSON.stringify(totals.tax_lines) : null,
         totals.tax_amount,
         total,
+        totals.wht_rate,
+        totals.wht_amount,
         balanceDue,
         currency,
         exchangeRate,
@@ -5137,12 +5192,14 @@ function createInvoice(data, inputLineItems) {
       `INSERT INTO invoices (
         invoice_number, quote_id, client_id, contact_id, project_id, status,
         date_created, date_due,
-        subtotal, tax_rate, tax_lines, tax_amount, discount_amount, total, amount_paid, balance_due,
+        subtotal, tax_rate, tax_lines, tax_amount, discount_amount, total,
+        wht_rate, wht_amount, wht_credit_received, wht_credit_note_ref,
+        amount_paid, balance_due,
         currency, exchange_rate,
         discount_type, discount_value,
         notes, terms,
         invoice_type, edit_locked, recurring_profile_id, is_recurring, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         null,
@@ -5158,8 +5215,12 @@ function createInvoice(data, inputLineItems) {
         totals.tax_amount,
         totals.discount_amount,
         totals.total,
+        totals.wht_rate,
+        totals.wht_amount,
         0,
-        totals.total,
+        '',
+        0,
+        totals.net_payable,
         currency,
         exchangeRate,
         data.discount_type || 'none',
@@ -6071,6 +6132,31 @@ function markInvoicesSent(ids) {
     }
   }
   return { ok: true, marked, skipped };
+}
+
+function setInvoiceWhtCredit(id, payload = {}) {
+  const existing = getInvoice(id);
+  if (!existing) {
+    return { ok: false, errors: { general: 'Invoice not found.' } };
+  }
+  const now = new Date().toISOString();
+  const receivedVal = payload.wht_credit_received !== undefined ? payload.wht_credit_received : payload.received;
+  const received = receivedVal ? 1 : 0;
+  const refVal = payload.wht_credit_note_ref !== undefined ? payload.wht_credit_note_ref : payload.ref;
+  const ref = refVal !== undefined ? String(refVal).trim() : (existing.wht_credit_note_ref || '');
+  db.run(
+    `UPDATE invoices SET wht_credit_received = ?, wht_credit_note_ref = ?, updated_at = ? WHERE id = ?`,
+    [received, ref, now, id]
+  );
+  saveToDisk();
+  const updated = getInvoice(id);
+  addAuditEntry({
+    entityType: 'invoice',
+    entityRef: updated.invoice_number,
+    action: 'updated',
+    description: `Updated WHT credit status for ${updated.invoice_number} (received: ${received ? 'Yes' : 'No'})`,
+  });
+  return { ok: true, invoice: updated };
 }
 
 // ---------- Payments ----------
@@ -8791,5 +8877,7 @@ module.exports = {
   createPaymentInstructionPreset,
   updatePaymentInstructionPreset,
   deletePaymentInstructionPreset,
+  setInvoiceWhtCredit,
+  computeDocumentTotals,
 };
 

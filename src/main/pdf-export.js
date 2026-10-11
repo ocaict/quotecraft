@@ -193,6 +193,9 @@ function buildCompanyLines(profile) {
   if (cityLine.length) lines.push(cityLine.join('\n'));
   if (stateLine) lines.push(stateLine);
   if (profile.country) lines.push(profile.country);
+  if (profile.cac_number) lines.push(`RC/BN: ${profile.cac_number}`);
+  if (profile.tin) lines.push(`TIN: ${profile.tin}`);
+  else if (profile.tax_id) lines.push(`Tax ID: ${profile.tax_id}`);
   return lines;
 }
 
@@ -814,6 +817,16 @@ function renderInvoicePdf(invoice, client, profile, opts) {
   const taxRows = buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency, invoice.tax_lines);
   taxRows.forEach((r) => totalRows.push(r));
 
+  const whtAmount = Number(invoice.wht_amount) || 0;
+  if (whtAmount > 0.0001) {
+    totalRows.push(['Gross Total', money(invoice.total, currency)]);
+    totalRows.push([`Less WHT (${Number(invoice.wht_rate || 0)}%)`, `\u2212${money(whtAmount, currency)}`]);
+  }
+
+  const payableTotal = Math.max(0, Number(invoice.total || 0) - whtAmount);
+  const finalGrandLabel = whtAmount > 0.0001 ? (grandLabel === 'INVOICE' ? 'NET PAYABLE' : 'NET ' + grandLabel) : grandLabel;
+  const finalGrandValue = whtAmount > 0.0001 ? money(payableTotal, currency) : money(invoice.total, currency);
+
   const paid = Number(invoice.amount_paid) || 0;
   const credited = Number(invoice.amount_credited) || 0;
   const balance = Number(invoice.balance_due) || 0;
@@ -835,8 +848,8 @@ function renderInvoicePdf(invoice, client, profile, opts) {
 
   drawTotals(ctx, {
     rows: totalRows,
-    grandLabel,
-    grandValue: money(invoice.total, currency),
+    grandLabel: finalGrandLabel,
+    grandValue: finalGrandValue,
     extra: extraRows,
   });
 
@@ -1219,6 +1232,15 @@ function renderInvoicePrintHtml(invoice, client, profile) {
   if (Number(invoice.discount_amount) > 0) totalRows.push(['Discount', `\u2212${money(invoice.discount_amount, currency)}`]);
   buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency, invoice.tax_lines).forEach((r) => totalRows.push(r));
 
+  const whtAmount = Number(invoice.wht_amount) || 0;
+  if (whtAmount > 0.0001) {
+    totalRows.push(['Gross Total', money(invoice.total, currency)]);
+    totalRows.push([`Less WHT (${Number(invoice.wht_rate || 0)}%)`, `\u2212${money(whtAmount, currency)}`]);
+  }
+  const payableTotal = Math.max(0, Number(invoice.total || 0) - whtAmount);
+  const finalGrandLabel = whtAmount > 0.0001 ? (grandLabel === 'INVOICE' ? 'NET PAYABLE' : 'NET ' + grandLabel) : grandLabel;
+  const finalGrandValue = whtAmount > 0.0001 ? money(payableTotal, currency) : money(invoice.total, currency);
+
   const paid = Number(invoice.amount_paid) || 0;
   const credited = Number(invoice.amount_credited) || 0;
   const balance = Number(invoice.balance_due) || 0;
@@ -1255,8 +1277,8 @@ function renderInvoicePrintHtml(invoice, client, profile) {
     items: invoice.line_items || [],
     currency,
     totalRows,
-    grandLabel,
-    grandValue: money(invoice.total, currency),
+    grandLabel: finalGrandLabel,
+    grandValue: finalGrandValue,
     extraRows,
     notesTerms,
     footerLeft: `Prepared by ${businessName}`,
@@ -2401,6 +2423,15 @@ function renderInvoiceHtml(invoice, client, profile) {
   }
   const taxRows = buildPdfTaxRows(invoice.line_items || [], invoice.subtotal, invoice.discount_amount, currency, invoice.tax_lines);
   taxRows.forEach((r) => totalRows.push(r));
+
+  const whtAmount = Number(invoice.wht_amount) || 0;
+  if (whtAmount > 0.0001) {
+    totalRows.push(['Gross Total', money(invoice.total, currency)]);
+    totalRows.push([`Less WHT (${Number(invoice.wht_rate || 0)}%)`, `\u2212${money(whtAmount, currency)}`]);
+    totalRows.push(['Net Payable', money(Math.max(0, Number(invoice.total || 0) - whtAmount), currency)]);
+  } else {
+    totalRows.push(['Total', money(invoice.total, currency)]);
+  }
 
   const paid = Number(invoice.amount_paid) || 0;
   const credited = Number(invoice.amount_credited) || 0;

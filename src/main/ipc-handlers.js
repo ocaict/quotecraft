@@ -51,6 +51,7 @@ const {
   listInvoices,
   setInvoiceStatus,
   markInvoicesSent,
+  setInvoiceWhtCredit,
   addPayment,
   getPaymentHistory,
   getPaymentsReport,
@@ -1285,6 +1286,15 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       return { ok: false, errors: { general: `Failed to update statuses: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('invoices:setWhtCredit', async (event, id, payload) => {
+    try {
+      const result = setInvoiceWhtCredit(id, payload);
+      return result;
+    } catch (err) {
+      return { ok: false, errors: { general: `Failed to update WHT credit status: ${err.message}` } };
     }
   });
 
