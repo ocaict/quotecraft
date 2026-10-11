@@ -1393,7 +1393,7 @@
   if (licenseUpgradeBtn) {
     licenseUpgradeBtn.addEventListener('click', () => {
       // Opens the official QuoteCraft purchase page in the default browser
-      const purchaseUrl = 'https://quotecraft.ng/upgrade';
+      const purchaseUrl = 'https://paystack.shop/pay/quotecraft';
       if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
         window.electronAPI.openExternal(purchaseUrl);
       } else {

@@ -296,7 +296,8 @@ Turn QuoteCraft into a paid, revenue-generating desktop product tailored for Nig
 ### 5.3 Paystack Purchase Flow for Nigerian Buyers ✅
 - **Action:**
   - Price in Naira: **₦20,000 / year** or **₦40,000 Lifetime License**.
-  - In QuoteCraft, clicking **"Upgrade to Pro"** opens the official Paystack payment page in browser.
+  - Official Paystack payment link: `https://paystack.shop/pay/quotecraft`.
+  - In QuoteCraft, clicking **"Upgrade to Pro"** opens `https://paystack.shop/pay/quotecraft` in the browser.
   - In **Settings > Commercial License**, user enters their key and clicks **"Activate License"**.
   - Instant unlock with active status badge, licensee display, and plan details.
 - **Files Affected:**
