@@ -3001,24 +3001,6 @@ function registerIpcHandlers() {
   ipcMain.handle('license:getFeatures', async () => {
     return { ok: true, features: PLAN_FEATURES, freeLimits: FREE_LIMITS };
   });
-
-  /**
-   * Safely opens an external URL in the system's default browser.
-   */
-  ipcMain.handle('shell:openExternal', async (_event, url) => {
-    try {
-      if (typeof url !== 'string') return { ok: false, error: 'Invalid URL' };
-      const parsed = new URL(url);
-      if (['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
-        await shell.openExternal(url);
-        return { ok: true };
-      }
-      return { ok: false, error: 'Disallowed protocol' };
-    } catch (err) {
-      logger.error('[shell:openExternal] ' + err.message);
-      return { ok: false, error: err.message };
-    }
-  });
 }
 
 module.exports = { registerIpcHandlers };
