@@ -148,10 +148,12 @@
     https://quotecraft-license-worker.ocatech.workers.dev/webhook
     ```
   - Save changes.
-- [ ] **7.3 End-to-End Test Transaction**
-  - Make a test purchase (or live ₦100 test transaction).
-  - Confirm email lands in inbox with working activation key within 3 seconds.
-  - Paste key into QuoteCraft desktop app to verify instant unlock.
+- [x] **7.3 End-to-End Test Transaction** — ✅ VERIFIED
+  - In-app test checkout initiated from QuoteCraft desktop app.
+  - Paystack sandbox payment completed (Ref: `T753114586793691`).
+  - Webhook received, HMAC verified, license key generated and stored in KV.
+  - Branded email dispatched to customer via Brevo API.
+  - Offline cryptographic signature verified in QuoteCraft desktop app.
 
 ---
 
@@ -166,4 +168,4 @@
 | Phase 5: Transactional Email (Brevo / Sendinblue) | ✅ Done & Verified (no custom domain needed) |
 | Phase 6: Local & Live Test Scripts | ✅ Done |
 | Phase 7: Deployed to Cloudflare Edge | ✅ Done (Live at `quotecraft-license-worker.ocatech.workers.dev`) |
-| **Paystack Webhook Configuration** | ⚠️ Enter URL in Paystack Dashboard |
+| **End-to-End Live/Test Flow** | ✅ 100% Verified |
