@@ -101,15 +101,15 @@ export async function generateLicenseKey({ licensee_name, licensee_email, plan, 
 
 /**
  * Determines the plan and expiry based on the amount paid (in kobo).
- * Lifetime: >= 35,000 NGN (3,500,000 kobo) OR 1,000 NGN (100,000 kobo for live testing)
- * Annual:   default < 35,000 NGN
+ * Lifetime: ₦15,000 (1,500,000 kobo)
+ * Annual:   ₦5,000 (500,000 kobo)
  *
  * @param {number} amountKobo
  * @returns {{ plan: 'annual'|'lifetime', expiry_date: string|null }}
  */
 export function determinePlan(amountKobo) {
-  // Treat ₦1,000 (100,000 kobo) or standard ₦35,000+ as Lifetime
-  const isLifetime = amountKobo >= 3_500_000 || (amountKobo >= 100_000 && amountKobo <= 200_000);
+  // Any payment >= ₦10,000 (1,000,000 kobo) qualifies for Lifetime Access
+  const isLifetime = amountKobo >= 1_000_000;
   if (isLifetime) {
     return { plan: 'lifetime', expiry_date: null };
   }
