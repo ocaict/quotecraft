@@ -8,7 +8,7 @@ A comprehensive, stage-by-stage operational execution plan to take **QuoteCraft*
 
 | Stage | Focus Area | Primary Target | Acceptance Criteria |
 |---|---|---|---|
-| **Stage 1** | **Payment & Webhook Synchronization** | Paystack Dashboard & Cloudflare Worker | Live transactions trigger valid HMAC webhooks without 401 errors |
+| **Stage 1** | **Payment & Webhook Synchronization** | Paystack Dashboard & Cloudflare Worker | ✅ **COMPLETED** — Live webhook active, HMAC-SHA512 verified, KV & browser callback deployed |
 | **Stage 2** | **Email Deliverability & Sender Setup** | Brevo & Custom Domain DNS | License emails land in primary inbox (DKIM/SPF passed) |
 | **Stage 3** | **App Pricing & Upgrade Flow Hardening** | Desktop Client Code (`settings.js`, Paystack URL) | Live official pricing displayed; secure payment link triggered |
 | **Stage 4** | **Packaging, GitHub Releases & Auto-Update** | `electron-builder`, GitHub Releases | Signed/notarized or clean NSIS installer with `latest.yml` |
@@ -17,7 +17,7 @@ A comprehensive, stage-by-stage operational execution plan to take **QuoteCraft*
 
 ---
 
-## Stage 1: Payment & Webhook Synchronization (Paystack + Cloudflare)
+## Stage 1: Payment & Webhook Synchronization (Paystack + Cloudflare) (✅ COMPLETED)
 
 ### 1.1 Objective
 Ensure Paystack Live mode sends webhooks to the production Cloudflare Worker, and the worker validates signatures using the live secret key.
@@ -26,22 +26,29 @@ Ensure Paystack Live mode sends webhooks to the production Cloudflare Worker, an
 1. **Configure Live Webhook URL in Paystack Dashboard:**
    - Log in to [Paystack Dashboard](https://dashboard.paystack.com/).
    - Navigate to **Settings** &rarr; **API Keys & Webhooks**.
-   - Under **Live Webhook URL**, set:
+   - Under **Live Webhook URL** and **Live Callback URL**, set:
      ```text
      https://quotecraft-license-worker.ocatech.workers.dev/webhook
      ```
+   - *Status:* ✅ Verified and saved in Paystack Dashboard.
 2. **Synchronize Cloudflare Worker Secrets:**
-   - Ensure the worker environment variables / secrets match live credentials:
+   - Worker environment variables & secrets configured:
      - `PAYSTACK_SECRET_KEY`: Set to Paystack Live Secret Key (`sk_live_...`).
-     - `SIGNING_KEY`: Confirmed 64-character hex Ed25519 private key.
-     - `BREVO_API_KEY`: Confirmed active Brevo API Key.
-     - `KV_LICENSES`: Cloudflare KV namespace binding `LICENSES`.
-3. **Set Webhook Event Filter:**
-   - Confirm worker handles `charge.success` events cleanly.
+     - `QC_LICENSE_KEY`: Set to production HMAC signing key.
+     - `BREVO_API_KEY`: Set to active Brevo API key.
+     - `LICENSES_KV`: Bound to KV namespace `9af9aa2b6fc14d7283e5925ca94adeb0`.
+   - *Status:* ✅ All secrets verified active and live.
+3. **Browser Callback & Event Handling:**
+   - Worker handles `POST /webhook` for Paystack automated events (`charge.success`).
+   - Worker handles `GET /webhook` for browser redirects, instantly looking up the reference in KV to render a branded success UI with 1-click license key copy.
+   - *Status:* ✅ Deployed and verified on Cloudflare.
 
 ### 1.3 Verification & Acceptance Criteria
-- Sending a test ping or viewing Paystack Webhook Logs shows HTTP `200 OK`.
-- Signature calculation matches `x-paystack-signature` header using `crypto.subtle` HMAC SHA-512.
+- [x] Webhook endpoint returns HTTP `200 OK` on valid signed `charge.success` events.
+- [x] Invalid signatures correctly rejected with HTTP `401 Unauthorized`.
+- [x] Generated license keys saved in remote KV with 90-day TTL.
+- [x] Transactional emails dispatched via Brevo API and delivered.
+- [x] Browser callback verified (`GET /webhook?reference=...`) displaying instant on-screen key.
 
 ---
 
@@ -180,8 +187,8 @@ When a customer contacts support claiming they never received their email:
 
 ## Launch Checklist Sign-Off
 
-- [ ] Paystack Live Secret Key active in Cloudflare Worker
-- [ ] Paystack Live Webhook URL configured
+- [x] Paystack Live Secret Key active in Cloudflare Worker
+- [x] Paystack Live Webhook URL configured & saved
 - [ ] Brevo sending domain authenticated (SPF/DKIM)
 - [ ] Official production price updated in app & Paystack link
 - [ ] `npm run dist:win` installer built and verified on clean OS
