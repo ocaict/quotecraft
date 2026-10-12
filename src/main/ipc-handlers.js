@@ -3001,6 +3001,49 @@ function registerIpcHandlers() {
   ipcMain.handle('license:getFeatures', async () => {
     return { ok: true, features: PLAN_FEATURES, freeLimits: FREE_LIMITS };
   });
+
+  /**
+   * Initializes a Paystack test checkout session and opens it in the browser.
+   */
+  ipcMain.handle('license:startTestPurchase', async (event, opts = {}) => {
+    try {
+      const email = opts.email || 'ocatestemail@gmail.com';
+      const plan = opts.plan === 'lifetime' ? 'lifetime' : 'annual';
+      const amountKobo = plan === 'lifetime' ? 4000000 : 2000000;
+      const testSecret = process.env.PAYSTACK_TEST_SECRET_KEY || 'sk_test_8e651b0232b4590c3f66f4bb1fc904a26e396b55';
+
+      const postData = JSON.stringify({
+        email,
+        amount: amountKobo,
+        callback_url: 'https://quotecraft-license-worker.ocatech.workers.dev/health',
+        metadata: {
+          custom_fields: [
+            { display_name: 'Product', variable_name: 'product', value: `QuoteCraft Pro ${plan === 'lifetime' ? 'Lifetime' : 'Annual'}` }
+          ]
+        }
+      });
+
+      const response = await fetch('https://api.paystack.co/transaction/initialize', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${testSecret}`,
+          'Content-Type': 'application/json'
+        },
+        body: postData
+      });
+
+      const data = await response.json();
+      if (!data.status || !data.data?.authorization_url) {
+        throw new Error(data.message || 'Failed to initialize Paystack test transaction');
+      }
+
+      await shell.openExternal(data.data.authorization_url);
+      return { ok: true, url: data.data.authorization_url, reference: data.data.reference };
+    } catch (err) {
+      logger.error('[license:startTestPurchase] ' + err.message);
+      return { ok: false, message: err.message };
+    }
+  });
 }
 
 module.exports = { registerIpcHandlers };

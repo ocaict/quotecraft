@@ -1403,6 +1403,33 @@
     });
   }
 
+  const licenseTestUpgradeBtn = document.getElementById('licenseTestUpgradeBtn');
+  if (licenseTestUpgradeBtn) {
+    licenseTestUpgradeBtn.addEventListener('click', async () => {
+      const emailInput = document.getElementById('companyEmail');
+      const defaultEmail = (emailInput && emailInput.value.trim()) || 'ocatestemail@gmail.com';
+      const email = prompt('Enter recipient email for Paystack test payment & license delivery:', defaultEmail);
+      if (!email || !email.trim()) return;
+
+      window.QuoteCraftUtils.showToast('Initializing Paystack test checkout sandbox\u2026', 'info');
+
+      try {
+        if (window.electronAPI && typeof window.electronAPI.startLicenseTestPurchase === 'function') {
+          const res = await window.electronAPI.startLicenseTestPurchase({ email: email.trim(), plan: 'annual' });
+          if (res.ok) {
+            window.QuoteCraftUtils.showToast('Paystack test checkout opened in your browser! Complete the test payment there.', 'success');
+          } else {
+            window.QuoteCraftUtils.showToast('Failed to start test payment: ' + (res.message || 'Unknown error'), 'error');
+          }
+        } else {
+          window.QuoteCraftUtils.showToast('Test checkout API not available.', 'error');
+        }
+      } catch (err) {
+        window.QuoteCraftUtils.showToast('Test checkout failed: ' + err.message, 'error');
+      }
+    });
+  }
+
   // Load license status on first settings page load
   loadLicenseStatus();
 })();

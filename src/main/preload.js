@@ -227,5 +227,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   activateLicense: (key) => ipcRenderer.invoke('license:activate', key),
   deactivateLicense: () => ipcRenderer.invoke('license:deactivate'),
   getLicenseFeatures: () => ipcRenderer.invoke('license:getFeatures'),
+  startLicenseTestPurchase: (opts) => ipcRenderer.invoke('license:startTestPurchase', opts),
 });
 
