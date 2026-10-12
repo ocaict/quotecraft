@@ -11,3 +11,8 @@ Thumbs.db
 *.log
 .vscode/
 .idea/
+
+# Cloudflare Worker secrets & local cache — NEVER commit these
+tools/quotecraft-license-worker/.dev.vars
+.wrangler/
+tools/quotecraft-license-worker/.wrangler/
