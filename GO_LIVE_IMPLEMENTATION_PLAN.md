@@ -179,6 +179,6 @@ When a customer contacts support claiming they never received their email:
 - [x] Brevo delivery & on-screen license fallback configured
 - [x] Official production price updated in app & licensing engine (₦15k / ₦5k)
 - [x] `npm run dist:win` installer built and verified on clean OS
-- [ ] GitHub Release uploaded with `latest.yml`
+- [x] GitHub Release uploaded with `latest.yml` (`https://github.com/ocaict/quotecraft/releases/tag/v1.2.0`)
 - [ ] 1 successful Live Canary transaction completed
 - [ ] Support email / contact channel monitored
