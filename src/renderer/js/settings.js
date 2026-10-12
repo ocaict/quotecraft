@@ -1403,44 +1403,6 @@
     });
   }
 
-  async function triggerTestPurchase(plan) {
-    const isLifetime = plan === 'lifetime';
-    const planName = isLifetime ? 'Lifetime (₦40,000)' : 'Annual (₦20,000)';
-    const emailInput = document.getElementById('companyEmail');
-    const email = (emailInput && emailInput.value.trim()) || 'ocatestemail@gmail.com';
-
-    if (!confirm(`Initialize Paystack test payment for ${planName}?\n\nRecipient: ${email}\n\nYour ${isLifetime ? 'Lifetime' : 'Annual'} license key will be generated and emailed to this address.\n\nClick OK to open the Paystack test checkout in your browser.`)) {
-      return;
-    }
-
-    window.QuoteCraftUtils.showToast(`Initializing Paystack ${isLifetime ? 'Lifetime' : 'Annual'} sandbox checkout for ${email}\u2026`, 'info');
-
-    try {
-      if (window.electronAPI && typeof window.electronAPI.startLicenseTestPurchase === 'function') {
-        const res = await window.electronAPI.startLicenseTestPurchase({ email, plan });
-        if (res.ok) {
-          window.QuoteCraftUtils.showToast('Paystack test checkout opened in your browser! Complete payment there.', 'success');
-        } else {
-          window.QuoteCraftUtils.showToast('Failed to start test payment: ' + (res.message || 'Unknown error'), 'error');
-        }
-      } else {
-        window.QuoteCraftUtils.showToast('Test checkout API not available.', 'error');
-      }
-    } catch (err) {
-      window.QuoteCraftUtils.showToast('Test checkout failed: ' + err.message, 'error');
-    }
-  }
-
-  const licenseTestUpgradeBtn = document.getElementById('licenseTestUpgradeBtn');
-  if (licenseTestUpgradeBtn) {
-    licenseTestUpgradeBtn.addEventListener('click', () => triggerTestPurchase('annual'));
-  }
-
-  const licenseTestLifetimeBtn = document.getElementById('licenseTestLifetimeBtn');
-  if (licenseTestLifetimeBtn) {
-    licenseTestLifetimeBtn.addEventListener('click', () => triggerTestPurchase('lifetime'));
-  }
-
   // Load license status on first settings page load
   loadLicenseStatus();
 })();
