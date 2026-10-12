@@ -287,10 +287,17 @@ export async function sendLicenseEmail({ to, name, licenseKey, plan, expiryDate,
       'Accept': 'application/json',
     },
     body: JSON.stringify({
-      sender: { name: 'QuoteCraft', email: 'ocatechskill@gmail.com' },
+      sender: { name: 'QuoteCraft Pro', email: 'ocatechskill@gmail.com' },
+      replyTo: { name: 'QuoteCraft Support', email: 'ocatechskill@gmail.com' },
       to: [{ email: to, name }],
-      subject: `🎉 Your QuoteCraft Pro ${planLabel} License Key`,
+      subject: `Your QuoteCraft Pro ${planLabel} License Key — Order ${reference}`,
       htmlContent: html,
+      textContent: `Hello ${name},\n\nThank you for purchasing QuoteCraft Pro (${planLabel}).\n\nYour activation key:\n${licenseKey}\n\nTo activate: Open QuoteCraft → Settings → License & Activation → paste your key → click Activate.\n\nPlan: QuoteCraft Pro ${planLabel}\nAmount: ${amount}\nReference: ${reference}\n\nNeed help? Email ocatechskill@gmail.com\n\n© ${new Date().getFullYear()} QuoteCraft`,
+      tags: ['license-delivery'],
+      headers: {
+        'X-Mailer': 'QuoteCraft-License-Worker/1.0',
+        'X-Transaction-Type': 'license-delivery',
+      },
     }),
   });
 
