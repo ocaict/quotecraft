@@ -52,9 +52,16 @@ export default {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const isValid = await verifyPaystackSignature(rawBody, paystackSig, env.PAYSTACK_SECRET_KEY);
+    let isValid = false;
+    if (env.PAYSTACK_SECRET_KEY) {
+      isValid = await verifyPaystackSignature(rawBody, paystackSig, env.PAYSTACK_SECRET_KEY);
+    }
+    if (!isValid && env.PAYSTACK_TEST_SECRET_KEY) {
+      isValid = await verifyPaystackSignature(rawBody, paystackSig, env.PAYSTACK_TEST_SECRET_KEY);
+    }
+
     if (!isValid) {
-      console.warn('[worker] Invalid Paystack signature — possible spoofed request');
+      console.warn('[worker] Invalid Paystack signature — signature did not match live or test key');
       return new Response('Unauthorized', { status: 401 });
     }
 
