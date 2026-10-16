@@ -46,6 +46,25 @@ export default {
         }
       }
 
+      // JSON status endpoint used by the success page to poll until the
+      // charge.success webhook has finished writing the key to KV.
+      if (url.searchParams.get('format') === 'json') {
+        return new Response(
+          JSON.stringify({
+            ready: Boolean(record && record.license_key),
+            license_key: record?.license_key || null,
+            plan: record?.plan || null,
+            reference,
+          }),
+          {
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Cache-Control': 'no-store',
+            },
+          }
+        );
+      }
+
       return new Response(renderSuccessHtml(reference, record), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -322,6 +341,16 @@ function renderSuccessHtml(reference, record) {
     }
     .copy-btn:hover { background: #34d399; }
     .copy-btn:active { transform: scale(0.98); }
+    .spinner {
+      width: 28px;
+      height: 28px;
+      margin: 18px auto 4px;
+      border: 3px solid rgba(148, 163, 184, 0.25);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: qc-spin 0.8s linear infinite;
+    }
+    @keyframes qc-spin { to { transform: rotate(360deg); } }
     .steps {
       text-align: left;
       background: rgba(15, 23, 42, 0.4);
@@ -383,23 +412,30 @@ function renderSuccessHtml(reference, record) {
       Thank you for purchasing QuoteCraft Pro. Your payment was processed successfully, and your personal license key is ready.
     </p>
 
-    ${licenseKey ? `
     <div class="key-section">
       <div class="key-header">
-        <span>Your Activation Key</span>
+        <span id="keyHeaderLabel">${licenseKey ? 'Your Activation Key' : 'Activation Status'}</span>
       </div>
-      <div class="key-box" id="keyText">${licenseKey}</div>
-      <button class="copy-btn" id="copyBtn" onclick="copyKey()">📋 Copy License Key</button>
+
+      <div id="keyPending" style="display:${licenseKey ? 'none' : 'block'};">
+        <p style="font-size:14px; color:#cbd5e1; line-height:1.5;">
+          Payment received — generating your license key now. This takes just a few seconds and the page updates automatically.
+        </p>
+        <div class="spinner" aria-hidden="true"></div>
+      </div>
+
+      <div id="keyReady" style="display:${licenseKey ? 'block' : 'none'};">
+        <div class="key-box" id="keyText">${licenseKey}</div>
+        <button class="copy-btn" id="copyBtn" onclick="copyKey()">📋 Copy License Key</button>
+      </div>
+
+      <div id="keyTimeout" style="display:none;">
+        <p style="font-size:14px; color:#cbd5e1; line-height:1.5;">
+          Your payment is confirmed, but the key is taking a little longer to generate. A copy is also being emailed to you — you can refresh in a moment.
+        </p>
+        <button class="copy-btn" style="background:#3b82f6; color:#fff;" onclick="window.location.reload()">🔄 Refresh</button>
+      </div>
     </div>
-    ` : `
-    <div class="key-section">
-      <div class="key-header"><span>Activation Status</span></div>
-      <p style="font-size:14px; color:#cbd5e1; line-height:1.5;">
-        Your license key has been generated and dispatched to your email address. If it does not appear below within a few moments, please check your inbox (and spam/promotions folder).
-      </p>
-      ${reference ? `<button class="copy-btn" style="background:#3b82f6; color:#fff;" onclick="window.location.reload()">🔄 Refresh to View Key</button>` : ''}
-    </div>
-    `}
 
     <div class="steps">
       <h3>Quick Activation Guide</h3>
@@ -426,6 +462,11 @@ function renderSuccessHtml(reference, record) {
   </div>
 
   <script>
+    var REFERENCE = ${JSON.stringify(reference || '')};
+    var MAX_ATTEMPTS = 20; // ~40s at 2s intervals
+    var attempts = 0;
+    var pollTimer = null;
+
     function copyKey() {
       const text = document.getElementById('keyText').innerText.trim();
       navigator.clipboard.writeText(text).then(() => {
@@ -439,6 +480,49 @@ function renderSuccessHtml(reference, record) {
           btn.style.color = '';
         }, 2500);
       });
+    }
+
+    function revealKey(key) {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      const pending = document.getElementById('keyPending');
+      const timeout = document.getElementById('keyTimeout');
+      const ready = document.getElementById('keyReady');
+      const label = document.getElementById('keyHeaderLabel');
+      if (pending) pending.style.display = 'none';
+      if (timeout) timeout.style.display = 'none';
+      if (label) label.innerText = 'Your Activation Key';
+      document.getElementById('keyText').innerText = key;
+      if (ready) ready.style.display = 'block';
+    }
+
+    function pollForKey() {
+      if (!REFERENCE) {
+        document.getElementById('keyPending').style.display = 'none';
+        document.getElementById('keyTimeout').style.display = 'block';
+        return;
+      }
+      pollTimer = setInterval(function () {
+        attempts++;
+        fetch(window.location.pathname + '?format=json&reference=' + encodeURIComponent(REFERENCE) + '&t=' + Date.now())
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (data && data.ready && data.license_key) revealKey(data.license_key);
+          })
+          .catch(function () { /* network hiccup — keep polling */ })
+          .then(function () {
+            if (!pollTimer) return;
+            if (attempts >= MAX_ATTEMPTS) {
+              clearInterval(pollTimer);
+              pollTimer = null;
+              document.getElementById('keyPending').style.display = 'none';
+              document.getElementById('keyTimeout').style.display = 'block';
+            }
+          });
+      }, 2000);
+    }
+
+    if (!document.getElementById('keyText').innerText.trim()) {
+      pollForKey();
     }
   </script>
 </body>

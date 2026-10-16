@@ -29,8 +29,9 @@ const WORKER_URL = process.env.WORKER_URL || 'http://localhost:8787/webhook';
 const planArg = process.argv[2] || 'annual';
 const isLifetime = planArg === 'lifetime';
 
-// Annual = ₦20,000 (2,000,000 kobo), Lifetime = ₦40,000 (4,000,000 kobo)
-const amountKobo = isLifetime ? 4_000_000 : 2_000_000;
+// Official pricing: Annual = ₦5,000 (500,000 kobo), Lifetime = ₦15,000 (1,500,000 kobo)
+// determinePlan() treats >= ₦10,000 (1,000,000 kobo) as Lifetime.
+const amountKobo = isLifetime ? 1_500_000 : 500_000;
 const testRef = `TEST-${Date.now()}`;
 
 const payload = {

@@ -368,10 +368,10 @@ function drawClientBlock(ctx, client, label, contact) {
 function drawItemsTable(ctx, items, currency) {
   const { doc, W } = ctx;
   const qtyW = 50;
-  const priceW = 60;
-  const discW = 48;
-  const taxW = 44;
-  const totalW = 72;
+  const priceW = 80;  // widened to prevent currency wrapping
+  const discW = 40;
+  const taxW = 38;
+  const totalW = 80;  // widened to match priceW
   const descW = W - qtyW - priceW - discW - taxW - totalW;
   const qtyX = MARGIN + descW;
   const priceX = qtyX + qtyW;

@@ -5976,7 +5976,7 @@ function convertQuoteToInvoice(quoteId, overrides) {
       const idRes = db.exec('SELECT last_insert_rowid() AS id');
       invoiceId = idRes[0].values[0][0];
 
-      const desc = `Deposit / Retainer (${depositPercent}% of Quote ${quote.quote_number}) — Full Quote Reference: ${quote.currency || 'USD'} ${quoteTotal.toFixed(2)}`;
+      const desc = `Deposit / Retainer – ${depositPercent}% of Quote ${quote.quote_number}`;
       db.run(
         `INSERT INTO invoice_line_items (
           invoice_id, description, quantity, unit_price,

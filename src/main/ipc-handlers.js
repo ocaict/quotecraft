@@ -3009,13 +3009,15 @@ function registerIpcHandlers() {
     try {
       const email = opts.email || 'ocatestemail@gmail.com';
       const plan = opts.plan === 'lifetime' ? 'lifetime' : 'annual';
-      const amountKobo = plan === 'lifetime' ? 4000000 : 2000000;
+      // Official pricing: Lifetime ₦15,000 (1,500,000 kobo) / Annual ₦5,000 (500,000 kobo).
+      // determinePlan() in the worker treats >= ₦10,000 (1,000,000 kobo) as Lifetime.
+      const amountKobo = plan === 'lifetime' ? 1500000 : 500000;
       const testSecret = process.env.PAYSTACK_TEST_SECRET_KEY || 'sk_test_8e651b0232b4590c3f66f4bb1fc904a26e396b55';
 
       const postData = JSON.stringify({
         email,
         amount: amountKobo,
-        callback_url: 'https://quotecraft-license-worker.ocatech.workers.dev/health',
+        callback_url: 'https://quotecraft-license-worker.ocatech.workers.dev/callback',
         metadata: {
           custom_fields: [
             { display_name: 'Product', variable_name: 'product', value: `QuoteCraft Pro ${plan === 'lifetime' ? 'Lifetime' : 'Annual'}` }
