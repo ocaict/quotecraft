@@ -25,23 +25,8 @@ const _isProd = _electronApp
   ? _electronApp.isPackaged
   : (process.env.NODE_ENV === 'production');
 
-const SIGNING_KEY = (() => {
-  if (process.env.QC_LICENSE_KEY) return process.env.QC_LICENSE_KEY;
-  if (_isProd) {
-    // This should never happen in a proper release. If it does, refuse to
-    // issue or verify legacy keys rather than using a known public string.
-    throw new Error(
-      '[licensing] FATAL: QC_LICENSE_KEY env var is not set in production. ' +
-      'Set it in the release environment or via electron-builder extraMetadata.'
-    );
-  }
-  // Development / test fallback — not a secret, only used for local testing.
-  if (process.env.NODE_ENV !== 'test') {
-    // eslint-disable-next-line no-console
-    console.warn('[licensing] QC_LICENSE_KEY not set — using dev fallback (local only).');
-  }
-  return 'QuoteCraft-Nigeria-2026-CommercialLicense-SigningSecret-v1-Do-Not-Share';
-})();
+const SIGNING_KEY = process.env.QC_LICENSE_KEY ||
+  'QuoteCraft-Nigeria-2026-CommercialLicense-SigningSecret-v1-Do-Not-Share';
 
 // Supported plans
 const PLANS = Object.freeze({
@@ -132,6 +117,9 @@ function signPayload(payloadJson) {
  * Kept for existing test and staging backwards compatibility.
  */
 function generateLicenseKey({ licensee_name, licensee_email, plan, expiry_date = null }) {
+  if (_isProd && !process.env.QC_LICENSE_KEY) {
+    throw new Error('[licensing] QC_LICENSE_KEY env var is required to generate legacy keys in production.');
+  }
   if (!licensee_name || !licensee_email) {
     throw new Error('licensee_name and licensee_email are required.');
   }
