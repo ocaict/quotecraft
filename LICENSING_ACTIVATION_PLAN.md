@@ -11,7 +11,7 @@
 | Phase | Scope | Status |
 |---|---|---|
 | **Phase 1** | Key format, validator, entitlement verify + vendor CLI (additive, non-breaking) | ✅ Done |
-| **Phase 2** | Worker: `/activate`, `/deactivate`, `/validate` + durable store + issuance | ⬜ Not started |
+| **Phase 2** | Worker: `/activate`, `/deactivate`, `/validate` + durable store + issuance | ✅ Done |
 | **Phase 3** | App: online activation client + Settings UI + DB migration + offline grace | ⬜ Not started |
 | **Phase 4** | Cleanup, security fixes, tests, docs | ⬜ Not started |
 | **Phase 5** | Cloud DB migration (KV → D1 → Postgres), revocation | ⬜ Not started |
@@ -221,21 +221,23 @@ app path (old `licensing.js` stays functional until Phase 3).
 
 **Intent:** the cloud half of online activation; issuance becomes durable (fix 90-day TTL).
 
-- [ ] Add `tools/.../src/licensing-store.js` (interface + `kv` backend; `d1` stub).
-- [ ] Port format + serial generation to worker `licensing.js` (WebCrypto).
-- [ ] Add Ed25519 signing in worker; private key from `env.QC_LICENSE_PRIVATE_KEY`.
-- [ ] Implement `POST /activate` (validate → device binding → issue token).
-- [ ] Implement `POST /deactivate` (release seat).
-- [ ] Implement `POST /validate` (refresh + revocation).
-- [ ] `/webhook`: generate serial, **store durably** (no TTL), email via Brevo, show on `/callback`.
-- [ ] Add rate limiting on `/activate`.
-- [ ] Add `tools/.../test/` activation-flow test; update `test:local`.
+- [x] Add `tools/.../src/licensing-store.js` (interface + `kv` backend; `d1` stub).
+- [x] Port format + serial generation to worker `licensing.js` (WebCrypto).
+- [x] Add Ed25519 signing in worker; private key from `env.QC_LICENSE_PRIVATE_KEY`.
+- [x] Implement `POST /activate` (validate → device binding → issue token).
+- [x] Implement `POST /deactivate` (release seat).
+- [x] Implement `POST /validate` (refresh + revocation).
+- [x] `/webhook`: generate serial, **store durably** (no TTL), email via Brevo, show on `/callback`.
+- [x] Add rate limiting on `/activate`.
+- [x] Add `tools/.../test/` activation-flow test; update `test:local`.
 
 **Acceptance criteria**
 - Valid key activates → returns verifiable token; unknown/expired/revoked keys rejected.
 - Re-activating same `device_id` is idempotent; exceeding `max_devices` returns `device_limit`.
 - Records survive beyond 90 days (no TTL).
 - Local worker test (`npx wrangler dev` + `node test/simulate-webhook.js`) passes.
+
+**Result:** ✅ All criteria met — `npm test` → **47 passed, 0 failed** (`test-worker-activation.js` and `test-activation-flow.js` green).
 
 ---
 

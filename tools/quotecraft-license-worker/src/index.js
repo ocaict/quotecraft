@@ -1,28 +1,60 @@
 /**
  * index.js — QuoteCraft License Worker Entry Point
  *
- * Handles Paystack:
- *   1. POST /webhook: Validates HMAC-SHA512, enforces idempotency, generates
- *      ed25519/HMAC license key, stores in KV, and dispatches email via Brevo.
- *   2. GET /webhook or GET /callback or GET /success: Renders a beautiful, branded
- *      confirmation page for users redirected after Paystack checkout, displaying
- *      their license key immediately with 1-click copy.
- *   3. GET /health: Health check endpoint.
+ * Endpoints:
+ *   1. GET  /health: Health check endpoint.
+ *   2. GET  /webhook, /callback, /success: Browser redirects displaying confirmation & key.
+ *   3. POST /webhook: Paystack charge.success webhook handler (durable serial creation & email).
+ *   4. POST /activate: Online activation & device binding (issues Ed25519 entitlement token).
+ *   5. POST /deactivate: Releases a device seat.
+ *   6. POST /validate: Validates cached entitlement token and refreshes offline grace window.
  */
 
-import { generateLicenseKey, determinePlan } from './licensing.js';
+'use strict';
+
+import {
+  generateSerial,
+  validateKeyFormat,
+  determinePlan,
+  buildEntitlement,
+  signEntitlementToken,
+  verifyEntitlementToken,
+  normalizeKey,
+} from './licensing.js';
+import { createLicensingStore } from './licensing-store.js';
 import { sendLicenseEmail } from './email.js';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-paystack-signature',
+};
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      ...CORS_HEADERS,
+    },
+  });
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env = {}) {
     const url = new URL(request.url);
+
+    // ─── CORS Preflight ───────────────────────────────────────────────────────
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
 
     // ─── Health check ────────────────────────────────────────────────────────
     if (url.pathname === '/health' && request.method === 'GET') {
-      return new Response(JSON.stringify({ status: 'ok', service: 'quotecraft-license-worker' }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ status: 'ok', service: 'quotecraft-license-worker' });
     }
+
+    const store = createLicensingStore(env);
 
     // ─── Browser Redirects (GET /webhook, GET /callback, GET /success) ────────
     const isBrowserCallback =
@@ -37,22 +69,22 @@ export default {
       const reference = url.searchParams.get('reference') || url.searchParams.get('trxref') || '';
       let record = null;
 
-      if (reference && env.LICENSES_KV) {
+      if (reference) {
         try {
-          const raw = await env.LICENSES_KV.get(`tx:${reference}`);
-          if (raw) record = JSON.parse(raw);
+          record = await store.getTransaction(reference);
         } catch (e) {
-          console.error('[worker] Error retrieving KV record for callback:', e);
+          console.error('[worker] Error retrieving record for callback:', e);
         }
       }
 
       // JSON status endpoint used by the success page to poll until the
-      // charge.success webhook has finished writing the key to KV.
+      // charge.success webhook has finished writing the key to the store.
       if (url.searchParams.get('format') === 'json') {
+        const key = record?.serial || record?.license_key || null;
         return new Response(
           JSON.stringify({
-            ready: Boolean(record && record.license_key),
-            license_key: record?.license_key || null,
+            ready: Boolean(key),
+            license_key: key,
             plan: record?.plan || null,
             reference,
           }),
@@ -60,6 +92,7 @@ export default {
             headers: {
               'Content-Type': 'application/json; charset=utf-8',
               'Cache-Control': 'no-store',
+              ...CORS_HEADERS,
             },
           }
         );
@@ -70,125 +103,335 @@ export default {
       });
     }
 
-    // ─── Only handle POST /webhook beyond this point ─────────────────────────
-    if (url.pathname !== '/webhook' || request.method !== 'POST') {
-      return new Response('Not Found', { status: 404 });
+    // ─── POST /activate ───────────────────────────────────────────────────────
+    if (url.pathname === '/activate' && request.method === 'POST') {
+      return handleActivate(request, env, store);
     }
 
-    // ─── Step 1: Read raw body ───────────────────────────────────────────────
-    let rawBody;
-    try {
-      rawBody = await request.text();
-    } catch (err) {
-      console.error('[worker] Failed to read request body:', err);
-      return new Response('Bad Request', { status: 400 });
+    // ─── POST /deactivate ─────────────────────────────────────────────────────
+    if (url.pathname === '/deactivate' && request.method === 'POST') {
+      return handleDeactivate(request, env, store);
     }
 
-    // ─── Step 2: Verify Paystack HMAC-SHA512 Signature ────────────────────────
-    const paystackSig = request.headers.get('x-paystack-signature');
-    if (!paystackSig) {
-      console.warn('[worker] Missing x-paystack-signature header');
-      return new Response('Unauthorized', { status: 401 });
+    // ─── POST /validate ───────────────────────────────────────────────────────
+    if (url.pathname === '/validate' && request.method === 'POST') {
+      return handleValidate(request, env, store);
     }
 
-    let isValid = false;
-    if (env.PAYSTACK_SECRET_KEY) {
-      isValid = await verifyPaystackSignature(rawBody, paystackSig, env.PAYSTACK_SECRET_KEY);
-    }
-    if (!isValid && env.PAYSTACK_TEST_SECRET_KEY) {
-      isValid = await verifyPaystackSignature(rawBody, paystackSig, env.PAYSTACK_TEST_SECRET_KEY);
+    // ─── POST /webhook ────────────────────────────────────────────────────────
+    if (url.pathname === '/webhook' && request.method === 'POST') {
+      return handleWebhook(request, env, store);
     }
 
-    if (!isValid) {
-      console.warn('[worker] Invalid Paystack signature — signature did not match live or test key');
-      return new Response('Unauthorized', { status: 401 });
-    }
-
-    // ─── Step 3: Parse event body ─────────────────────────────────────────────
-    let event;
-    try {
-      event = JSON.parse(rawBody);
-    } catch (err) {
-      console.error('[worker] Invalid JSON body:', err);
-      return new Response('Bad Request', { status: 400 });
-    }
-
-    // ─── Step 4: Only process charge.success ──────────────────────────────────
-    if (event.event !== 'charge.success') {
-      console.log(`[worker] Ignoring event type: ${event.event}`);
-      return new Response('OK', { status: 200 });
-    }
-
-    const data = event.data || {};
-    const reference = data.reference;
-    const email = data.customer?.email;
-    const firstName = data.customer?.first_name || '';
-    const lastName = data.customer?.last_name || '';
-    const name = [firstName, lastName].filter(Boolean).join(' ') || email;
-    const amountKobo = data.amount || 0;
-
-    if (!reference || !email) {
-      console.error('[worker] Missing reference or email in charge.success payload');
-      return new Response('OK', { status: 200 });
-    }
-
-    // ─── Step 5: Idempotency check ────────────────────────────────────────────
-    const kvKey = `tx:${reference}`;
-    const existing = await env.LICENSES_KV.get(kvKey);
-    if (existing) {
-      console.log(`[worker] Duplicate event for reference ${reference} — skipping`);
-      return new Response('OK', { status: 200 });
-    }
-
-    // ─── Step 6: Determine plan & generate license key ────────────────────────
-    const { plan, expiry_date } = determinePlan(amountKobo);
-    let licenseKey;
-    try {
-      licenseKey = await generateLicenseKey({
-        licensee_name: name,
-        licensee_email: email,
-        plan,
-        expiry_date,
-        signingKey: env.QC_LICENSE_KEY,
-      });
-    } catch (err) {
-      console.error('[worker] License key generation failed:', err);
-      return new Response('Internal Server Error', { status: 500 });
-    }
-
-    // ─── Step 7: Store audit record in KV (90-day TTL) ────────────────────────
-    const auditRecord = JSON.stringify({
-      email,
-      name,
-      plan,
-      expiry_date,
-      license_key: licenseKey,
-      amount_kobo: amountKobo,
-      issued_at: new Date().toISOString(),
-    });
-    await env.LICENSES_KV.put(kvKey, auditRecord, { expirationTtl: 7_776_000 });
-
-    // ─── Step 8: Send activation email via Brevo ───────────────────────────────
-    const amountNaira = '₦' + (amountKobo / 100).toLocaleString('en-NG');
-    try {
-      await sendLicenseEmail({
-        to: email,
-        name,
-        licenseKey,
-        plan,
-        expiryDate: expiry_date,
-        amount: amountNaira,
-        reference,
-        apiKey: env.BREVO_API_KEY || env.RESEND_API_KEY,
-      });
-      console.log(`[worker] ✅ License emailed to ${email} — plan: ${plan}, ref: ${reference}`);
-    } catch (err) {
-      console.error(`[worker] ❌ Failed to send email to ${email}:`, err);
-    }
-
-    return new Response('OK', { status: 200 });
+    return new Response('Not Found', { status: 404, headers: CORS_HEADERS });
   },
 };
+
+// ─── Endpoint Handlers ────────────────────────────────────────────────────────
+
+/**
+ * Handles device activation against a license key.
+ */
+async function handleActivate(request, env, store) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (_e) {
+    return jsonResponse({ ok: false, reason: 'malformed', message: 'Invalid JSON body' }, 400);
+  }
+
+  const { key, device_id, app_version } = body || {};
+  if (!key || !device_id) {
+    return jsonResponse({ ok: false, reason: 'malformed', message: 'key and device_id are required' }, 400);
+  }
+
+  // Rate limiting per IP and per key
+  const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+  const ipLimit = await store.checkRateLimit('ip', clientIp, 20, 60);
+  if (!ipLimit.allowed) {
+    return jsonResponse({ ok: false, reason: 'rate_limited', message: 'Too many requests. Please wait a minute.' }, 429);
+  }
+
+  const normKey = normalizeKey(key);
+  const keyLimit = await store.checkRateLimit('key', normKey, 10, 60);
+  if (!keyLimit.allowed) {
+    return jsonResponse({ ok: false, reason: 'rate_limited', message: 'Too many activation attempts for this key.' }, 429);
+  }
+
+  // Format and checksum validation
+  const fmt = validateKeyFormat(key);
+  if (!fmt.ok) {
+    return jsonResponse({ ok: false, reason: 'malformed', message: 'Invalid license key format or checksum' }, 400);
+  }
+
+  const serial = fmt.serial;
+  const license = await store.getLicense(serial);
+  if (!license) {
+    return jsonResponse({ ok: false, reason: 'invalid', message: 'License key not found' }, 404);
+  }
+
+  if (license.status !== 'active') {
+    return jsonResponse({ ok: false, reason: license.status || 'revoked' }, 403);
+  }
+
+  if (license.expiry) {
+    const expiryMs = Date.parse(license.expiry);
+    if (!isNaN(expiryMs) && Date.now() > expiryMs + 86400000) {
+      return jsonResponse({ ok: false, reason: 'expired' }, 403);
+    }
+  }
+
+  // Device seat binding (idempotent for the same device_id)
+  const bindRes = await store.bindDevice(serial, { device_id, app_version });
+  if (!bindRes.ok) {
+    return jsonResponse({ ok: false, reason: bindRes.reason }, 403);
+  }
+
+  // Issue Ed25519-signed Entitlement Token (valid for 30-day offline grace)
+  const entitlement = buildEntitlement({
+    serial: license.serial,
+    name: license.name,
+    plan: license.plan,
+    expiry: license.expiry,
+    device_id,
+    graceDays: 30,
+  });
+
+  let token;
+  try {
+    token = await signEntitlementToken(entitlement, env.QC_LICENSE_PRIVATE_KEY);
+  } catch (err) {
+    console.error('[worker] Failed to sign entitlement token:', err);
+    return jsonResponse({ ok: false, reason: 'internal_error' }, 500);
+  }
+
+  return jsonResponse({
+    ok: true,
+    token,
+    license: {
+      name: license.name,
+      plan: license.plan,
+      expiry: license.expiry,
+    },
+  });
+}
+
+/**
+ * Handles device unbinding (releasing a seat).
+ */
+async function handleDeactivate(request, env, store) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (_e) {
+    return jsonResponse({ ok: false, reason: 'malformed', message: 'Invalid JSON body' }, 400);
+  }
+
+  const { key, device_id } = body || {};
+  if (!key || !device_id) {
+    return jsonResponse({ ok: false, reason: 'malformed', message: 'key and device_id are required' }, 400);
+  }
+
+  const fmt = validateKeyFormat(key);
+  if (!fmt.ok) {
+    return jsonResponse({ ok: false, reason: 'malformed' }, 400);
+  }
+
+  const res = await store.unbindDevice(fmt.serial, device_id);
+  if (!res.ok) {
+    return jsonResponse({ ok: false, released: false, reason: res.reason }, res.reason === 'invalid' ? 404 : 400);
+  }
+
+  return jsonResponse({ ok: true, released: true });
+}
+
+/**
+ * Handles online validation and grace period refresh.
+ */
+async function handleValidate(request, env, store) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (_e) {
+    return jsonResponse({ ok: false, reason: 'malformed', message: 'Invalid JSON body' }, 400);
+  }
+
+  const { token } = body || {};
+  if (!token) {
+    return jsonResponse({ ok: false, reason: 'malformed', message: 'token is required' }, 400);
+  }
+
+  // Verify signature with embedded or env public key
+  const verifyRes = await verifyEntitlementToken(token, env.QC_LICENSE_PUBLIC_KEY);
+  if (!verifyRes.ok) {
+    return jsonResponse({ ok: false, reason: 'invalid_token' }, 400);
+  }
+
+  const payload = verifyRes.payload;
+  const license = await store.getLicense(payload.serial);
+  if (!license) {
+    return jsonResponse({ ok: false, reason: 'revoked' }, 403);
+  }
+
+  if (license.status !== 'active') {
+    return jsonResponse({ ok: false, reason: license.status || 'revoked' }, 403);
+  }
+
+  if (license.expiry) {
+    const expiryMs = Date.parse(license.expiry);
+    if (!isNaN(expiryMs) && Date.now() > expiryMs + 86400000) {
+      return jsonResponse({ ok: false, reason: 'expired' }, 403);
+    }
+  }
+
+  // Ensure this device is still bound to the key
+  if (payload.device_id && Array.isArray(license.devices)) {
+    const isBound = license.devices.some((d) => d.device_id === payload.device_id);
+    if (!isBound) {
+      return jsonResponse({ ok: false, reason: 'device_unlinked' }, 403);
+    }
+  }
+
+  // Issue refreshed token with a new 30-day offline grace window
+  const refreshed = buildEntitlement({
+    serial: license.serial,
+    name: license.name,
+    plan: license.plan,
+    expiry: license.expiry,
+    device_id: payload.device_id,
+    graceDays: 30,
+  });
+
+  let freshToken;
+  try {
+    freshToken = await signEntitlementToken(refreshed, env.QC_LICENSE_PRIVATE_KEY);
+  } catch (err) {
+    console.error('[worker] Failed to sign refreshed token:', err);
+    return jsonResponse({ ok: false, reason: 'internal_error' }, 500);
+  }
+
+  return jsonResponse({ ok: true, token: freshToken });
+}
+
+/**
+ * Handles Paystack charge.success webhook.
+ */
+async function handleWebhook(request, env, store) {
+  let rawBody;
+  try {
+    rawBody = await request.text();
+  } catch (err) {
+    console.error('[worker] Failed to read request body:', err);
+    return new Response('Bad Request', { status: 400, headers: CORS_HEADERS });
+  }
+
+  // Verify Paystack HMAC-SHA512 Signature
+  const paystackSig = request.headers.get('x-paystack-signature');
+  if (!paystackSig) {
+    console.warn('[worker] Missing x-paystack-signature header');
+    return new Response('Unauthorized', { status: 401, headers: CORS_HEADERS });
+  }
+
+  let isValid = false;
+  if (env.PAYSTACK_SECRET_KEY) {
+    isValid = await verifyPaystackSignature(rawBody, paystackSig, env.PAYSTACK_SECRET_KEY);
+  }
+  if (!isValid && env.PAYSTACK_TEST_SECRET_KEY) {
+    isValid = await verifyPaystackSignature(rawBody, paystackSig, env.PAYSTACK_TEST_SECRET_KEY);
+  }
+
+  if (!isValid) {
+    console.warn('[worker] Invalid Paystack signature — did not match live or test key');
+    return new Response('Unauthorized', { status: 401, headers: CORS_HEADERS });
+  }
+
+  let event;
+  try {
+    event = JSON.parse(rawBody);
+  } catch (err) {
+    console.error('[worker] Invalid JSON body:', err);
+    return new Response('Bad Request', { status: 400, headers: CORS_HEADERS });
+  }
+
+  // Only process charge.success
+  if (event.event !== 'charge.success') {
+    console.log(`[worker] Ignoring event type: ${event.event}`);
+    return new Response('OK', { status: 200, headers: CORS_HEADERS });
+  }
+
+  const data = event.data || {};
+  const reference = data.reference;
+  const email = data.customer?.email;
+  const firstName = data.customer?.first_name || '';
+  const lastName = data.customer?.last_name || '';
+  const name = [firstName, lastName].filter(Boolean).join(' ') || email;
+  const amountKobo = data.amount || 0;
+
+  if (!reference || !email) {
+    console.error('[worker] Missing reference or email in charge.success payload');
+    return new Response('OK', { status: 200, headers: CORS_HEADERS });
+  }
+
+  // Idempotency check: don't double-issue
+  const existing = await store.getTransaction(reference);
+  if (existing) {
+    console.log(`[worker] Duplicate event for reference ${reference} — skipping`);
+    return new Response('OK', { status: 200, headers: CORS_HEADERS });
+  }
+
+  // Determine plan and generate short Crockford serial
+  const { plan, expiry_date } = determinePlan(amountKobo);
+  let serial;
+  try {
+    serial = generateSerial({ plan, expiry: expiry_date });
+  } catch (err) {
+    console.error('[worker] License key generation failed:', err);
+    return new Response('Internal Server Error', { status: 500, headers: CORS_HEADERS });
+  }
+
+  // Store durably in license store (NO TTL)
+  const record = {
+    serial,
+    name,
+    email,
+    plan,
+    expiry: expiry_date,
+    status: 'active',
+    devices: [],
+    max_devices: 2,
+    activation_count: 0,
+    issued_at: new Date().toISOString(),
+    paystack_reference: reference,
+    amount_kobo: amountKobo,
+  };
+
+  try {
+    await store.createLicense(record);
+  } catch (err) {
+    console.error('[worker] Failed to store durable license record:', err);
+    return new Response('Internal Server Error', { status: 500, headers: CORS_HEADERS });
+  }
+
+  // Send activation email via Brevo
+  const amountNaira = '₦' + (amountKobo / 100).toLocaleString('en-NG');
+  try {
+    await sendLicenseEmail({
+      to: email,
+      name,
+      licenseKey: serial,
+      plan,
+      expiryDate: expiry_date,
+      amount: amountNaira,
+      reference,
+      apiKey: env.BREVO_API_KEY || env.RESEND_API_KEY,
+    });
+    console.log(`[worker] ✅ License emailed to ${email} — key: ${serial}, plan: ${plan}, ref: ${reference}`);
+  } catch (err) {
+    console.error(`[worker] ❌ Failed to send email to ${email}:`, err);
+  }
+
+  return new Response('OK', { status: 200, headers: CORS_HEADERS });
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -206,7 +449,7 @@ async function verifyPaystackSignature(rawBody, signature, secretKey) {
   );
   const sigBuffer = await crypto.subtle.sign('HMAC', key, enc.encode(rawBody));
   const computed = Array.from(new Uint8Array(sigBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
+    .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 
   return computed === signature;
@@ -216,8 +459,9 @@ async function verifyPaystackSignature(rawBody, signature, secretKey) {
  * Renders user-facing HTML success confirmation for browser callbacks.
  */
 function renderSuccessHtml(reference, record) {
-  const licenseKey = record?.license_key || '';
-  const planName = record?.plan === 'lifetime' ? 'Lifetime License' : (record?.plan ? 'Annual License' : 'Pro License');
+  const licenseKey = record?.serial || record?.license_key || '';
+  const planName =
+    record?.plan === 'lifetime' ? 'Lifetime License' : record?.plan ? 'Annual License' : 'Pro License';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -316,8 +560,9 @@ function renderSuccessHtml(reference, record) {
     }
     .key-box {
       font-family: 'Courier New', Courier, monospace;
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
       color: #34d399;
       background: rgba(15, 23, 42, 0.6);
       padding: 12px 14px;
@@ -325,6 +570,7 @@ function renderSuccessHtml(reference, record) {
       word-break: break-all;
       user-select: all;
       border: 1px solid #1e293b;
+      text-align: center;
     }
     .copy-btn {
       margin-top: 12px;
@@ -463,7 +709,7 @@ function renderSuccessHtml(reference, record) {
 
   <script>
     var REFERENCE = ${JSON.stringify(reference || '')};
-    var MAX_ATTEMPTS = 20; // ~40s at 2s intervals
+    var MAX_ATTEMPTS = 20;
     var attempts = 0;
     var pollTimer = null;
 
@@ -508,7 +754,7 @@ function renderSuccessHtml(reference, record) {
           .then(function (data) {
             if (data && data.ready && data.license_key) revealKey(data.license_key);
           })
-          .catch(function () { /* network hiccup — keep polling */ })
+          .catch(function () { /* network error — retry */ })
           .then(function () {
             if (!pollTimer) return;
             if (attempts >= MAX_ATTEMPTS) {

@@ -109,12 +109,38 @@ async function main() {
     if (res.ok) {
       console.log(`✅ Worker responded: ${res.status} — ${text}`);
       console.log('   Check your email inbox and the wrangler dev logs for details.');
+
+      // Check callback endpoint to fetch generated key
+      const callbackUrl = WORKER_URL.replace(/\/webhook$/, '') + `/callback?format=json&reference=${encodeURIComponent(testRef)}`;
+      const cbRes = await fetch(callbackUrl);
+      if (cbRes.ok) {
+        const cbData = await cbRes.json();
+        console.log(`\n🔑 Issued License Key: ${cbData.license_key} (${cbData.plan})`);
+
+        // Test activation against local worker
+        const activateUrl = WORKER_URL.replace(/\/webhook$/, '') + '/activate';
+        const actRes = await fetch(activateUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: cbData.license_key,
+            device_id: 'dev-sim-test-1',
+            app_version: '2.1.0',
+          }),
+        });
+        if (actRes.ok) {
+          const actData = await actRes.json();
+          console.log(`✅ Activation succeeded! Token issued: ${actData.token?.slice(0, 35)}...`);
+        } else {
+          console.error(`❌ Activation failed: ${actRes.status} — ${await actRes.text()}`);
+        }
+      }
     } else {
       console.error(`❌ Worker error: ${res.status} — ${text}`);
     }
 
     // Send duplicate to test idempotency
-    console.log('\n🔁 Sending duplicate (idempotency test)...');
+    console.log('\n🔁 Sending duplicate webhook (idempotency test)...');
     const res2 = await fetch(WORKER_URL, {
       method: 'POST',
       headers: {

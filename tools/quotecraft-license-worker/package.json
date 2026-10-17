@@ -1,11 +1,13 @@
 {
   "name": "quotecraft-license-worker",
   "version": "1.0.0",
-  "description": "Cloudflare Worker — Paystack webhook handler for QuoteCraft Pro license key generation & email delivery",
+  "description": "Cloudflare Worker — Paystack webhook handler for QuoteCraft Pro license key generation, activation & email delivery",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "test": "node test/test-activation-flow.js",
     "test:local": "node test/simulate-webhook.js"
   },
   "devDependencies": {

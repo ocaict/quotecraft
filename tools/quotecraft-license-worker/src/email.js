@@ -1,5 +1,5 @@
 /**
- * email.js — Resend API transactional email for QuoteCraft Pro license delivery
+ * email.js — Brevo API transactional email for QuoteCraft Pro license delivery
  *
  * Sends a beautifully branded HTML email with:
  * - The generated activation key in a prominent monospace box
@@ -11,17 +11,17 @@
 'use strict';
 
 /**
- * Sends the license key email via Resend API.
+ * Sends the license key email via Brevo API.
  *
  * @param {object} opts
  * @param {string} opts.to           - Customer email
  * @param {string} opts.name         - Customer name
- * @param {string} opts.licenseKey   - The generated QC-PRO-... key
+ * @param {string} opts.licenseKey   - The generated QC-... key
  * @param {'annual'|'lifetime'} opts.plan
  * @param {string|null} opts.expiryDate
  * @param {string} opts.amount       - Formatted payment amount (e.g. "₦20,000")
  * @param {string} opts.reference    - Paystack transaction reference
- * @param {string} opts.resendApiKey - Resend API key from env
+ * @param {string} opts.apiKey       - Brevo API key from env
  * @returns {Promise<void>}
  */
 export async function sendLicenseEmail({ to, name, licenseKey, plan, expiryDate, amount, reference, apiKey }) {

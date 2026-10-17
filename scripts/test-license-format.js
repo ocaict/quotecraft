@@ -127,7 +127,7 @@ function run() {
   // 8. Tampered token rejected
   console.log('--- Test 8: Tampered entitlement rejected ---');
   const parts = token.split('.');
-  const badSig = parts[1].slice(0, -1) + (parts[1].slice(-1) === 'A' ? 'B' : 'A');
+  const badSig = (parts[1][0] === 'A' ? 'B' : 'A') + parts[1].slice(1);
   const tamperedRes = verifyEntitlementToken(parts[0] + '.' + badSig, LICENSE_PUBLIC_KEY_PEM);
   assert.strictEqual(tamperedRes.ok, false, 'Tampered signature must fail');
   assert.strictEqual(tamperedRes.reason, 'signature');
