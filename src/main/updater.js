@@ -124,12 +124,11 @@ function initUpdater(window) {
 
 async function checkForUpdates(manual = false) {
   let isPackaged = false;
-  let currentVersion = '1.2.0';
+  let currentVersion = getAppVersion();
   try {
     const electron = require('electron');
     if (electron && electron.app) {
       isPackaged = Boolean(electron.app.isPackaged);
-      currentVersion = electron.app.getVersion() || '1.2.0';
     }
   } catch (_) {}
 

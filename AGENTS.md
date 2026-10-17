@@ -5,17 +5,18 @@ no framework, no bundler, no TypeScript. Main process is Node/CommonJS; the rend
 is plain `<script>` tags loaded by `src/renderer/index.html`. No README exists.
 
 ## Commands
-- Install: `npm ci` (Node 20, per CI)
+- Install: `npm ci` (Node 20)
 - Run app: `npm run dev` → `electron .` (entry `src/main/main.js`)
 - All tests: `npm test` → `scripts/run-all-tests.js` runs every `scripts/test-*.js`
 - Single test: `node scripts/test-invoice-create.js`
 - Package Windows installer: `npm run dist` (electron-builder nsis → `dist/`)
 - No lint / format / typecheck scripts exist — do not invent them.
-- Releases: push a `v*` tag; CI builds the Windows installer and creates a GitHub
-  release. CI (`.github/workflows/ci.yml`) uploads the installer, blockmap, and
-  `latest.yml`; `scripts/publish-release.js` reads the version from `package.json`.
-  The Windows artifact name is pinned by `build.artifactName` (no spaces, since
-  GitHub rewrites spaces in asset names and `electron-updater` matches on the name).
+- Releases (manual, no CI): bump `version` in `package.json`, run `npm run dist`
+  (electron-builder nsis → `dist/`), then `node scripts/publish-release.js`, which
+  reads `version` from `package.json` and uploads the installer, blockmap, and
+  `latest.yml` to a GitHub release. The Windows artifact name is pinned by
+  `build.artifactName` (no spaces, since GitHub rewrites spaces in asset names and
+  `electron-updater` matches on the name).
 
 ## Tests
 - Tests run under plain `node`, NOT Electron. They `require('../src/main/database')`
@@ -24,7 +25,7 @@ is plain `<script>` tags loaded by `src/renderer/index.html`. No README exists.
   deletes its own `.sqlite`. Copy that pattern for new tests.
 - Coverage targets main-process/DB logic (plus `renderer/js/theme.js`). DOM renderer
   code is not testable without Electron and depends on `window.electronAPI`.
-- CI runs on ubuntu + windows; tests must not need GUI or network.
+- Tests must not need GUI or network (they run under plain `node`).
 
 ## Architecture
 - `src/main/database.js` — the entire data layer (sql.js/WASM, synchronous
