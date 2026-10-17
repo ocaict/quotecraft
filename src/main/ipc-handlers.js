@@ -3021,7 +3021,10 @@ function registerIpcHandlers() {
       const plan = opts.plan === 'lifetime' ? 'lifetime' : 'annual';
       // Official pricing: Lifetime ₦15,000 (1,500,000 kobo) / Annual ₦5,000 (500,000 kobo).
       const amountKobo = plan === 'lifetime' ? 1500000 : 500000;
-      const testSecret = process.env.PAYSTACK_TEST_SECRET_KEY || 'sk_test_8e651b0232b4590c3f66f4bb1fc904a26e396b55';
+      const testSecret = process.env.PAYSTACK_TEST_SECRET_KEY;
+      if (!testSecret) {
+        return { ok: false, message: 'PAYSTACK_TEST_SECRET_KEY env var is not set. Set it in .env or your shell before running in dev mode.' };
+      }
 
       const postData = JSON.stringify({
         email,

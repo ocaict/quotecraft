@@ -1,3 +1,5 @@
+'use strict';
+
 const path = require('path');
 const fs = require('fs');
 const assert = require('assert');
@@ -6,6 +8,8 @@ const assert = require('assert');
 const testDbPath = path.join(__dirname, 'test-licensing.sqlite');
 if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
 process.env.TEST_DB_PATH = testDbPath;
+// Silence the dev-fallback warning from licensing.js
+process.env.NODE_ENV = 'test';
 
 const {
   generateLicenseKey,
@@ -25,8 +29,20 @@ const {
   getClients,
 } = require('../src/main/database');
 
+const { generateSerial, validateKeyFormat, normalizeKey } = require('../src/shared/license-key');
+const { signEntitlement, buildEntitlement, verifyEntitlementToken, isEntitlementValid } = require('../src/main/entitlement');
+const { getEffectiveLicenseState } = require('../src/main/activation');
+const { getPrivateKeyPem } = require('./license-keys');
+
+// Mock fetch placeholder for offline grace tests
+const originalFetch = global.fetch;
+
 async function runTests() {
-  console.log('=== Stage 5 Nigeria: Commercial Licensing Test Suite ===\n');
+  console.log('=== QuoteCraft Commercial Licensing Test Suite ===\n');
+
+  // -------------------------------------------------------------------------
+  // Legacy QC-PRO- key tests (backwards compat, keep these forever)
+  // -------------------------------------------------------------------------
 
   // Test 1: Generate & Verify Annual Pro License Key
   console.log('--- Test 1: Annual Pro License Key Generation & Verification ---');
@@ -190,20 +206,103 @@ async function runTests() {
   // Pro allows adding 4th client and beyond
   const client4 = addClient({ name: 'Client 4 (Pro Unlimited)', email: 'c4@test.ng' });
   assert.ok(client4 && client4.id, '4th client successfully added under Pro license');
+  clearLicenseInfo();
   console.log('✓ Client gating logic and Pro unlock validated\n');
 
+  // -------------------------------------------------------------------------
+  // New Crockford Base32 + Ed25519 Entitlement tests
+  // -------------------------------------------------------------------------
+
+  // Test 10: New Key Format, Normalization & Checksum
+  console.log('--- Test 10: New Crockford Base32 Key Format & Validation ---');
+  const serial = generateSerial({ plan: 'annual', expiry: '2027-12-31' });
+  assert.ok(serial.startsWith('QC-'), 'Serial must start with QC-');
+  const fmtOk = validateKeyFormat(serial);
+  assert.strictEqual(fmtOk.ok, true, 'Generated serial must pass format validation');
+  assert.strictEqual(fmtOk.plan, 'annual', 'Validated plan must be annual');
+
+  const fmtBad = validateKeyFormat('QC-INVALID-KEY-12345-67890');
+  assert.strictEqual(fmtBad.ok, false, 'Invalid format key must fail validation');
+
+  const norm = normalizeKey('qc-7a2k9-4mpq8-xt5r2-9wz3o');
+  assert.ok(!norm.includes('o') && !norm.includes('O'), 'O must normalize to 0');
+  console.log('✓ New Crockford base32 format & normalization verified\n');
+
+  // Test 11: Ed25519 Entitlement Token Verification & Tamper Detection
+  console.log('--- Test 11: Entitlement Token Signing & Ed25519 Verification ---');
+  const privateKeyPem = getPrivateKeyPem();
+  const deviceId = 'test-device-uuid-1234';
+  const entPayload = buildEntitlement({
+    serial,
+    name: 'Alice Test',
+    email: 'alice@test.ng',
+    plan: 'lifetime',
+    deviceId,
+  });
+  const token = signEntitlement(entPayload, privateKeyPem);
+  const verify11 = verifyEntitlementToken(token);
+  assert.strictEqual(verify11.ok, true, 'Signed token must verify with public key');
+  assert.strictEqual(verify11.payload.serial, serial, 'Token serial must match');
+
+  const validNow = isEntitlementValid(verify11.payload);
+  assert.strictEqual(validNow.ok, true, 'Entitlement token is currently valid');
+
+  // Tamper detection
+  const tokenParts = token.split('.');
+  const tamperedToken = tokenParts[0] + '.tampered.' + tokenParts[2];
+  const tamperVerify = verifyEntitlementToken(tamperedToken);
+  assert.strictEqual(tamperVerify.ok, false, 'Tampered token must fail verification');
+
+  // Expiry check (beyond 30 days grace)
+  const future35 = new Date(Date.now() + 35 * 86400 * 1000);
+  const graceExpired = isEntitlementValid(verify11.payload, future35.getTime());
+  assert.strictEqual(graceExpired.ok, false, 'Expired beyond grace window must be invalid');
+  console.log('✓ Entitlement token signing, Ed25519 verification & tamper detection verified\n');
+
+  // Test 12: Desktop Offline Grace & Effective License State
+  console.log('--- Test 12: Desktop Offline Grace & Effective License State ---');
+  saveLicenseInfo({
+    license_key: serial,
+    serial: serial,
+    entitlement_token: token,
+    status: 'active',
+    device_id: deviceId,
+    valid_until: entPayload.valid_until,
+    plan: 'lifetime',
+    licensee_name: 'Alice Test',
+    licensee_email: 'alice@test.ng',
+  });
+
+  const stored12 = getLicenseInfo();
+  assert.strictEqual(stored12.serial, serial, 'Stored serial should match');
+
+  const state12 = await getEffectiveLicenseState();
+  assert.strictEqual(state12.ok, true, 'getEffectiveLicenseState should succeed');
+  assert.strictEqual(state12.isPro, true, 'Effective state should be Pro within grace');
+  assert.strictEqual(state12.state, 'active', 'Effective state should be active');
+
+  // Simulate after grace expiry with injectable clock
+  const stateExpired12 = await getEffectiveLicenseState({ autoRefresh: false, now: future35.getTime() });
+  assert.strictEqual(stateExpired12.isPro, false, 'Expired license must not be Pro');
+  assert.strictEqual(stateExpired12.state, 'grace_expired', 'State should be grace_expired');
+
+  clearLicenseInfo();
+  console.log('✓ Offline grace and effective license state verified\n');
+
   // Clean up test DB
+  global.fetch = originalFetch;
   if (fs.existsSync(testDbPath)) {
     try { fs.unlinkSync(testDbPath); } catch (_e) {}
   }
 
-  console.log('======================================================');
-  console.log(' All 9 Licensing & Monetization tests passed! (100%)');
-  console.log('======================================================\n');
+  console.log('=========================================================');
+  console.log(' All 12 Licensing & Monetization tests passed! (100%)');
+  console.log('=========================================================\n');
 }
 
 runTests().catch((err) => {
-  console.error('\n❌ Licensing test failed:', err);
+  global.fetch = originalFetch;
+  console.error('\n✗ Licensing test failed:', err);
   if (fs.existsSync(testDbPath)) {
     try { fs.unlinkSync(testDbPath); } catch (_e) {}
   }

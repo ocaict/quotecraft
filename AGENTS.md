@@ -35,6 +35,14 @@ is plain `<script>` tags loaded by `src/renderer/index.html`. No README exists.
   list near the bottom of `src/renderer/index.html`.
 - `src/shared/constants.js` is imported by main (CommonJS) and read by the renderer
   as `window.QuoteCraftConstants`; preserve the dual export.
+- `src/shared/license-key.js` — Crockford base32 format (`QC-XXXXX-XXXXX-XXXXX-XXXXX`),
+  checksum validation, normalization, and serial generation. Dual export (Node / renderer).
+- `src/main/entitlement.js` — Ed25519 signed entitlement token verification with
+  embedded public key, offline grace check, and expiration inspection.
+- `src/main/activation.js` — Desktop online activation client (`/activate`, `/validate`,
+  `/deactivate`), 30-day offline grace enforcement, and stable machine device ID.
+- `src/main/license-public-key.js` — Embedded Ed25519 public key (PEM); desktop app
+  ships with public key only.
 - `tools/quotecraft-license-worker/` — separate Cloudflare Worker (ES modules).
   Deploy `npx wrangler deploy`; local sim: `npx wrangler dev` then
   `node test/simulate-webhook.js`.
@@ -60,6 +68,13 @@ is plain `<script>` tags loaded by `src/renderer/index.html`. No README exists.
   `window.electronAPI`.
 - sql.js `.wasm` is `asarUnpack`ed for packaging; `pdfkit` and `sql.js` are the
   heavy runtime deps.
-- Secrets: `QC_LICENSE_KEY` has a hardcoded dev fallback in `src/main/licensing.js`;
-  worker secrets live in `tools/quotecraft-license-worker/.dev.vars` (gitignored) —
-  never commit them.
+- Licensing & Secrets: Commercial licensing uses 20-character Crockford base32 keys
+  (`QC-XXXXX-XXXXX-XXXXX-XXXXX`) activated online against the Cloudflare Worker (`POST /activate`).
+  The desktop app caches an Ed25519 entitlement token locally with 30-day offline grace (`valid_until`).
+  Only the Ed25519 public key is bundled in the app (`src/main/license-public-key.js`).
+  The signing private key (`QC_LICENSE_PRIVATE_KEY`) lives exclusively in Worker secrets
+  (`tools/quotecraft-license-worker/.dev.vars`, gitignored) and must never be committed.
+  Legacy HMAC signing key `QC_LICENSE_KEY` throws in production if missing; dev uses a fallback
+  with a warning (silenced when `NODE_ENV=test`). Worker URL is configurable via `QC_WORKER_URL`
+  (default: `https://quotecraft-license-worker.ocatech.workers.dev`). `PAYSTACK_TEST_SECRET_KEY`
+  must be supplied via env for test purchase handlers (no hardcoded fallback).

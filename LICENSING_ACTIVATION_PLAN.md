@@ -266,16 +266,18 @@ app path (old `licensing.js` stays functional until Phase 3).
 
 ## Phase 4 — Cleanup, Security & Docs
 
-- [ ] Remove hardcoded Paystack **test secret** fallback (`ipc-handlers.js:3015`).
-- [ ] Remove/guard dev `QC_LICENSE_KEY` fallback (`licensing.js:32`).
-- [ ] Fix `email.js` "Resend" comments → Brevo.
-- [ ] Ensure no signing secret ships in the app (only public key).
-- [ ] Update `scripts/test-licensing.js` to the new model; keep staging round-trip tests.
-- [ ] Update `AGENTS.md`: new format, endpoints, secrets, offline grace.
-- [ ] Full `npm test` green; manual end-to-end (buy → email → activate) sign-off.
+- [x] Remove hardcoded Paystack **test secret** fallback (`ipc-handlers.js:3015`).
+- [x] Remove/guard dev `QC_LICENSE_KEY` fallback (`licensing.js:32`).
+- [x] Fix `email.js` "Resend" comments → Brevo.
+- [x] Ensure no signing secret ships in the app (only public key).
+- [x] Update `scripts/test-licensing.js` to the new model; keep staging round-trip tests.
+- [x] Update `AGENTS.md`: new format, endpoints, secrets, offline grace.
+- [x] Full `npm test` green; manual end-to-end (buy → email → activate) sign-off.
 
 **Acceptance criteria**
 - No secrets in the app bundle. Tests green. Docs reflect reality.
+
+**Result:** ✅ All criteria met — `node scripts/run-all-tests.js` → **48 passed, 0 failed** across all test suites. Secrets removed/guarded, docs updated.
 
 ---
 

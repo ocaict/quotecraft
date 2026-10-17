@@ -20,3 +20,5 @@ tools/quotecraft-license-worker/.wrangler/
 # Licensing signing keys & locally generated key store — NEVER commit these
 scripts/.license-private-key.pem
 licenses.json
+device.id
+scripts/device.id

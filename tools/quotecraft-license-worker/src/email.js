@@ -204,7 +204,7 @@ export async function sendLicenseEmail({ to, name, licenseKey, plan, expiryDate,
           <p class="key-label">🔑 Your Activation Key</p>
           <div class="key-box">
             <div class="key-text">${escapeHtml(licenseKey)}</div>
-            <p class="key-hint">Copy the entire key including the QC-PRO- prefix</p>
+            <p class="key-hint">Copy the entire key exactly as shown above</p>
           </div>
         </div>
 
@@ -228,8 +228,9 @@ export async function sendLicenseEmail({ to, name, licenseKey, plan, expiryDate,
         <div class="step">
           <div class="step-num">3</div>
           <div class="step-content">
-            Click <strong>"Activate License"</strong>. QuoteCraft will verify your key
-            instantly — no internet required after this step. ✅
+            Click <strong>"Activate License"</strong>. QuoteCraft connects to our activation
+            server once to verify your key and bind this device. After that it works
+            <strong>offline for 30 days</strong> before silently refreshing. ✅
           </div>
         </div>
 
