@@ -12,7 +12,10 @@ is plain `<script>` tags loaded by `src/renderer/index.html`. No README exists.
 - Package Windows installer: `npm run dist` (electron-builder nsis → `dist/`)
 - No lint / format / typecheck scripts exist — do not invent them.
 - Releases: push a `v*` tag; CI builds the Windows installer and creates a GitHub
-  release. `scripts/publish-release.js` hardcodes v1.2.0 assets — update it per release.
+  release. CI (`.github/workflows/ci.yml`) uploads the installer, blockmap, and
+  `latest.yml`; `scripts/publish-release.js` reads the version from `package.json`.
+  The Windows artifact name is pinned by `build.artifactName` (no spaces, since
+  GitHub rewrites spaces in asset names and `electron-updater` matches on the name).
 
 ## Tests
 - Tests run under plain `node`, NOT Electron. They `require('../src/main/database')`

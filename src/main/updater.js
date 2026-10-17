@@ -33,9 +33,17 @@ function getAutoUpdater() {
 function sendToWindow(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
     try {
-      mainWindow.webContents.send(channel, data);
+      mainWindow.webContents.send(channel, { currentVersion: getAppVersion(), ...data });
     } catch (_) {}
   }
+}
+
+function getAppVersion() {
+  try {
+    const electron = require('electron');
+    if (electron && electron.app) return electron.app.getVersion();
+  } catch (_) {}
+  return null;
 }
 
 function initUpdater(window) {
@@ -162,7 +170,7 @@ function quitAndInstall() {
 }
 
 function getStatus() {
-  return updateStatus;
+  return { ...updateStatus, currentVersion: getAppVersion() };
 }
 
 module.exports = {

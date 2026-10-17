@@ -9,6 +9,20 @@ if (fs.existsSync(testDbPath)) {
 }
 process.env.TEST_DB_PATH = testDbPath;
 
+// Date-relative fixtures so this test never goes stale. overdue_count is
+// computed as next_issue_date <= today, so a hardcoded date eventually
+// flips from "future" to "overdue" and breaks the assertions.
+function isoDateFromToday(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${day}`;
+}
+const FUTURE_ISSUE_DATE = isoDateFromToday(10);
+const PAST_ISSUE_DATE = isoDateFromToday(-30);
+
 const {
   initializeDatabase,
   closeDatabase,
@@ -76,14 +90,14 @@ async function runTests() {
   // 4. Set recurring profile on Invoice 1 with future next_issue_date
   const p1Res = setRecurringProfile(inv1Id, {
     frequency: 'monthly',
-    next_issue_date: '2026-10-15',
+    next_issue_date: FUTURE_ISSUE_DATE,
   });
   assert.ok(p1Res.ok, 'Recurring profile 1 set');
 
   const s1 = getRecurringSummary();
   assert.strictEqual(s1.ok, true);
   assert.strictEqual(s1.summary.active_count, 1, 'Should have 1 active profile');
-  assert.strictEqual(s1.summary.next_fire_date, '2026-10-15', 'Next fire date should match');
+  assert.strictEqual(s1.summary.next_fire_date, FUTURE_ISSUE_DATE, 'Next fire date should match');
   assert.strictEqual(s1.summary.next_amount, 1500, 'Next amount should be 1500');
   assert.strictEqual(s1.summary.next_currency, 'USD', 'Currency should be USD');
   assert.strictEqual(s1.summary.monthly_expected, 1500, 'Monthly expected should be 1500');
@@ -111,13 +125,13 @@ async function runTests() {
 
   const p2Res = setRecurringProfile(inv2Id, {
     frequency: 'monthly',
-    next_issue_date: '2026-09-01',
+    next_issue_date: PAST_ISSUE_DATE,
   });
   assert.ok(p2Res.ok, 'Recurring profile 2 set');
 
   const s2 = getRecurringSummary();
   assert.strictEqual(s2.summary.active_count, 2, 'Should have 2 active profiles');
-  assert.strictEqual(s2.summary.next_fire_date, '2026-09-01', 'Earlier date should be next_fire_date');
+  assert.strictEqual(s2.summary.next_fire_date, PAST_ISSUE_DATE, 'Earlier date should be next_fire_date');
   assert.strictEqual(s2.summary.next_amount, 800, 'Next amount should be 800');
   assert.strictEqual(s2.summary.monthly_expected, 2300, 'Monthly expected should be 1500 + 800 = 2300');
   assert.strictEqual(s2.summary.overdue_count, 1, 'Profile 2 next date is past today, so overdue_count = 1');
@@ -129,7 +143,7 @@ async function runTests() {
 
   const s3 = getRecurringSummary();
   assert.strictEqual(s3.summary.active_count, 1, 'Only 1 active profile after pausing');
-  assert.strictEqual(s3.summary.next_fire_date, '2026-10-15', 'Active profile 1 is now next');
+  assert.strictEqual(s3.summary.next_fire_date, FUTURE_ISSUE_DATE, 'Active profile 1 is now next');
   assert.strictEqual(s3.summary.monthly_expected, 1500, 'Monthly expected drops back to 1500');
   assert.strictEqual(s3.summary.overdue_count, 0, 'No active overdue profile');
   console.log('✓ Paused profile correctly excluded from active metrics');

@@ -981,8 +981,8 @@
 
   function updateUpdaterUI(status) {
     if (!status) return;
-    if (status.version && updaterCurrentVersion) {
-      updaterCurrentVersion.textContent = `v${status.version}`;
+    if (status.currentVersion && updaterCurrentVersion) {
+      updaterCurrentVersion.textContent = `v${status.currentVersion}`;
     }
 
     if (status.status === 'checking') {

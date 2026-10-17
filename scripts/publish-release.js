@@ -32,21 +32,19 @@ if (!token) {
 
 const OWNER = 'ocaict';
 const REPO = 'quotecraft';
-const TAG = 'v1.2.0';
 
-const releaseBody = `## QuoteCraft v1.2.0 — Official Commercial Release 🎉
+// Read the version from package.json so this script never goes stale.
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
+const VERSION = pkg.version;
+const TAG = `v${VERSION}`;
+const SETUP_EXE = `QuoteCraft-Setup-${VERSION}.exe`;
+
+const releaseBody = `## QuoteCraft ${TAG} — Official Release 🎉
 
 QuoteCraft is a fast, offline-first invoice and quote management desktop application tailored for freelancers, contractors, and growing businesses.
 
-### ✨ What's New in v1.2.0:
-- **Offline-First SQLite Engine:** Local-first data architecture with zero dependency on cloud databases.
-- **Paystack Live Integration:** In-app license upgrades with instant on-screen activation and transactional email key delivery.
-- **Automated Rolling Backups:** Automated daily backups with one-click restore and diagnostic logging.
-- **Universal Multi-Currency PDF Engine:** Sharp, high-resolution invoices and quotes supporting NGN (₦), USD ($), GBP (£), and EUR (€).
-- **Auto-Updates:** In-app update notifications powered by \`electron-updater\`.
-
 ### 📦 Installation (Windows):
-1. Download **\`QuoteCraft Setup 1.2.0.exe\`** below.
+1. Download **\`${SETUP_EXE}\`** below.
 2. Run the installer and follow the setup wizard.
 3. *(If prompted by Windows SmartScreen: Click **More info** → **Run anyway**)*.`;
 
@@ -163,8 +161,8 @@ async function main() {
   // 2. Upload assets from dist/
   const distDir = path.resolve(__dirname, '..', 'dist');
   const filesToUpload = [
-    { file: path.join(distDir, 'QuoteCraft Setup 1.2.0.exe'), type: 'application/vnd.microsoft.portable-executable' },
-    { file: path.join(distDir, 'QuoteCraft Setup 1.2.0.exe.blockmap'), type: 'application/octet-stream' },
+    { file: path.join(distDir, SETUP_EXE), type: 'application/vnd.microsoft.portable-executable' },
+    { file: path.join(distDir, `${SETUP_EXE}.blockmap`), type: 'application/octet-stream' },
     { file: path.join(distDir, 'latest.yml'), type: 'text/yaml' },
   ];
 
