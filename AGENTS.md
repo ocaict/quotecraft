@@ -63,5 +63,3 @@ is plain `<script>` tags loaded by `src/renderer/index.html`. No README exists.
 - Secrets: `QC_LICENSE_KEY` has a hardcoded dev fallback in `src/main/licensing.js`;
   worker secrets live in `tools/quotecraft-license-worker/.dev.vars` (gitignored) —
   never commit them.
-- `GO_LIVE_IMPLEMENTATION_PLAN.md`, `PRODUCTION_ROADMAP.md`, and
-  `NIGERIA_COMMERCIAL_ROADMAP.md` are status/planning docs, not setup guides.
