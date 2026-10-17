@@ -46,6 +46,12 @@ const releaseBody = `## QuoteCraft ${TAG} — Official Release 🎉
 
 QuoteCraft is a fast, offline-first invoice and quote management desktop application tailored for freelancers, contractors, and growing businesses.
 
+### 🚀 What's New in ${TAG}:
+- **Commercial Licensing Overhaul**: Clean 20-character Crockford Base32 keys (\`QC-XXXXX-XXXXX-XXXXX-XXXXX\`) with client-side checksum validation.
+- **Online Activation & Offline Grace**: Seamless online key activation with 30-day offline cryptographic grace via Ed25519 entitlement tokens.
+- **License Management UI**: Refresh status, view seat details, and deactivate licenses directly within Settings.
+- **Security & Performance**: Hardened IPC channels, robust database schema migrations, and overall optimizations.
+
 ### 📦 Installation (Windows):
 1. Download **\`${SETUP_EXE}\`** below.
 2. Run the installer and follow the setup wizard.
