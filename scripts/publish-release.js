@@ -1,6 +1,9 @@
 /**
  * publish-release.js
- * Creates GitHub Release v1.2.0 and uploads the distribution assets
+ * Creates a GitHub Release for the version in package.json and uploads the
+ * dist/ assets (installer, blockmap, latest.yml).
+ *
+ * Usage: build first (`npm run dist`), then `node scripts/publish-release.js`.
  */
 
 const https = require('https');
