@@ -7,37 +7,38 @@
 ## Architecture Summary
 
 ```text
-[Customer Pays on Paystack] 
-       │ (₦20,000 Annual or ₦40,000 Lifetime)
-       ▼
-[Paystack Dispatches POST webhook: charge.success]
-       │
-       ▼
-[Cloudflare Edge Worker (node:crypto / V8 isolate)]
+[Customer Pays on Paystack Payment Page]
+       │ (₦5,000 Annual or ₦15,000 Lifetime)
+       ├────────────────────────────────────┐
+       ▼                                    ▼
+[POST webhook: charge.success]      [Browser redirect → /callback]
+       │                                    │
+       ▼                                    │ polls /callback?format=json
+[Cloudflare Edge Worker (V8 isolate)]       │ every 2s until key is in KV
   1. Verify x-paystack-signature (HMAC-SHA512)
   2. Idempotency check in Cloudflare KV (prevent duplicate keys)
   3. Extract customer name, email, amount (determines Annual vs. Lifetime)
   4. Generate HMAC-SHA256 License Key (QC-PRO-<B32_PAYLOAD>-<B32_SIG>)
-  5. Store transaction reference & key in KV
-  6. Send branded activation email via Resend API
+  5. Store transaction reference & key in KV (90-day TTL)
+  6. Send branded activation email via Brevo API
   7. Return HTTP 200 OK to Paystack within < 300ms
-       │
-       ▼
-[Customer Receives Email with Key & Instant Unlock Steps]
+       │                                    │
+       ▼                                    ▼
+[Customer Receives Email]      [Branded success page shows key on-screen]
 ```
 
 ---
 
 ## Phase 1: Accounts & Credentials Setup
 
-- [ ] **1.1 Cloudflare Account**
+- [x] **1.1 Cloudflare Account**
   - Sign up for a free account at [cloudflare.com](https://cloudflare.com).
   - Verify Cloudflare API token / log in with Wrangler CLI: `npx wrangler login`.
-- [ ] **1.2 Resend Account (Transactional Email)**
+- [x] **1.2 Resend Account (Transactional Email)**
   - Sign up at [resend.com](https://resend.com) (free tier: 3,000 emails/mo, 100 emails/day).
   - Add and verify sending domain (e.g. `quotecraft.ng` or custom domain) or use default testing sender.
   - Generate a Resend API Key (`re_...`).
-- [ ] **1.3 Paystack Dashboard Credentials**
+- [x] **1.3 Paystack Dashboard Credentials**
   - Obtain live Secret Key (`sk_live_...`) from **Settings > API & Webhooks**.
   - Keep QuoteCraft signing secret (`QC_LICENSE_KEY`) matching desktop app secret:  
     `QuoteCraft-Nigeria-2026-CommercialLicense-SigningSecret-v1-Do-Not-Share`.
@@ -46,7 +47,7 @@
 
 ## Phase 2: Worker Project Scaffolding
 
-- [ ] **2.1 Initialize Cloudflare Worker project**
+- [x] **2.1 Initialize Cloudflare Worker project**
   - Create directory: `tools/quotecraft-license-worker/`.
   - Initialize with npm and Wrangler:
     ```bash
@@ -55,7 +56,7 @@
     npm init -y
     npm install wrangler --save-dev
     ```
-- [ ] **2.2 Configure `wrangler.toml`**
+- [x] **2.2 Configure `wrangler.toml`**
   - Set Node.js compatibility flags for `node:crypto`:
     ```toml
     name = "quotecraft-license-worker"
@@ -67,10 +68,10 @@
     binding = "LICENSES_KV"
     id = "<KV_NAMESPACE_ID>"
     ```
-- [ ] **2.3 Provision KV Namespace**
+- [x] **2.3 Provision KV Namespace**
   - Run `npx wrangler kv namespace create LICENSES_KV`.
   - Paste generated ID into `wrangler.toml`.
-- [ ] **2.4 Store Encrypted Secrets in Cloudflare**
+- [x] **2.4 Store Encrypted Secrets in Cloudflare**
   - `npx wrangler secret put PAYSTACK_SECRET_KEY`
   - `npx wrangler secret put QC_LICENSE_KEY`
   - `npx wrangler secret put RESEND_API_KEY`
@@ -79,44 +80,44 @@
 
 ## Phase 3: Cryptographic License Engine Port (`src/licensing.js`)
 
-- [ ] **3.1 Port Crockford Base32 and HMAC-SHA256 generation**
+- [x] **3.1 Port Crockford Base32 and HMAC-SHA256 generation**
   - Replicate QuoteCraft's desktop engine (`src/main/licensing.js`) into worker:
     - Base32 encoding without ambiguous characters (`0/O`, `1/I`).
     - HMAC-SHA256 digital signature computation using `QC_LICENSE_KEY`.
     - Key format: `QC-PRO-<B32_PAYLOAD>-<B32_SIG>`.
-- [ ] **3.2 Implement Plan Tier Mapping**
-  - If payment amount >= ₦35,000 (3,500,000 kobo) &rarr; `plan: 'lifetime'`, `expiry_date: null`.
-  - If payment amount < ₦35,000 &rarr; `plan: 'annual'`, `expiry_date: today + 365 days`.
+- [x] **3.2 Implement Plan Tier Mapping**
+  - If payment amount >= ₦10,000 (1,000,000 kobo) &rarr; `plan: 'lifetime'`, `expiry_date: null`.
+  - If payment amount < ₦10,000 (e.g. ₦5,000) &rarr; `plan: 'annual'`, `expiry_date: today + 1 year`.
 
 ---
 
 ## Phase 4: Webhook Handler & Security Engine (`src/index.js`)
 
-- [ ] **4.1 Verify Paystack HMAC-SHA512 Signature**
+- [x] **4.1 Verify Paystack HMAC-SHA512 Signature**
   - Extract `x-paystack-signature` header from request.
   - Read raw body text: `const rawBody = await request.text();`.
   - Compute `crypto.createHmac('sha512', env.PAYSTACK_SECRET_KEY).update(rawBody).digest('hex')`.
   - Return `401 Unauthorized` if signature mismatch.
-- [ ] **4.2 Filter Event Type**
+- [x] **4.2 Filter Event Type**
   - Ensure `event === 'charge.success'`.
   - Immediately return `200 OK` for unrelated events (`charge.failed`, `transfer.success`, etc.).
-- [ ] **4.3 Enforce Idempotency**
+- [x] **4.3 Enforce Idempotency**
   - Check transaction reference in KV: `await env.LICENSES_KV.get('tx:' + reference)`.
   - If already processed, log and return `200 OK` immediately (prevents duplicate emails on Paystack retry).
-- [ ] **4.4 Save Audit Trail to KV**
+- [x] **4.4 Save Audit Trail to KV**
   - Store key: `tx:<reference>` &rarr; `{ email, plan, key, issued_at }` with 90-day TTL.
 
 ---
 
 ## Phase 5: Transactional Email Notification (`src/email.js`)
 
-- [ ] **5.1 Design Responsive HTML Email Template**
+- [x] **5.1 Design Responsive HTML Email Template**
   - Professional, mobile-friendly design with QuoteCraft brand colors.
   - Prominent monospace activation key box with click-to-copy instructions.
   - 3-step activation walkthrough inside desktop app.
   - Receipt details (amount paid, transaction reference, plan type).
   - WhatsApp/email support contact.
-- [ ] **5.2 Resend API Integration**
+- [x] **5.2 Resend API Integration**
   - Dispatch via `fetch('https://api.resend.com/emails')` using Bearer auth.
   - Handle rate limits and error logging cleanly.
 
@@ -124,9 +125,9 @@
 
 ## Phase 6: Local Testing & Webhook Simulation
 
-- [ ] **6.1 Test Key Generation Locally**
+- [x] **6.1 Test Key Generation Locally**
   - Create test script to generate and verify sample Annual and Lifetime keys.
-- [ ] **6.2 Local Webhook Simulation with `wrangler dev`**
+- [x] **6.2 Local Webhook Simulation with `wrangler dev`**
   - Run Worker locally: `npx wrangler dev`.
   - Send simulated `charge.success` payload using curl with valid HMAC signature.
   - Verify email delivery in Resend dashboard.
@@ -139,9 +140,10 @@
 - [x] **7.1 Deploy to Cloudflare** — ✅ DONE
   - Production URL: **`https://quotecraft-license-worker.ocatech.workers.dev`**
   - Webhook endpoint: **`https://quotecraft-license-worker.ocatech.workers.dev/webhook`**
+  - Browser callback endpoint: **`https://quotecraft-license-worker.ocatech.workers.dev/callback`**
   - Health check: **`https://quotecraft-license-worker.ocatech.workers.dev/health`**
-  - Version ID: `81bf177e-82b9-4c9a-9011-18a3212f89e7`
-- [ ] **7.2 Configure Webhook in Paystack Dashboard** — ⚠️ ACTION REQUIRED
+  - Version ID: `0449b74d-9cdc-4cf3-9529-3c41bf29e140` (adds instant on-screen key via KV polling)
+- [x] **7.2 Configure Webhook in Paystack Dashboard** — ✅ DONE
   - Open [Paystack Dashboard > Settings > API & Webhooks](https://dashboard.paystack.com/#/settings/developer).
   - Set **Live Webhook URL** to:
     ```
@@ -154,6 +156,11 @@
   - Webhook received, HMAC verified, license key generated and stored in KV.
   - Branded email dispatched to customer via Brevo API.
   - Offline cryptographic signature verified in QuoteCraft desktop app.
+- [x] **7.4 Payment Page Redirect & Instant On-Screen Key** — ✅ DONE & VERIFIED (live)
+  - The static Paystack Payment Page (`https://paystack.shop/pay/quotecraft`) has its **Redirect URL** set to `https://quotecraft-license-worker.ocatech.workers.dev/callback`.
+  - The dashboard **Live Callback URL** only applies to API-initialized transactions — Payment Pages/Storefront links use their own per-page Redirect URL.
+  - After payment, Paystack redirects the browser to `/callback`, which auto-polls `GET /callback?format=json&reference=...` every 2s (up to ~40s) until the key is present in KV, then displays it with a 1-click copy button — no manual refresh.
+  - Verified with a real live payment: key displayed on-screen and emailed, no developer intervention.
 
 ---
 

@@ -12,7 +12,7 @@ A comprehensive, stage-by-stage operational execution plan to take **QuoteCraft*
 | **Stage 2** | **Email Deliverability & Sender Setup** | Brevo Shared Delivery & On-Screen Key | ✅ **COMPLETED** — Delivered via Brevo shared verified infrastructure + on-screen display |
 | **Stage 3** | **App Pricing & Upgrade Flow Hardening** | Desktop Client Code & Cloudflare Worker | ✅ **COMPLETED** — Official pricing: ₦15,000 Lifetime & ₦5,000 Yearly configured |
 | **Stage 4** | **Packaging, GitHub Releases & Auto-Update** | `electron-builder`, GitHub Releases | ✅ **COMPLETED** — NSIS installer `v1.2.0` & `latest.yml` generated in `dist/` |
-| **Stage 5** | **Live Canary Transaction & Verification** | End-to-End Real User Flow | Full real payment &rarr; auto-license email &rarr; 1-click in-app activation |
+| **Stage 5** | **Live Canary Transaction & Verification** | End-to-End Real User Flow | ✅ **COMPLETED** — Live payment &rarr; redirect to branded success page &rarr; auto-license email &rarr; in-app activation |
 | **Stage 6** | **Post-Launch Operations & Support Runbook** | Monitoring & Customer Support | License recovery, refund handling, error diagnostics |
 
 ---
@@ -40,15 +40,17 @@ Ensure Paystack Live mode sends webhooks to the production Cloudflare Worker, an
    - *Status:* ✅ All secrets verified active and live.
 3. **Browser Callback & Event Handling:**
    - Worker handles `POST /webhook` for Paystack automated events (`charge.success`).
-   - Worker handles `GET /webhook` for browser redirects, instantly looking up the reference in KV to render a branded success UI with 1-click license key copy.
-   - *Status:* ✅ Deployed and verified on Cloudflare.
+   - Worker handles `GET /callback` (also `/success`, `/webhook`, or any URL carrying `?reference=`/`?trxref=`) for browser redirects, looking up the transaction reference in KV and rendering a branded success UI with 1-click license key copy.
+   - The static **Paystack Payment Page** (`https://paystack.shop/pay/quotecraft`) has its **Redirect URL** set to `https://quotecraft-license-worker.ocatech.workers.dev/callback` (set per-page — the dashboard `Live Callback URL` only applies to API-initialized transactions).
+   - The success page auto-polls `GET /callback?format=json&reference=...` every 2s (up to ~40s) until the `charge.success` webhook has written the key to KV, so the key appears on-screen without a manual refresh.
+   - *Status:* ✅ Deployed and verified on Cloudflare (worker version `0449b74d`).
 
 ### 1.3 Verification & Acceptance Criteria
 - [x] Webhook endpoint returns HTTP `200 OK` on valid signed `charge.success` events.
 - [x] Invalid signatures correctly rejected with HTTP `401 Unauthorized`.
 - [x] Generated license keys saved in remote KV with 90-day TTL.
 - [x] Transactional emails dispatched via Brevo API and delivered.
-- [x] Browser callback verified (`GET /webhook?reference=...`) displaying instant on-screen key.
+- [x] Browser callback verified (`GET /callback?reference=...`) displaying instant on-screen key via KV polling.
 
 ---
 
@@ -62,7 +64,7 @@ Deliver license keys reliably to customers even without an upfront custom domain
    - Transactional emails send through Brevo's verified infrastructure (`ocatechskill@...brevosend.com`) with `replyTo: ocatechskill@gmail.com`.
    - Verified live test delivery (`status: delivered`) to `ocatestemail@gmail.com`.
 2. **Instant On-Screen Guarantee:**
-   - Even if email delivery is delayed or filtered by a customer's provider, the newly deployed browser callback displays the license key on-screen immediately upon completing payment.
+   - Even if email delivery is delayed or filtered by a customer's provider, the browser callback (Payment Page Redirect URL &rarr; `/callback`) displays the license key on-screen automatically within seconds of payment, polling KV until the webhook has generated it.
 3. **Future Custom Domain Optimization:**
    - When a custom domain is acquired, SPF/DKIM DNS records will be added to Brevo for white-label branding.
 
@@ -121,7 +123,7 @@ Build clean production installers, establish auto-update infrastructure, and pre
 
 ---
 
-## Stage 5: Live Canary Transaction & Verification
+## Stage 5: Live Canary Transaction & Verification (✅ COMPLETED)
 
 ### 5.1 Objective
 Execute a live, end-to-end commercial transaction as a real user to guarantee zero friction.
@@ -133,16 +135,25 @@ Execute a live, end-to-end commercial transaction as a real user to guarantee ze
 2. **Verify Worker Webhook Execution:**
    - Monitor Cloudflare Worker logs via Cloudflare Dashboard or Wrangler tail.
    - Confirm event `charge.success` received.
-   - Confirm Ed25519 license key generated and stored in KV.
-3. **Verify Email Receipt:**
+   - Confirm signed license key generated and stored in KV.
+3. **Verify Post-Payment Redirect:**
+   - Paystack redirects the browser to the Payment Page **Redirect URL** (`…/callback`).
+   - Confirm the branded "Payment Confirmed!" page displays the license key automatically (KV polling).
+4. **Verify Email Receipt:**
    - Confirm receipt of Brevo email containing the license key within 30-60 seconds.
-4. **Activate Within QuoteCraft:**
-   - Copy key from email &rarr; Paste into QuoteCraft **License Key** field &rarr; Click **Activate License**.
+5. **Activate Within QuoteCraft:**
+   - Copy key from email or the success page &rarr; Paste into QuoteCraft **License Key** field &rarr; Click **Activate License**.
    - Confirm app status immediately updates to **"Lifetime License Active"**.
    - Verify all Pro features unlock (watermark removed, unlimited quotes/invoices, advanced PDF exports).
 
-### 5.3 Acceptance Criteria
-- Zero manual developer intervention required from checkout to activation.
+### 5.3 Verification Results
+- ✅ Live payment completed and webhook `charge.success` processed.
+- ✅ License key generated, stored in KV, and emailed via Brevo.
+- ✅ Payment Page Redirect URL &rarr; `/callback` displays the activation key on-screen automatically.
+- ✅ Key activates QuoteCraft Pro in-app.
+
+### 5.4 Acceptance Criteria
+- [x] Zero manual developer intervention required from checkout to activation.
 
 ---
 
@@ -163,7 +174,7 @@ When a customer contacts support claiming they never received their email:
 3. KV retrieves existing license key by reference and dispatches a fresh Brevo email.
 
 #### B. Machine Transfer / Reinstallation
-- Because QuoteCraft uses cryptographically signed Ed25519 offline keys, the customer can reuse their license key on a new or formatted computer.
+- Because QuoteCraft uses cryptographically signed HMAC-SHA256 offline keys, the customer can reuse their license key on a new or formatted computer.
 - Instructions to user: Download fresh QuoteCraft &rarr; Settings &rarr; Enter existing license key.
 
 #### C. Database Disaster Recovery
@@ -180,5 +191,5 @@ When a customer contacts support claiming they never received their email:
 - [x] Official production price updated in app & licensing engine (₦15k / ₦5k)
 - [x] `npm run dist:win` installer built and verified on clean OS
 - [x] GitHub Release uploaded with `latest.yml` (`https://github.com/ocaict/quotecraft/releases/tag/v1.2.0`)
-- [ ] 1 successful Live Canary transaction completed
+- [x] 1 successful Live Canary transaction completed
 - [ ] Support email / contact channel monitored
