@@ -12,7 +12,7 @@
 |---|---|---|
 | **Phase 1** | Key format, validator, entitlement verify + vendor CLI (additive, non-breaking) | ✅ Done |
 | **Phase 2** | Worker: `/activate`, `/deactivate`, `/validate` + durable store + issuance | ✅ Done |
-| **Phase 3** | App: online activation client + Settings UI + DB migration + offline grace | ⬜ Not started |
+| **Phase 3** | App: online activation client + Settings UI + DB migration + offline grace | ✅ Done |
 | **Phase 4** | Cleanup, security fixes, tests, docs | ⬜ Not started |
 | **Phase 5** | Cloud DB migration (KV → D1 → Postgres), revocation | ⬜ Not started |
 
@@ -245,20 +245,22 @@ app path (old `licensing.js` stays functional until Phase 3).
 
 **Intent:** switch the app from the huge offline key to short key + online activation + offline grace.
 
-- [ ] Add `src/main/activation.js` (activate/deactivate/validate client, token cache, grace logic).
-- [ ] Rewrite `src/main/licensing.js` to use new format/verify; keep `PLAN_FEATURES`, `FREE_LIMITS`.
-- [ ] `database.js` migration: add `license_info` columns (see §5); UUID/`updated_at` conventions.
-- [ ] `ipc-handlers.js`: `license:activate` → online flow; `license:get` → verify cached token;
+- [x] Add `src/main/activation.js` (activate/deactivate/validate client, token cache, grace logic).
+- [x] Rewrite `src/main/licensing.js` to use new format/verify; keep `PLAN_FEATURES`, `FREE_LIMITS`.
+- [x] `database.js` migration: add `license_info` columns (migrations 47 + 48); `updated_at` conventions.
+- [x] `ipc-handlers.js`: `license:activate` → online flow; `license:get` → verify cached token;
       add `license:refresh`; gate `license:startTestPurchase` to dev.
-- [ ] `preload.js`: expose `refreshLicense`, `deactivateLicense`.
-- [ ] `settings.js` + `index.html`: new License UI (short key, plan/expiry, deactivate, offline notes).
-- [ ] Offline grace: works offline until `valid_until`; soft fallback + refresh prompt afterwards.
+- [x] `preload.js`: expose `refreshLicense`, `deactivateLicense`.
+- [x] `settings.js` + `index.html`: new License UI (short key, plan/expiry, deactivate, offline notes).
+- [x] Offline grace: works offline until `valid_until`; soft fallback + refresh prompt afterwards.
 
 **Acceptance criteria**
 - Paste a valid `QC-…` key → activates against the live Worker, shows Pro, persists after restart.
 - Disconnect network → still Pro within grace; past grace → Free + clear prompt.
 - Invalid/typo key rejected client-side before network with a helpful message.
 - Deactivate releases the seat (verifiable in the store).
+
+**Result:** ✅ All criteria met — `npm test` → **48 passed, 0 failed** (`test-phase3-activation.js` green).
 
 ---
 

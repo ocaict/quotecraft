@@ -1282,6 +1282,9 @@
     const activeIssued = document.getElementById('licenseActiveIssued');
     const activeExpiry = document.getElementById('licenseActiveExpiry');
     const expiryWrap = document.getElementById('licenseExpiryWrap');
+    const activeSerial = document.getElementById('licenseActiveSerial');
+    const graceWrap = document.getElementById('licenseGraceWrap');
+    const graceStatus = document.getElementById('licenseGraceStatus');
     const purchasePanel = document.getElementById('licensePurchasePanel');
     const keyInput = document.getElementById('licenseKeyInput');
 
@@ -1290,12 +1293,19 @@
     try {
       const res = await window.electronAPI.getLicense();
       if (!res || !res.isPro || !res.license) {
-        // Free tier
+        // Free tier or Grace Expired
         if (badge) {
-          badge.textContent = '\uD83D\uDD12 Free Tier';
-          badge.style.background = 'rgba(107,114,128,0.15)';
-          badge.style.color = '#9ca3af';
-          badge.style.border = '1px solid rgba(107,114,128,0.3)';
+          if (res?.license?.needsRefresh || res?.license?.state === 'grace_expired') {
+            badge.textContent = '⚠️ Refresh Needed';
+            badge.style.background = 'rgba(245,158,11,0.15)';
+            badge.style.color = '#f59e0b';
+            badge.style.border = '1px solid rgba(245,158,11,0.3)';
+          } else {
+            badge.textContent = '\uD83D\uDD12 Free Tier';
+            badge.style.background = 'rgba(107,114,128,0.15)';
+            badge.style.color = '#9ca3af';
+            badge.style.border = '1px solid rgba(107,114,128,0.3)';
+          }
         }
         if (activePanel) activePanel.style.display = 'none';
         if (purchasePanel) purchasePanel.style.display = '';
@@ -1314,6 +1324,7 @@
         if (activeName) activeName.textContent = `QuoteCraft Pro \u2014 Active`;
         if (activeEmail) activeEmail.textContent = lic.licensee_email || '';
         if (activePlan) activePlan.textContent = lic.plan === 'lifetime' ? 'Lifetime' : 'Annual';
+        if (activeSerial) activeSerial.textContent = lic.serial || lic.license_key || '\u2014';
         if (activeIssued) {
           activeIssued.textContent = lic.issued_at ? new Date(lic.issued_at).toLocaleDateString() : '\u2014';
         }
@@ -1323,6 +1334,21 @@
             activeExpiry.textContent = new Date(lic.expiry_date).toLocaleDateString();
           } else {
             expiryWrap.style.display = 'none';
+          }
+        }
+        if (graceWrap && graceStatus) {
+          if (lic.valid_until) {
+            graceWrap.style.display = '';
+            const diffDays = Math.ceil((new Date(lic.valid_until).getTime() - Date.now()) / (86400000));
+            if (diffDays > 0) {
+              graceStatus.textContent = `Valid offline (${diffDays} days remaining)`;
+              graceStatus.style.color = '#10b981';
+            } else {
+              graceStatus.textContent = 'Grace expired — connect to refresh';
+              graceStatus.style.color = '#f59e0b';
+            }
+          } else {
+            graceWrap.style.display = 'none';
           }
         }
         if (keyInput) keyInput.value = '';
@@ -1344,6 +1370,21 @@
         return;
       }
 
+      // Client-side format pre-validation (instant typo check)
+      if (window.QuoteCraftLicenseKey && !key.toUpperCase().startsWith('QC-PRO-')) {
+        const fmt = window.QuoteCraftLicenseKey.validateKeyFormat(key);
+        if (!fmt.ok) {
+          const reason =
+            fmt.reason === 'checksum'
+              ? 'Typo detected in license key. Please recheck your characters.'
+              : fmt.reason === 'length'
+              ? 'License key is incomplete. Must be 4 groups of 5 characters.'
+              : 'Invalid key format.';
+          if (msgEl) { msgEl.textContent = '❌ ' + reason; msgEl.style.color = '#f87171'; }
+          return;
+        }
+      }
+
       licenseActivateBtn.disabled = true;
       licenseActivateBtn.textContent = '\u23F3 Activating\u2026';
       if (msgEl) { msgEl.textContent = ''; }
@@ -1357,11 +1398,10 @@
           }
           window.QuoteCraftUtils.showToast('\u26A1 QuoteCraft Pro activated! All premium features are now unlocked.', 'success');
           await loadLicenseStatus();
-          // Dispatch event so other parts of the app can update
           document.dispatchEvent(new CustomEvent('licensechange', { detail: { isPro: true } }));
         } else {
           if (msgEl) {
-            msgEl.textContent = '\u274C ' + (res.message || 'Invalid license key. Please check and try again.');
+            msgEl.textContent = '\u274C ' + (res.message || 'Activation failed. Please check your key or internet connection.');
             msgEl.style.color = '#f87171';
           }
         }
@@ -1374,17 +1414,38 @@
     });
   }
 
+  const licenseRefreshBtn = document.getElementById('licenseRefreshBtn');
+  if (licenseRefreshBtn) {
+    licenseRefreshBtn.addEventListener('click', async () => {
+      const msgEl = document.getElementById('licenseRefreshMsg');
+      if (msgEl) msgEl.textContent = 'Refreshing\u2026';
+      try {
+        const res = await window.electronAPI.refreshLicense();
+        if (res && res.ok) {
+          if (msgEl) { msgEl.textContent = '✓ Refreshed'; msgEl.style.color = '#10b981'; }
+          window.QuoteCraftUtils.showToast('License status refreshed successfully.', 'success');
+          await loadLicenseStatus();
+        } else {
+          if (msgEl) { msgEl.textContent = res.message || 'Refresh failed'; msgEl.style.color = '#f87171'; }
+        }
+      } catch (err) {
+        if (msgEl) { msgEl.textContent = 'Error: ' + err.message; msgEl.style.color = '#f87171'; }
+      }
+      setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 4000);
+    });
+  }
+
   const licenseDeactivateBtn = document.getElementById('licenseDeactivateBtn');
   if (licenseDeactivateBtn) {
     licenseDeactivateBtn.addEventListener('click', async () => {
-      if (!confirm('Are you sure you want to remove your QuoteCraft Pro license? Pro features will be disabled until you re-activate.')) return;
+      if (!confirm('Are you sure you want to deactivate QuoteCraft Pro on this device? This frees up a device seat on your license.')) return;
       try {
         await window.electronAPI.deactivateLicense();
-        window.QuoteCraftUtils.showToast('License removed. You are now on the Free tier.', 'info');
+        window.QuoteCraftUtils.showToast('Device deactivated. You are now on the Free tier.', 'info');
         await loadLicenseStatus();
         document.dispatchEvent(new CustomEvent('licensechange', { detail: { isPro: false } }));
       } catch (err) {
-        window.QuoteCraftUtils.showToast('Failed to remove license: ' + err.message, 'error');
+        window.QuoteCraftUtils.showToast('Failed to deactivate device: ' + err.message, 'error');
       }
     });
   }

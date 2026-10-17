@@ -219,6 +219,7 @@ function validateKeyFormat(input) {
     plan: plan,
     expiry: expiry,
     serial: body.slice(2 + EXPIRY_LEN),
+    formatted: formatKey(payload),
     normalized: payload,
   };
 }

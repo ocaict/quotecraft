@@ -5,6 +5,12 @@ const logger = require('./logger');
 const updater = require('./updater');
 const { verifyLicenseKey, PLAN_FEATURES, FREE_LIMITS } = require('./licensing');
 const {
+  activateOnline,
+  deactivateOnline,
+  refreshLicenseOnline,
+  getEffectiveLicenseState,
+} = require('./activation');
+const {
   renderQuotePdf,
   renderInvoicePdf,
   renderCreditNotePdf,
@@ -2930,24 +2936,24 @@ function registerIpcHandlers() {
   // ---------------------------------------------------------------------------
 
   /**
-   * Returns the stored license info plus its current validity.
+   * Returns the stored license info plus its current validity (verifying cached token & offline grace).
    */
   ipcMain.handle('license:get', async () => {
     try {
-      const stored = getLicenseInfo();
-      if (!stored || !stored.license_key) {
-        return { ok: true, isPro: false, license: null };
-      }
-      const verification = verifyLicenseKey(stored.license_key);
+      const state = await getEffectiveLicenseState();
       return {
-        ok: true,
-        isPro: verification.ok === true && !verification.expired,
-        license: {
-          ...stored,
-          valid: verification.ok,
-          expired: verification.expired || false,
-          message: verification.message,
-        },
+        ok: state.ok,
+        isPro: state.isPro,
+        license: state.license
+          ? {
+              ...state.license,
+              valid: state.isPro,
+              state: state.state,
+              valid_until: state.valid_until || state.license.valid_until || null,
+              needsRefresh: state.needsRefresh || false,
+              message: state.message || (state.isPro ? 'QuoteCraft Pro — Valid' : ''),
+            }
+          : null,
       };
     } catch (err) {
       logger.error('[license:get] ' + err.message);
@@ -2956,26 +2962,15 @@ function registerIpcHandlers() {
   });
 
   /**
-   * Activates a license key: verifies it, then persists if valid.
+   * Activates a license key online against the Worker, binds device seat, and caches token.
    */
   ipcMain.handle('license:activate', async (_event, keyString) => {
     try {
       if (!keyString || typeof keyString !== 'string') {
         return { ok: false, message: 'Please enter a license key.' };
       }
-      const result = verifyLicenseKey(keyString.trim());
-      if (!result.ok) {
-        return { ok: false, message: result.message };
-      }
-      saveLicenseInfo({
-        license_key: keyString.trim(),
-        licensee_name: result.licensee_name,
-        licensee_email: result.licensee_email,
-        plan: result.plan,
-        expiry_date: result.expiry_date || null,
-        issued_at: result.issued_at || null,
-      });
-      return { ok: true, message: result.message, license: result };
+      const result = await activateOnline(keyString.trim());
+      return result;
     } catch (err) {
       logger.error('[license:activate] ' + err.message);
       return { ok: false, message: err.message };
@@ -2983,14 +2978,25 @@ function registerIpcHandlers() {
   });
 
   /**
-   * Deactivates (removes) the stored license.
+   * Deactivates (releases) the device seat on the Worker and clears local license.
    */
   ipcMain.handle('license:deactivate', async () => {
     try {
-      clearLicenseInfo();
-      return { ok: true };
+      return await deactivateOnline();
     } catch (err) {
       logger.error('[license:deactivate] ' + err.message);
+      return { ok: false, message: err.message };
+    }
+  });
+
+  /**
+   * Refreshes the cached entitlement token against the Worker to extend the offline grace window.
+   */
+  ipcMain.handle('license:refresh', async () => {
+    try {
+      return await refreshLicenseOnline();
+    } catch (err) {
+      logger.error('[license:refresh] ' + err.message);
       return { ok: false, message: err.message };
     }
   });
@@ -3003,14 +3009,17 @@ function registerIpcHandlers() {
   });
 
   /**
-   * Initializes a Paystack test checkout session and opens it in the browser.
+   * Initializes a Paystack test checkout session (gated to development mode).
    */
   ipcMain.handle('license:startTestPurchase', async (event, opts = {}) => {
+    const isDev = !app.isPackaged || process.env.NODE_ENV === 'development';
+    if (!isDev) {
+      return { ok: false, message: 'Test purchase checkout is only available in development.' };
+    }
     try {
       const email = opts.email || 'ocatestemail@gmail.com';
       const plan = opts.plan === 'lifetime' ? 'lifetime' : 'annual';
       // Official pricing: Lifetime ₦15,000 (1,500,000 kobo) / Annual ₦5,000 (500,000 kobo).
-      // determinePlan() in the worker treats >= ₦10,000 (1,000,000 kobo) as Lifetime.
       const amountKobo = plan === 'lifetime' ? 1500000 : 500000;
       const testSecret = process.env.PAYSTACK_TEST_SECRET_KEY || 'sk_test_8e651b0232b4590c3f66f4bb1fc904a26e396b55';
 

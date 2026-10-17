@@ -1,33 +1,19 @@
 /**
- * licensing.js — QuoteCraft Offline Commercial License Engine
+ * licensing.js — QuoteCraft Commercial License Engine
  *
- * Generates and verifies HMAC-SHA256 signed license keys for QuoteCraft Pro.
- *
- * License Key Format:
- *   QC-PRO-<BASE32_PAYLOAD>-<BASE32_SIGNATURE>
- *
- * Payload JSON (Base32-encoded):
- *   {
- *     licensee_name: string,
- *     licensee_email: string,
- *     plan: 'annual' | 'lifetime',
- *     expiry_date: string | null,   // ISO date string or null for lifetime
- *     issued_at: string,            // ISO date string
- *     sku: 'QC-PRO-NG',            // Product SKU
- *   }
- *
- * The signature is HMAC-SHA256 of the payload JSON, keyed with SIGNING_KEY.
- * Verification is entirely offline; no internet required.
+ * Provides plan metadata, feature lists, tier limits, and unified validation
+ * for both new online serial activation (v1 Crockford Base32 + Ed25519 entitlement tokens)
+ * and legacy offline keys (QC-PRO-...).
  */
 
 'use strict';
 
 const crypto = require('crypto');
+const { validateKeyFormat, normalizeKey, isValidKey } = require('../shared/license-key');
+const { verifyEntitlementToken, isEntitlementValid } = require('./entitlement');
 
 // ---------------------------------------------------------------------------
-// Signing Key — keep this SECRET on the server that generates licenses.
-// The bundled app only needs this to VERIFY (can be same key for symmetric HMAC).
-// For production, replace with your own 64+ character random secret.
+// Legacy Signing Key (preserved for existing test backwards compatibility)
 // ---------------------------------------------------------------------------
 const SIGNING_KEY = process.env.QC_LICENSE_KEY ||
   'QuoteCraft-Nigeria-2026-CommercialLicense-SigningSecret-v1-Do-Not-Share';
@@ -67,9 +53,9 @@ const FREE_LIMITS = Object.freeze({
 });
 
 // ---------------------------------------------------------------------------
-// Base32 helpers (Crockford alphabet — no ambiguous chars O/0 I/1)
+// Legacy Base32 & HMAC helpers
 // ---------------------------------------------------------------------------
-const BASE32_ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ0123456789'; // 32 chars
+const BASE32_ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ0123456789';
 
 function toBase32(buffer) {
   let bits = 0;
@@ -110,29 +96,15 @@ function fromBase32(str) {
   return Buffer.from(bytes);
 }
 
-// ---------------------------------------------------------------------------
-// Core cryptographic operations
-// ---------------------------------------------------------------------------
-
 function signPayload(payloadJson) {
   return crypto.createHmac('sha256', SIGNING_KEY)
     .update(payloadJson, 'utf8')
     .digest();
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 /**
- * Generates a QuoteCraft Pro license key.
- *
- * @param {object} opts
- * @param {string} opts.licensee_name  - Name of the licensee
- * @param {string} opts.licensee_email - Email of the licensee
- * @param {'annual'|'lifetime'} opts.plan - License plan
- * @param {string|null} [opts.expiry_date] - Expiry ISO date (null for lifetime)
- * @returns {string} License key in QC-PRO-XXXX-XXXX format
+ * Generates a legacy QuoteCraft Pro license key (QC-PRO-...).
+ * Kept for existing test and staging backwards compatibility.
  */
 function generateLicenseKey({ licensee_name, licensee_email, plan, expiry_date = null }) {
   if (!licensee_name || !licensee_email) {
@@ -157,34 +129,83 @@ function generateLicenseKey({ licensee_name, licensee_email, plan, expiry_date =
   const payloadJson = JSON.stringify(payload);
   const payloadB32 = toBase32(Buffer.from(payloadJson, 'utf8'));
   const sigBytes = signPayload(payloadJson);
-  // Use only first 10 bytes of signature for brevity (80-bit security for a desktop app)
   const sigB32 = toBase32(sigBytes.slice(0, 10));
 
   return `QC-PRO-${payloadB32}-${sigB32}`;
 }
 
 /**
- * Verifies a QuoteCraft license key.
+ * Verifies a license key or entitlement token.
+ * Supports:
+ *   1. Entitlement Token: <base64url>.<base64url> (Ed25519 signature + grace window)
+ *   2. Modern Serial: QC-XXXXX-XXXXX-XXXXX-XXXXX (Format & checksum validation)
+ *   3. Legacy Key: QC-PRO-<B32>-<SIG> (HMAC-SHA256 validation)
  *
- * @param {string} keyString - The license key to verify
+ * @param {string} keyString
  * @returns {{ ok: boolean, plan?: string, licensee_name?: string, licensee_email?: string,
- *             expiry_date?: string|null, issued_at?: string, expired?: boolean, message?: string }}
+ *             expiry_date?: string|null, issued_at?: string, expired?: boolean, message?: string, isPro?: boolean }}
  */
 function verifyLicenseKey(keyString) {
   if (!keyString || typeof keyString !== 'string') {
     return { ok: false, message: 'No license key provided.' };
   }
 
-  const trimmed = keyString.trim().toUpperCase();
+  const trimmed = keyString.trim();
 
-  // Format check
-  if (!trimmed.startsWith('QC-PRO-')) {
-    return { ok: false, message: 'Invalid license key format. Key must start with QC-PRO-.' };
+  // 1. Entitlement Token check (<payload>.<sig>)
+  if (trimmed.includes('.') && trimmed.split('.').length === 2) {
+    const tokenRes = verifyEntitlementToken(trimmed);
+    if (!tokenRes.ok) {
+      return { ok: false, message: 'Invalid entitlement token signature.' };
+    }
+    const payload = tokenRes.payload;
+    const validity = isEntitlementValid(payload, Date.now());
+    const expired = validity.reason === 'expired';
+    const ok = validity.ok;
+
+    return {
+      ok,
+      isPro: ok,
+      plan: payload.plan,
+      licensee_name: payload.name || '',
+      licensee_email: payload.email || '',
+      expiry_date: payload.expiry || null,
+      issued_at: payload.issued_at,
+      valid_until: payload.valid_until,
+      expired,
+      needsRefresh: validity.needsRefresh || false,
+      message: expired
+        ? `This license key expired on ${payload.expiry}.`
+        : validity.needsRefresh
+        ? 'Offline grace period ended. Please reconnect to the internet.'
+        : `QuoteCraft Pro (${payload.plan}) — Valid`,
+    };
   }
 
-  // Split on the last '-' to separate payload from signature
-  // Key format: QC-PRO-<PAYLOAD>-<SIG>
-  const withoutPrefix = trimmed.slice('QC-PRO-'.length);
+  // 2. Modern Crockford Serial check (QC-XXXXX-...)
+  if (!trimmed.toUpperCase().startsWith('QC-PRO-')) {
+    const fmt = validateKeyFormat(trimmed);
+    if (!fmt.ok) {
+      return {
+        ok: false,
+        message: fmt.reason === 'checksum'
+          ? 'License key typo detected. Please check the characters.'
+          : 'Invalid license key format.',
+      };
+    }
+    // A valid serial format is ready for online activation
+    return {
+      ok: true,
+      isPro: true,
+      serial: fmt.serial,
+      plan: fmt.plan,
+      expiry_date: fmt.expiry,
+      message: `QuoteCraft (${fmt.plan}) — Ready for online activation`,
+    };
+  }
+
+  // 3. Legacy QC-PRO- key validation
+  const withoutPrefix = trimmed.toUpperCase().slice('QC-PRO-'.length);
   const lastDash = withoutPrefix.lastIndexOf('-');
   if (lastDash === -1) {
     return { ok: false, message: 'Malformed license key: missing signature separator.' };
@@ -197,7 +218,6 @@ function verifyLicenseKey(keyString) {
     return { ok: false, message: 'Malformed license key: empty payload or signature.' };
   }
 
-  // Decode payload
   let payload;
   let payloadJson;
   try {
@@ -208,12 +228,10 @@ function verifyLicenseKey(keyString) {
     return { ok: false, message: `Failed to decode license key payload: ${err.message}` };
   }
 
-  // Verify signature
   try {
     const expectedSigBytes = signPayload(payloadJson);
     const expectedSigB32 = toBase32(expectedSigBytes.slice(0, 10));
 
-    // Constant-time comparison to prevent timing attacks
     if (sigB32.length !== expectedSigB32.length ||
         !crypto.timingSafeEqual(Buffer.from(sigB32), Buffer.from(expectedSigB32))) {
       return { ok: false, message: 'License key signature is invalid. The key may have been tampered with.' };
@@ -222,7 +240,6 @@ function verifyLicenseKey(keyString) {
     return { ok: false, message: `Signature verification failed: ${err.message}` };
   }
 
-  // Validate payload fields
   if (!payload.licensee_name || !payload.licensee_email || !payload.plan || !payload.sku) {
     return { ok: false, message: 'License key payload is missing required fields.' };
   }
@@ -231,14 +248,12 @@ function verifyLicenseKey(keyString) {
     return { ok: false, message: `This license key is for a different product (SKU: ${payload.sku}).` };
   }
 
-  // Check expiry
   let expired = false;
   if (payload.expiry_date) {
     const expiryMs = new Date(payload.expiry_date).getTime();
-    if (isNaN(expiryMs)) {
-      return { ok: false, message: 'License key contains an invalid expiry date.' };
+    if (!isNaN(expiryMs)) {
+      expired = Date.now() > expiryMs;
     }
-    expired = Date.now() > expiryMs;
   }
 
   return {
@@ -257,8 +272,7 @@ function verifyLicenseKey(keyString) {
 }
 
 /**
- * Returns whether a license is currently active (ok and not expired).
- * Quick helper to call from feature gates.
+ * Returns whether a license key string represents an active Pro license.
  *
  * @param {string|null} keyString
  * @returns {boolean}
@@ -273,6 +287,11 @@ module.exports = {
   generateLicenseKey,
   verifyLicenseKey,
   isProLicense,
+  validateKeyFormat,
+  normalizeKey,
+  isValidKey,
+  verifyEntitlementToken,
+  isEntitlementValid,
   PLANS,
   PLAN_FEATURES,
   FREE_LIMITS,

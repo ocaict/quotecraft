@@ -1561,6 +1561,28 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 48,
+    up: () => {
+      // Add online activation & offline grace fields to license_info table
+      const res = db.exec(`PRAGMA table_info(license_info)`);
+      if (res && res[0]) {
+        const cols = new Set(res[0].values.map((v) => v[1]));
+        const newCols = [
+          ['entitlement_token', 'TEXT DEFAULT NULL'],
+          ['serial', 'TEXT DEFAULT NULL'],
+          ['status', "TEXT DEFAULT 'active'"],
+          ['valid_until', 'TEXT DEFAULT NULL'],
+          ['device_id', 'TEXT DEFAULT NULL'],
+        ];
+        for (const [col, def] of newCols) {
+          if (!cols.has(col)) {
+            db.run(`ALTER TABLE license_info ADD COLUMN ${col} ${def}`);
+          }
+        }
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -9050,30 +9072,56 @@ function getLicenseInfo() {
 /**
  * Saves license activation details to the database.
  * @param {object} info
- * @param {string} info.license_key
- * @param {string} info.licensee_name
- * @param {string} info.licensee_email
- * @param {string} info.plan
- * @param {string|null} info.expiry_date
- * @param {string|null} info.issued_at
+ * @param {string} [info.license_key]
+ * @param {string} [info.serial]
+ * @param {string} [info.licensee_name]
+ * @param {string} [info.licensee_email]
+ * @param {string} [info.plan]
+ * @param {string|null} [info.expiry_date]
+ * @param {string|null} [info.issued_at]
+ * @param {string|null} [info.entitlement_token]
+ * @param {string} [info.status]
+ * @param {string|null} [info.valid_until]
+ * @param {string|null} [info.device_id]
  */
-function saveLicenseInfo({ license_key, licensee_name, licensee_email, plan, expiry_date, issued_at }) {
+function saveLicenseInfo(info) {
+  if (!info) return;
   const now = new Date().toISOString();
   const existing = getLicenseInfo();
+  const license_key = info.license_key !== undefined ? info.license_key : (existing ? existing.license_key : null);
+  const serial = info.serial !== undefined ? info.serial : (existing ? existing.serial : license_key);
+  const licensee_name = info.licensee_name !== undefined ? info.licensee_name : (existing ? existing.licensee_name : '');
+  const licensee_email = info.licensee_email !== undefined ? info.licensee_email : (existing ? existing.licensee_email : '');
+  const plan = info.plan !== undefined ? info.plan : (existing ? existing.plan : '');
+  const expiry_date = info.expiry_date !== undefined ? info.expiry_date : (existing ? existing.expiry_date : null);
+  const issued_at = info.issued_at !== undefined ? info.issued_at : (existing ? existing.issued_at : null);
+  const entitlement_token = info.entitlement_token !== undefined ? info.entitlement_token : (existing ? existing.entitlement_token : null);
+  const status = info.status !== undefined ? info.status : (existing && existing.status ? existing.status : 'active');
+  const valid_until = info.valid_until !== undefined ? info.valid_until : (existing ? existing.valid_until : null);
+  const device_id = info.device_id !== undefined ? info.device_id : (existing ? existing.device_id : null);
+  const activated_at = info.activated_at || (existing && existing.activated_at ? existing.activated_at : now);
+
   if (existing) {
     db.run(
-      `UPDATE license_info SET license_key=?, licensee_name=?, licensee_email=?, plan=?,
-       expiry_date=?, issued_at=?, updated_at=? WHERE id=1`,
+      `UPDATE license_info SET
+         license_key=?, licensee_name=?, licensee_email=?, plan=?,
+         expiry_date=?, issued_at=?, updated_at=?,
+         entitlement_token=?, serial=?, status=?, valid_until=?, device_id=?
+       WHERE id=1`,
       [license_key, licensee_name || '', licensee_email || '', plan || '',
-       expiry_date || null, issued_at || null, now]
+       expiry_date || null, issued_at || null, now,
+       entitlement_token, serial, status, valid_until, device_id]
     );
   } else {
     db.run(
-      `INSERT INTO license_info (id, license_key, licensee_name, licensee_email, plan,
-       expiry_date, issued_at, activated_at, updated_at)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO license_info (
+         id, license_key, licensee_name, licensee_email, plan,
+         expiry_date, issued_at, activated_at, updated_at,
+         entitlement_token, serial, status, valid_until, device_id
+       ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [license_key, licensee_name || '', licensee_email || '', plan || '',
-       expiry_date || null, issued_at || null, now, now]
+       expiry_date || null, issued_at || null, activated_at, now,
+       entitlement_token, serial, status, valid_until, device_id]
     );
   }
   saveToDisk();
