@@ -1,5 +1,20 @@
 window.QuoteCraftUtils = {
   goToPage(pageName) {
+    if (pageName === 'email-settings') {
+      this.goToPage('settings');
+      if (window.QuoteCraftSettings && window.QuoteCraftSettings.switchSubtab) {
+        window.QuoteCraftSettings.switchSubtab('email');
+      }
+      return;
+    }
+    if (pageName === 'audit-log') {
+      this.goToPage('settings');
+      if (window.QuoteCraftSettings && window.QuoteCraftSettings.switchSubtab) {
+        window.QuoteCraftSettings.switchSubtab('audit');
+      }
+      return;
+    }
+
     document.querySelectorAll('#nav a').forEach((a) => {
       a.classList.toggle('active', a.dataset.page === pageName);
     });

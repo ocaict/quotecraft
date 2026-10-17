@@ -301,11 +301,15 @@
       keywords: 'keys hotkeys help cheat sheet documentation',
       action: function () {
         window.QuoteCraftUtils.goToPage('settings');
-        var card = document.getElementById('shortcutsCard');
-        if (card) {
-          card.classList.add('shortcuts-highlight');
-          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          setTimeout(function () { card.classList.remove('shortcuts-highlight'); }, 2600);
+        if (window.QuoteCraftSettings && window.QuoteCraftSettings.switchSubtab) {
+          window.QuoteCraftSettings.switchSubtab('shortcuts', 'shortcutsCard');
+        } else {
+          var card = document.getElementById('shortcutsCard');
+          if (card) {
+            card.classList.add('shortcuts-highlight');
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(function () { card.classList.remove('shortcuts-highlight'); }, 2600);
+          }
         }
       }
     }

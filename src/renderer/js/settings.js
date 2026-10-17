@@ -1292,8 +1292,13 @@
 
     try {
       const res = await window.electronAPI.getLicense();
+      const subnavBadge = document.getElementById('subnavLicenseBadge');
       if (!res || !res.isPro || !res.license) {
         // Free tier or Grace Expired
+        if (subnavBadge) {
+          subnavBadge.textContent = 'Free';
+          subnavBadge.className = 'settings-nav-badge';
+        }
         if (badge) {
           if (res?.license?.needsRefresh || res?.license?.state === 'grace_expired') {
             badge.textContent = '⚠️ Refresh Needed';
@@ -1313,6 +1318,10 @@
       } else {
         // Pro active
         const lic = res.license;
+        if (subnavBadge) {
+          subnavBadge.textContent = 'Pro';
+          subnavBadge.className = 'settings-nav-badge badge-pro';
+        }
         if (badge) {
           badge.textContent = '\u26A1 QuoteCraft Pro';
           badge.style.background = 'rgba(16,185,129,0.15)';
@@ -1466,4 +1475,180 @@
 
   // Load license status on first settings page load
   loadLicenseStatus();
+
+  // ===========================================================================
+  // Settings Sub-Navigation & Pane Controller
+  // ===========================================================================
+
+  const SUBTAB_METADATA = {
+    profile: {
+      title: 'Company Profile',
+      subtitle: 'This information appears on every quote and invoice you generate. Save it once; edit any time.',
+      showSave: true,
+    },
+    defaults: {
+      title: 'Regional & Defaults',
+      subtitle: 'Configure default currency, tax rates, standard payment terms, and date/number formats.',
+      showSave: true,
+    },
+    appearance: {
+      title: 'Appearance & Themes',
+      subtitle: 'Customize QuoteCraft\'s visual interface and exported document styling.',
+      showSave: true,
+    },
+    banking: {
+      title: 'Bank Accounts (Direct Transfer)',
+      subtitle: 'Configure your Nigerian NUBAN and foreign Domiciliary accounts shown on invoices.',
+      showSave: true,
+    },
+    paystack: {
+      title: 'Paystack Online Payments',
+      subtitle: 'Allow clients to pay invoices directly via debit card, bank transfer, and USSD.',
+      showSave: true,
+    },
+    presets: {
+      title: 'Payment Presets',
+      subtitle: 'Create reusable payment blurbs to quick-insert on quotes and invoices.',
+      showSave: false,
+    },
+    email: {
+      title: 'Email Configuration',
+      subtitle: 'Send quotes and invoices directly from your own email account via local SMTP.',
+      showSave: false,
+    },
+    numbering: {
+      title: 'Document Numbering',
+      subtitle: 'Configure automated numbering sequence rules for invoices, quotes, and credit notes.',
+      showSave: true,
+    },
+    timetracking: {
+      title: 'Time Tracking',
+      subtitle: 'Define how stopped timers round to billed-hour entries.',
+      showSave: false,
+    },
+    shortcuts: {
+      title: 'Keyboard Shortcuts',
+      subtitle: 'Work faster across QuoteCraft with keyboard shortcuts.',
+      showSave: false,
+    },
+    applock: {
+      title: 'App Lock (PIN)',
+      subtitle: 'Require a secure PIN before QuoteCraft opens on this device.',
+      showSave: false,
+    },
+    audit: {
+      title: 'Audit Log',
+      subtitle: 'Chronological, read-only record of changes to your business data.',
+      showSave: false,
+    },
+    backup: {
+      title: 'Backups & Portability',
+      subtitle: 'Create local backups, schedule automated rolling copies, and export business data.',
+      showSave: false,
+    },
+    diagnostics: {
+      title: 'Diagnostics & Health',
+      subtitle: 'Diagnostic information for troubleshooting, data health, and technical support.',
+      showSave: false,
+    },
+    updates: {
+      title: 'Software Updates',
+      subtitle: 'Check for updates, review version status, and install the latest release.',
+      showSave: false,
+    },
+    license: {
+      title: '⚡ QuoteCraft Pro License',
+      subtitle: 'Activate and manage your commercial license and unlocked premium features.',
+      showSave: false,
+    },
+  };
+
+  function switchSubtab(subtabId, targetElementId) {
+    if (!SUBTAB_METADATA[subtabId]) subtabId = 'profile';
+
+    const subnavItems = document.querySelectorAll('.settings-nav-item');
+    subnavItems.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.subtab === subtabId);
+    });
+
+    const panes = document.querySelectorAll('.settings-panes > .settings-pane');
+    panes.forEach((pane) => {
+      pane.classList.toggle('active', pane.id === 'pane-' + subtabId);
+    });
+
+    const meta = SUBTAB_METADATA[subtabId];
+    const titleEl = document.getElementById('settingsPaneTitle');
+    const subtitleEl = document.getElementById('settingsPaneSubtitle');
+    const headerSaveBtn = document.getElementById('settingsHeaderSaveBtn');
+
+    if (titleEl) titleEl.textContent = meta.title;
+    if (subtitleEl) subtitleEl.textContent = meta.subtitle;
+    if (headerSaveBtn) headerSaveBtn.style.display = meta.showSave ? '' : 'none';
+
+    // Dispatch pagechange for integrated modules so they load their data
+    if (subtabId === 'email') {
+      document.dispatchEvent(new CustomEvent('pagechange', { detail: 'email-settings' }));
+    } else if (subtabId === 'audit') {
+      document.dispatchEvent(new CustomEvent('pagechange', { detail: 'audit-log' }));
+    } else if (subtabId === 'license') {
+      loadLicenseStatus();
+    } else if (subtabId === 'diagnostics') {
+      loadDiagnostics();
+    } else if (subtabId === 'presets') {
+      loadPaymentPresets();
+    }
+
+    try {
+      sessionStorage.setItem('qc-active-settings-subtab', subtabId);
+    } catch (_) {}
+
+    if (targetElementId) {
+      setTimeout(() => {
+        const target = document.getElementById(targetElementId);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.classList.add('shortcuts-highlight');
+          setTimeout(() => target.classList.remove('shortcuts-highlight'), 2600);
+        }
+      }, 60);
+    }
+  }
+
+  // Expose on global window for deep links across modules
+  window.QuoteCraftSettings = {
+    switchSubtab,
+  };
+
+  function initSettingsSubnav() {
+    const subnavItems = document.querySelectorAll('.settings-nav-item');
+    subnavItems.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        switchSubtab(btn.dataset.subtab);
+      });
+    });
+
+    // Ensure header save button submits settingsForm
+    const headerSaveBtn = document.getElementById('settingsHeaderSaveBtn');
+    if (headerSaveBtn) {
+      headerSaveBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          form.dispatchEvent(new Event('submit', { cancelable: true }));
+        }
+      });
+    }
+
+    // Default to last active subtab or 'profile'
+    let initialSubtab = 'profile';
+    try {
+      const saved = sessionStorage.getItem('qc-active-settings-subtab');
+      if (saved && SUBTAB_METADATA[saved]) initialSubtab = saved;
+    } catch (_) {}
+    switchSubtab(initialSubtab);
+  }
+
+  initSettingsSubnav();
 })();
+

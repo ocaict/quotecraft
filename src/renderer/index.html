@@ -131,15 +131,7 @@
         <div class="nav-group-title">Settings &amp; System</div>
         <a href="#" data-page="settings">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span class="nav-label">Company Profile</span>
-        </a>
-        <a href="#" data-page="email-settings">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          <span class="nav-label">Email Configuration</span>
-        </a>
-        <a href="#" data-page="audit-log">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span class="nav-label">Audit Log</span>
+          <span class="nav-label">Settings</span>
         </a>
       </div>
     </nav>
@@ -2607,13 +2599,120 @@
     </section>
 
     <section id="page-settings" class="page">
-      <div class="page-header">
-        <h1>Company Profile / Settings</h1>
-        <p class="subtitle">This information appears on every quote and invoice you generate. Save it once; edit any time.</p>
+  <div class="settings-shell">
+    <aside class="settings-subnav" id="settingsSubnav" aria-label="Settings navigation">
+      <!-- General -->
+      <div class="settings-nav-group">
+        <div class="settings-nav-title">General</div>
+        <button type="button" class="settings-nav-item active" data-subtab="profile">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Company Profile</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="defaults">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Regional &amp; Defaults</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="appearance">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <span>Appearance &amp; Themes</span>
+        </button>
+      </div>
+
+      <!-- Payments -->
+      <div class="settings-nav-group">
+        <div class="settings-nav-title">Payments</div>
+        <button type="button" class="settings-nav-item" data-subtab="banking">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          <span>Bank Accounts</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="paystack">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span>Paystack Online</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="presets">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>Payment Presets</span>
+        </button>
+      </div>
+
+      <!-- Communication -->
+      <div class="settings-nav-group">
+        <div class="settings-nav-title">Communication</div>
+        <button type="button" class="settings-nav-item" data-subtab="email">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <span>Email Configuration</span>
+        </button>
+      </div>
+
+      <!-- Workflow -->
+      <div class="settings-nav-group">
+        <div class="settings-nav-title">Workflow</div>
+        <button type="button" class="settings-nav-item" data-subtab="numbering">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+          <span>Document Numbering</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="timetracking">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>Time Tracking</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="shortcuts">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+          <span>Shortcuts</span>
+        </button>
+      </div>
+
+      <!-- Security & Data -->
+      <div class="settings-nav-group">
+        <div class="settings-nav-title">Security &amp; Data</div>
+        <button type="button" class="settings-nav-item" data-subtab="applock">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>App Lock (PIN)</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="audit">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Audit Log</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="backup">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Backups &amp; Export</span>
+        </button>
+      </div>
+
+      <!-- System -->
+      <div class="settings-nav-group">
+        <div class="settings-nav-title">System</div>
+        <button type="button" class="settings-nav-item" data-subtab="diagnostics">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span>Diagnostics &amp; Health</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="updates">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+          <span>Software Updates</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-subtab="license">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span>Pro License</span>
+          <span id="subnavLicenseBadge" class="settings-nav-badge">Free</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="settings-main">
+      <div class="settings-pane-header">
+        <div>
+          <h2 id="settingsPaneTitle">Company Profile</h2>
+          <p id="settingsPaneSubtitle" class="subtitle">This information appears on every quote and invoice you generate. Save it once; edit any time.</p>
+        </div>
+        <div class="settings-pane-actions" id="settingsPaneActions">
+          <button type="submit" form="settingsForm" id="settingsHeaderSaveBtn" class="btn btn-primary">Save Changes</button>
+        </div>
       </div>
 
       <form id="settingsForm" class="settings-form" novalidate>
-        <div class="card">
+        <div class="settings-panes">
+          <!-- Pane 1: Profile -->
+          <div class="settings-pane active" id="pane-profile">
+            <div class="card">
           <h2>Business details</h2>
 
           <div class="form-row">
@@ -2712,8 +2811,205 @@
             </div>
           </div>
         </div>
+            <div class="settings-pane-footer">
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+          </div>
 
-        <div class="card" id="bankingSettingsCard">
+          <!-- Pane 2: Defaults -->
+          <div class="settings-pane" id="pane-defaults">
+            <div class="card">
+          <h2>Defaults</h2>
+
+          <div class="form-row">
+            <div class="field field-required">
+              <label for="default_currency">Default currency</label>
+              <select id="default_currency" name="default_currency"></select>
+              <span class="hint">Pre-fills new quotes and item templates.</span>
+              <span class="field-error" data-error-for="default_currency"></span>
+            </div>
+
+            <div class="field">
+              <label for="reporting_currency">Reporting base currency</label>
+              <select id="reporting_currency" name="reporting_currency"></select>
+              <span class="hint">Used to aggregate dashboard totals. Defaults to your default currency.</span>
+              <span class="field-error" data-error-for="reporting_currency"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label for="default_tax_rate" style="margin:0;">Default tax rate (%)</label>
+                <button type="button" id="setDefault75VatBtn" class="btn btn-ghost btn-xs" style="padding: 2px 6px; font-size: 11px;">🇳🇬 7.5% Nigerian VAT</button>
+              </div>
+              <input type="number" id="default_tax_rate" name="default_tax_rate" min="0" max="100" step="0.01" value="0">
+              <span class="field-error" data-error-for="default_tax_rate"></span>
+            </div>
+            <div class="field">
+              <label for="default_hourly_rate">Default hourly rate (optional)</label>
+              <input type="number" id="default_hourly_rate" name="default_hourly_rate" min="0" step="0.01" placeholder="e.g. 75.00">
+              <span class="hint">Used for time entries when neither project nor client has a rate set.</span>
+              <span class="field-error" data-error-for="default_hourly_rate"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="default_terms">Default payment terms</label>
+              <input type="text" id="default_terms" name="default_terms" placeholder="e.g. Payment due within 14 days">
+              <span class="hint">Pre-fills on new invoices. Can be overridden per invoice.</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="default_quote_acceptance_instructions">Default Quote Acceptance Instructions</label>
+              <input type="text" id="default_quote_acceptance_instructions" name="default_quote_acceptance_instructions" placeholder="To accept this quote, please reply to confirm via email or phone.">
+              <span class="hint">Printed on all shareable quote PDFs and HTML exports instructing clients how to confirm offline.</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="date_format">Date format</label>
+              <select id="date_format" name="date_format">
+                <option value="MMM D, YYYY">MMM D, YYYY (e.g. Jan 15, 2026)</option>
+                <option value="DD/MM/YYYY">DD/MM/YYYY (e.g. 15/01/2026)</option>
+                <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 01/15/2026)</option>
+                <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 2026-01-15)</option>
+                <option value="D MMMM YYYY">D MMMM YYYY (e.g. 15 January 2026)</option>
+              </select>
+              <span class="hint">Formatting style for quotes, invoices, and exports.</span>
+            </div>
+            <div class="field">
+              <label for="decimal_separator">Decimal separator</label>
+              <select id="decimal_separator" name="decimal_separator">
+                <option value=".">Dot (.) &mdash; 1,234.56</option>
+                <option value=",">Comma (,) &mdash; 1.234,56</option>
+              </select>
+              <span class="hint">Decimal separator used for currency amounts.</span>
+            </div>
+          </div>
+        </div>
+            <div class="settings-pane-footer">
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+          </div>
+
+          <!-- Pane 3: Appearance -->
+          <div class="settings-pane" id="pane-appearance">
+            <div class="card" id="appearanceCard">
+          <h2>Appearance</h2>
+          <p class="subtitle">Choose how QuoteCraft looks. Your printed reports and PDF exports always come out light for clean printing, no matter which theme is active.</p>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <div class="theme-options" id="themeOptions">
+                <label class="theme-option">
+                  <input type="radio" name="themeMode" value="system">
+                  <span class="theme-option-body">
+                    <strong>🖥️ System</strong>
+                    <small>Follow your operating system's light/dark preference automatically.</small>
+                  </span>
+                </label>
+                <label class="theme-option">
+                  <input type="radio" name="themeMode" value="light">
+                  <span class="theme-option-body">
+                    <strong>☀️ Light</strong>
+                    <small>Bright, high-contrast interface.</small>
+                  </span>
+                </label>
+                <label class="theme-option">
+                  <input type="radio" name="themeMode" value="dark">
+                  <span class="theme-option-body">
+                    <strong>🌙 Dark</strong>
+                    <small>Low-glare dark interface for reduced eye strain.</small>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="pdfThemeCard">
+          <h2>PDF Document Theme</h2>
+          <p class="subtitle">Choose the visual styling applied to your exported quotes, invoices, and credit notes.</p>
+
+          <div class="pdf-theme-options" id="pdfThemeOptions">
+            <label class="pdf-theme-card" data-theme="classic">
+              <input type="radio" name="pdf_theme" value="classic" checked>
+              <div class="pdf-theme-preview pdf-theme-classic">
+                <div class="pdf-mock-header"></div>
+                <div class="pdf-mock-body">
+                  <div class="pdf-mock-line w-60"></div>
+                  <div class="pdf-mock-line w-40"></div>
+                  <div class="pdf-mock-table"></div>
+                </div>
+              </div>
+              <div class="pdf-theme-info">
+                <strong>Classic</strong>
+                <small>Traditional grey headers with a clean, balanced layout.</small>
+              </div>
+            </label>
+
+            <label class="pdf-theme-card" data-theme="modern">
+              <input type="radio" name="pdf_theme" value="modern">
+              <div class="pdf-theme-preview pdf-theme-modern">
+                <div class="pdf-mock-header"></div>
+                <div class="pdf-mock-body">
+                  <div class="pdf-mock-line w-60"></div>
+                  <div class="pdf-mock-line w-40"></div>
+                  <div class="pdf-mock-table"></div>
+                </div>
+              </div>
+              <div class="pdf-theme-info">
+                <strong>Modern</strong>
+                <small>Contemporary indigo styling with slate accents.</small>
+              </div>
+            </label>
+
+            <label class="pdf-theme-card" data-theme="minimal">
+              <input type="radio" name="pdf_theme" value="minimal">
+              <div class="pdf-theme-preview pdf-theme-minimal">
+                <div class="pdf-mock-header"></div>
+                <div class="pdf-mock-body">
+                  <div class="pdf-mock-line w-60"></div>
+                  <div class="pdf-mock-line w-40"></div>
+                  <div class="pdf-mock-table"></div>
+                </div>
+              </div>
+              <div class="pdf-theme-info">
+                <strong>Minimal</strong>
+                <small>Ultra-clean layout with subtle lines and zero clutter.</small>
+              </div>
+            </label>
+
+            <label class="pdf-theme-card" data-theme="dark">
+              <input type="radio" name="pdf_theme" value="dark">
+              <div class="pdf-theme-preview pdf-theme-dark">
+                <div class="pdf-mock-header"></div>
+                <div class="pdf-mock-body">
+                  <div class="pdf-mock-line w-60"></div>
+                  <div class="pdf-mock-line w-40"></div>
+                  <div class="pdf-mock-table"></div>
+                </div>
+              </div>
+              <div class="pdf-theme-info">
+                <strong>Branded Dark</strong>
+                <small>Bold dark header banner with vibrant purple branding.</small>
+              </div>
+            </label>
+          </div>
+        </div>
+            <div class="settings-pane-footer">
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+          </div>
+
+          <!-- Pane 4: Banking -->
+          <div class="settings-pane" id="pane-banking">
+            <div class="card" id="bankingSettingsCard">
           <h2>Bank & Payment Details (Direct Transfer)</h2>
           <p class="subtitle" style="margin: 0 0 16px 0; color: var(--text-muted); font-size: 13px;">
             Configure your Nigerian NUBAN and foreign Domiciliary accounts. Invoices automatically display the appropriate bank details depending on whether you bill in NGN or foreign currency (USD, GBP, EUR).
@@ -2834,8 +3130,14 @@
             </div>
           </div>
         </div>
+            <div class="settings-pane-footer">
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+          </div>
 
-        <div class="card" id="paystackIntegrationCard">
+          <!-- Pane 5: Paystack -->
+          <div class="settings-pane" id="pane-paystack">
+            <div class="card" id="paystackIntegrationCard">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
             <div>
               <h2 style="margin: 0; padding-bottom: 0; border-bottom: none; display: flex; align-items: center; gap: 8px;">
@@ -2886,8 +3188,14 @@
             </div>
           </div>
         </div>
+            <div class="settings-pane-footer">
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+          </div>
 
-        <div class="card" id="paymentPresetsCard">
+          <!-- Pane 6: Presets -->
+          <div class="settings-pane" id="pane-presets">
+            <div class="card" id="paymentPresetsCard">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
             <div>
               <h2 style="margin: 0; padding-bottom: 0; border-bottom: none;">Payment instruction presets</h2>
@@ -2897,642 +3205,11 @@
           </div>
           <div id="paymentPresetsList" class="payment-presets-list"></div>
         </div>
-
-        <div class="card">
-          <h2>Defaults</h2>
-
-          <div class="form-row">
-            <div class="field field-required">
-              <label for="default_currency">Default currency</label>
-              <select id="default_currency" name="default_currency"></select>
-              <span class="hint">Pre-fills new quotes and item templates.</span>
-              <span class="field-error" data-error-for="default_currency"></span>
-            </div>
-
-            <div class="field">
-              <label for="reporting_currency">Reporting base currency</label>
-              <select id="reporting_currency" name="reporting_currency"></select>
-              <span class="hint">Used to aggregate dashboard totals. Defaults to your default currency.</span>
-              <span class="field-error" data-error-for="reporting_currency"></span>
-            </div>
           </div>
 
-          <div class="form-row">
-            <div class="field">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <label for="default_tax_rate" style="margin:0;">Default tax rate (%)</label>
-                <button type="button" id="setDefault75VatBtn" class="btn btn-ghost btn-xs" style="padding: 2px 6px; font-size: 11px;">🇳🇬 7.5% Nigerian VAT</button>
-              </div>
-              <input type="number" id="default_tax_rate" name="default_tax_rate" min="0" max="100" step="0.01" value="0">
-              <span class="field-error" data-error-for="default_tax_rate"></span>
-            </div>
-            <div class="field">
-              <label for="default_hourly_rate">Default hourly rate (optional)</label>
-              <input type="number" id="default_hourly_rate" name="default_hourly_rate" min="0" step="0.01" placeholder="e.g. 75.00">
-              <span class="hint">Used for time entries when neither project nor client has a rate set.</span>
-              <span class="field-error" data-error-for="default_hourly_rate"></span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="field">
-              <label for="default_terms">Default payment terms</label>
-              <input type="text" id="default_terms" name="default_terms" placeholder="e.g. Payment due within 14 days">
-              <span class="hint">Pre-fills on new invoices. Can be overridden per invoice.</span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="field">
-              <label for="default_quote_acceptance_instructions">Default Quote Acceptance Instructions</label>
-              <input type="text" id="default_quote_acceptance_instructions" name="default_quote_acceptance_instructions" placeholder="To accept this quote, please reply to confirm via email or phone.">
-              <span class="hint">Printed on all shareable quote PDFs and HTML exports instructing clients how to confirm offline.</span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="field">
-              <label for="date_format">Date format</label>
-              <select id="date_format" name="date_format">
-                <option value="MMM D, YYYY">MMM D, YYYY (e.g. Jan 15, 2026)</option>
-                <option value="DD/MM/YYYY">DD/MM/YYYY (e.g. 15/01/2026)</option>
-                <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 01/15/2026)</option>
-                <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 2026-01-15)</option>
-                <option value="D MMMM YYYY">D MMMM YYYY (e.g. 15 January 2026)</option>
-              </select>
-              <span class="hint">Formatting style for quotes, invoices, and exports.</span>
-            </div>
-            <div class="field">
-              <label for="decimal_separator">Decimal separator</label>
-              <select id="decimal_separator" name="decimal_separator">
-                <option value=".">Dot (.) &mdash; 1,234.56</option>
-                <option value=",">Comma (,) &mdash; 1.234,56</option>
-              </select>
-              <span class="hint">Decimal separator used for currency amounts.</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>Time Tracking</h2>
-          <p class="subtitle">How a stopped timer becomes a billed-hour entry.</p>
-          <div class="form-row">
-            <div class="field">
-              <label for="timerRounding">Round stopped timers to the nearest</label>
-              <select id="timerRounding">
-                <option value="0">Exact (no rounding)</option>
-                <option value="1">1 minute</option>
-                <option value="5">5 minutes</option>
-                <option value="6" selected>6 minutes (0.1 hour)</option>
-                <option value="10">10 minutes</option>
-                <option value="15">15 minutes</option>
-                <option value="30">30 minutes</option>
-              </select>
-              <span class="hint">Stopping a timer logs elapsed time rounded to this increment. If the timer ran less than half the increment, stopping is refused so no 0-hour entry is created.</span>
-            </div>
-            <div class="field">
-              <label for="timerRoundingStatus">Status</label>
-              <span id="timerRoundingStatus" class="timer-status-text">6-minute rounding.</span>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="field">
-              <button type="button" id="timerRoundingSaveBtn" class="btn btn-primary">Save timer settings</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>Numbering</h2>
-          <p class="subtitle">Numbers are assigned automatically and won't repeat. Start numbers set where counting begins.</p>
-
-          <div class="form-row">
-            <div class="field">
-              <label for="invoice_prefix">Invoice prefix</label>
-              <input type="text" id="invoice_prefix" name="invoice_prefix" value="INV-">
-              <span class="field-error" data-error-for="invoice_prefix"></span>
-            </div>
-            <div class="field">
-              <label for="invoice_start_number">Invoice start number</label>
-              <input type="number" id="invoice_start_number" name="invoice_start_number" min="1" step="1" value="1">
-              <span class="field-error" data-error-for="invoice_start_number"></span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="field">
-              <label for="quote_prefix">Quote prefix</label>
-              <input type="text" id="quote_prefix" name="quote_prefix" value="Q-">
-              <span class="field-error" data-error-for="quote_prefix"></span>
-            </div>
-            <div class="field">
-              <label for="quote_start_number">Quote start number</label>
-              <input type="number" id="quote_start_number" name="quote_start_number" min="1" step="1" value="1">
-              <span class="field-error" data-error-for="quote_start_number"></span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="field">
-              <label for="credit_note_prefix">Credit note prefix</label>
-              <input type="text" id="credit_note_prefix" name="credit_note_prefix" value="CN-">
-              <span class="field-error" data-error-for="credit_note_prefix"></span>
-            </div>
-            <div class="field">
-              <label for="credit_note_start_number">Credit note start number</label>
-              <input type="number" id="credit_note_start_number" name="credit_note_start_number" min="1" step="1" value="1">
-              <span class="field-error" data-error-for="credit_note_start_number"></span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="field">
-              <label for="number_padding">Number padding (digits)</label>
-              <input type="number" id="number_padding" name="number_padding" min="1" max="10" step="1" value="4">
-              <span class="field-hint">e.g. 4 → INV-0001. Numbers are zero-padded to this width.</span>
-            </div>
-            <div class="field">
-              <label>Include year in number</label>
-              <div class="toggle-row">
-                <label class="toggle-switch">
-                  <input type="checkbox" id="number_include_year" name="number_include_year" value="1">
-                  <span class="toggle-slider"></span>
-                </label>
-                <span class="toggle-label">Prefix with current year (e.g. INV-2025-0001)</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" id="appearanceCard">
-          <h2>Appearance</h2>
-          <p class="subtitle">Choose how QuoteCraft looks. Your printed reports and PDF exports always come out light for clean printing, no matter which theme is active.</p>
-
-          <div class="form-row">
-            <div class="field field-span-2">
-              <div class="theme-options" id="themeOptions">
-                <label class="theme-option">
-                  <input type="radio" name="themeMode" value="system">
-                  <span class="theme-option-body">
-                    <strong>🖥️ System</strong>
-                    <small>Follow your operating system's light/dark preference automatically.</small>
-                  </span>
-                </label>
-                <label class="theme-option">
-                  <input type="radio" name="themeMode" value="light">
-                  <span class="theme-option-body">
-                    <strong>☀️ Light</strong>
-                    <small>Bright, high-contrast interface.</small>
-                  </span>
-                </label>
-                <label class="theme-option">
-                  <input type="radio" name="themeMode" value="dark">
-                  <span class="theme-option-body">
-                    <strong>🌙 Dark</strong>
-                    <small>Low-glare dark interface for reduced eye strain.</small>
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" id="pdfThemeCard">
-          <h2>PDF Document Theme</h2>
-          <p class="subtitle">Choose the visual styling applied to your exported quotes, invoices, and credit notes.</p>
-
-          <div class="pdf-theme-options" id="pdfThemeOptions">
-            <label class="pdf-theme-card" data-theme="classic">
-              <input type="radio" name="pdf_theme" value="classic" checked>
-              <div class="pdf-theme-preview pdf-theme-classic">
-                <div class="pdf-mock-header"></div>
-                <div class="pdf-mock-body">
-                  <div class="pdf-mock-line w-60"></div>
-                  <div class="pdf-mock-line w-40"></div>
-                  <div class="pdf-mock-table"></div>
-                </div>
-              </div>
-              <div class="pdf-theme-info">
-                <strong>Classic</strong>
-                <small>Traditional grey headers with a clean, balanced layout.</small>
-              </div>
-            </label>
-
-            <label class="pdf-theme-card" data-theme="modern">
-              <input type="radio" name="pdf_theme" value="modern">
-              <div class="pdf-theme-preview pdf-theme-modern">
-                <div class="pdf-mock-header"></div>
-                <div class="pdf-mock-body">
-                  <div class="pdf-mock-line w-60"></div>
-                  <div class="pdf-mock-line w-40"></div>
-                  <div class="pdf-mock-table"></div>
-                </div>
-              </div>
-              <div class="pdf-theme-info">
-                <strong>Modern</strong>
-                <small>Contemporary indigo styling with slate accents.</small>
-              </div>
-            </label>
-
-            <label class="pdf-theme-card" data-theme="minimal">
-              <input type="radio" name="pdf_theme" value="minimal">
-              <div class="pdf-theme-preview pdf-theme-minimal">
-                <div class="pdf-mock-header"></div>
-                <div class="pdf-mock-body">
-                  <div class="pdf-mock-line w-60"></div>
-                  <div class="pdf-mock-line w-40"></div>
-                  <div class="pdf-mock-table"></div>
-                </div>
-              </div>
-              <div class="pdf-theme-info">
-                <strong>Minimal</strong>
-                <small>Ultra-clean layout with subtle lines and zero clutter.</small>
-              </div>
-            </label>
-
-            <label class="pdf-theme-card" data-theme="dark">
-              <input type="radio" name="pdf_theme" value="dark">
-              <div class="pdf-theme-preview pdf-theme-dark">
-                <div class="pdf-mock-header"></div>
-                <div class="pdf-mock-body">
-                  <div class="pdf-mock-line w-60"></div>
-                  <div class="pdf-mock-line w-40"></div>
-                  <div class="pdf-mock-table"></div>
-                </div>
-              </div>
-              <div class="pdf-theme-info">
-                <strong>Branded Dark</strong>
-                <small>Bold dark header banner with vibrant purple branding.</small>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div class="card" id="shortcutsCard">
-          <h2>Keyboard Shortcuts</h2>
-          <p class="subtitle">Work faster without touching the mouse. Shortcuts are disabled while you're typing in a field or a dialog is open.</p>
-
-          <div class="shortcuts-list">
-            <div class="shortcut-row">
-              <span class="shortcut-kbd">N</span>
-              <span>New quote</span>
-            </div>
-            <div class="shortcut-row">
-              <span class="shortcut-kbd">I</span>
-              <span>New invoice (open the Invoices screen)</span>
-            </div>
-            <div class="shortcut-row">
-              <span class="shortcut-kbd">C</span>
-              <span>New client</span>
-            </div>
-            <div class="shortcut-row">
-              <span class="shortcut-kbd">Ctrl&nbsp;+&nbsp;S</span>
-              <span>Save the current form or dialog</span>
-            </div>
-            <div class="shortcut-row">
-              <span class="shortcut-kbd">/</span>
-              <span>Focus search on the current screen</span>
-            </div>
-            <div class="shortcut-row">
-              <span class="shortcut-kbd">?</span>
-              <span>Open this reference from any screen</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" id="appLockCard">
-          <h2>App Lock (PIN)</h2>
-          <p class="subtitle">Require a PIN before QuoteCraft opens — a deterrent for anyone with casual access to this computer.</p>
-
-          <div class="form-row">
-            <div class="field field-span-2">
-              <label class="toggle-row" for="appLockToggle">
-                <span class="toggle-switch">
-                  <input type="checkbox" id="appLockToggle">
-                  <span class="toggle-track"></span>
-                </span>
-                <span>Require a PIN to open QuoteCraft</span>
-              </label>
-            </div>
-          </div>
-
-          <div id="appLockConfig" class="hidden">
-            <div class="app-lock-status" id="appLockStatus"></div>
-            <div class="form-row">
-              <div class="field app-lock-current-field">
-                <label for="appLockCurrentPin">Current PIN</label>
-                <input type="password" id="appLockCurrentPin" autocomplete="current-password" maxlength="64" placeholder="Required to change or disable">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="field">
-                <label for="appLockNewPin">New PIN</label>
-                <input type="password" id="appLockNewPin" autocomplete="new-password" maxlength="64" placeholder="At least 4 characters">
-              </div>
-              <div class="field">
-                <label for="appLockNewPinConfirm">Confirm new PIN</label>
-                <input type="password" id="appLockNewPinConfirm" autocomplete="new-password" maxlength="64" placeholder="Repeat the PIN">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="field">
-                <label for="appLockInactivity">Lock after inactivity</label>
-                <select id="appLockInactivity">
-                  <option value="0">Never (lock only on launch)</option>
-                  <option value="1">1 minute</option>
-                  <option value="2">2 minutes</option>
-                  <option value="5" selected>5 minutes</option>
-                  <option value="10">10 minutes</option>
-                  <option value="15">15 minutes</option>
-                  <option value="30">30 minutes</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>&nbsp;</label>
-                <button type="button" id="appLockSaveBtn" class="btn btn-primary">Save PIN</button>
-                <button type="button" id="appLockDisableBtn" class="btn btn-ghost link-btn">Turn lock off</button>
-              </div>
-            </div>
-            <div class="app-lock-msg" id="appLockMsg"></div>
-          </div>
-
-          <div class="app-lock-recovery">
-            <strong>Read this before turning the lock on.</strong>
-            <p>Your data never leaves this device and there is no cloud account to verify you, so a forgotten PIN <em>cannot</em> be recovered by us — by design. If you forget it, the only ways back in are restoring a backup made <strong>before</strong> the lock was enabled, or deleting the app's data file on this device (which resets everything). Anyone with physical access to this computer could do the same, so treat App Lock as a deterrent, not absolute protection, and pick a PIN you will remember.</p>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>Backup &amp; Restore</h2>
-          <p class="subtitle">Export all of your data into a single file, or restore from an earlier backup. Backups include clients, quotes, invoices, payments, company settings, and your logo.</p>
-
-          <div class="form-row">
-            <div class="field field-span-2">
-              <label for="exportBackupBtn">Export</label>
-              <button type="button" id="exportBackupBtn" class="btn btn-secondary">Export Backup</button>
-              <span class="hint">Saves everything as one file you can keep anywhere (USB drive, cloud folder, etc.).</span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="field field-span-2">
-              <label for="restoreBackupBtn">Restore</label>
-              <button type="button" id="restoreBackupBtn" class="btn btn-ghost">Restore from Backup</button>
-              <span class="hint">Replaces current data with the contents of a previous backup. A timestamped copy of your current data is saved first.</span>
-            </div>
-          </div>
-
-          <hr class="card-divider">
-          <h3 class="card-subtitle">Automatic backups</h3>
-          <p class="subtitle">QuoteCraft keeps a rolling set of recent backups for you, running invisibly in the background — it never blocks while you work.</p>
-
-          <div class="form-row">
-            <div class="field field-span-2">
-              <label class="toggle-row" for="autobackupEnabled">
-                <span class="toggle-switch">
-                  <input type="checkbox" id="autobackupEnabled">
-                  <span class="toggle-track"></span>
-                </span>
-                <span>Automatically back up my data</span>
-              </label>
-            </div>
-          </div>
-
-          <div id="autobackupConfig" class="hidden">
-            <div class="form-row">
-              <div class="field">
-                <label for="autobackupSchedule">Back up</label>
-                <select id="autobackupSchedule">
-                  <option value="daily">Daily</option>
-                  <option value="on_close">When the app closes</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="autobackupRetainCount">Keep recent backups</label>
-                <select id="autobackupRetainCount">
-                  <option value="3">3</option>
-                  <option value="7" selected>7</option>
-                  <option value="14">14</option>
-                  <option value="30">30</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="field field-span-2">
-                <label for="autobackupFolder">Backup folder</label>
-                <div class="backup-folder-row">
-                  <input type="text" id="autobackupFolder" readonly placeholder="Choose a folder to store backups">
-                  <button type="button" id="autobackupFolderBtn" class="btn btn-secondary">Choose folder</button>
-                  <button type="button" id="autobackupDefaultFolderBtn" class="btn btn-ghost" title="Use default AppData folder">Use Default</button>
-                </div>
-                <span class="hint">Older backups beyond the "keep" count are removed automatically, so a bad backup never wipes out your only good one.</span>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="field field-span-2">
-                <label for="autobackupSaveBtn">Status</label>
-                <div class="backup-status-row">
-                  <span id="autobackupStatus" class="backup-status-text">Not yet configured.</span>
-                  <button type="button" id="autobackupSaveBtn" class="btn btn-primary">Save</button>
-                  <button type="button" id="autobackupNowBtn" class="btn btn-secondary">Back up now</button>
-                </div>
-              </div>
-            </div>
-            <div id="autobackupRecent" class="backup-recent hidden"></div>
-            <div class="app-lock-msg" id="autobackupMsg"></div>
-          </div>
-        <div class="card" id="diagnosticsCard">
-          <h2>System Diagnostics & Health</h2>
-          <p class="subtitle">Diagnostic information for troubleshooting, data health, and technical support.</p>
-
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:16px;">
-            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
-              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">App Version</div>
-              <div id="diagAppVersion" style="font-size:14px; font-weight:600;">—</div>
-            </div>
-            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
-              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">Database Integrity</div>
-              <div id="diagDbIntegrity" style="font-size:14px; font-weight:600; color:#3fb950;">—</div>
-            </div>
-            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
-              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">Database Size</div>
-              <div id="diagDbSize" style="font-size:14px; font-weight:600;">—</div>
-            </div>
-            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
-              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">Attachments Storage</div>
-              <div id="diagAttachmentsSize" style="font-size:14px; font-weight:600;">—</div>
-            </div>
-          </div>
-
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
-            <button type="button" id="verifyDbBtn" class="btn btn-secondary">🔍 Verify Database</button>
-            <button type="button" id="exportDiagnosticsBtn" class="btn btn-secondary">Export Diagnostic Report (.json)</button>
-            <button type="button" id="exportLogsBtn" class="btn btn-secondary">📋 Export Application Logs (.log)</button>
-          </div>
-          <span class="hint">Includes non-sensitive system specs, database health, and runtime diagnostic logs for technical support.</span>
-        </div>
-
-        <!-- Data Portability / GDPR Export -->
-        <div class="card settings-card" id="dataExportCard">
-          <h2>Data Portability &amp; Export</h2>
-          <p class="subtitle">Download all your business data as CSV files in a single ZIP archive. Use for backups, migrations, or GDPR compliance.</p>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
-            <button type="button" id="exportAllDataBtn" class="btn btn-secondary">📦 Export All Business Data (.zip)</button>
-          </div>
-          <span class="hint">Exports: clients, invoices, quotes, payments, expenses, and time entries as CSV files.</span>
-        </div>
-
-        <!-- Software Updates -->
-        <div class="card settings-card">
-          <h2>Software Updates</h2>
-          <p class="subtitle">Keep QuoteCraft updated with the latest performance enhancements, security patches, and features.</p>
-
-          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:12px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-              <span id="updateStatusBadge" class="badge" style="background:var(--bg-secondary, #1a1e28); border:1px solid var(--border-color, #2a3142); padding:6px 12px; font-size:13px; font-weight:500;">
-                Current Version: <strong id="updaterCurrentVersion">v…</strong>
-              </span>
-              <span id="updateStatusMessage" style="font-size:13px; color:var(--text-muted, #8b949e);">Up to date</span>
-            </div>
-
-            <div style="display:flex; gap:10px;">
-              <button type="button" id="checkForUpdatesBtn" class="btn btn-secondary">🔄 Check for Updates</button>
-              <button type="button" id="installUpdateBtn" class="btn btn-primary hidden">✨ Restart & Install Update</button>
-            </div>
-          </div>
-
-          <div id="updateProgressBarContainer" class="hidden" style="margin-top:14px;">
-            <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">
-              <span>Downloading update...</span>
-              <span id="updateProgressPercent">0%</span>
-            </div>
-            <div style="width:100%; height:6px; background:var(--bg-secondary, #1a1e28); border-radius:3px; overflow:hidden;">
-              <div id="updateProgressBar" style="width:0%; height:100%; background:var(--primary, #4f46e5); transition:width 0.2s ease;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- QuoteCraft Pro License -->
-        <div class="card settings-card" id="licenseCard">
-          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
-            <div>
-              <h2 style="margin:0 0 4px 0;">&#x26A1; QuoteCraft Pro License</h2>
-              <p class="subtitle" style="margin:0;">Activate your Pro license to unlock all premium features including Paystack integration, WhatsApp sharing, unlimited clients, and full FIRS tax compliance tools.</p>
-            </div>
-            <div id="licenseBadgeWrap">
-              <span id="licenseStatusBadge" class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border:1px solid rgba(107,114,128,0.3); font-size:13px; padding:6px 14px; border-radius:20px; font-weight:600;">
-                &#x1F512; Free Tier
-              </span>
-            </div>
-          </div>
-
-          <!-- Current license info (shown when pro is active) -->
-          <!-- Current license info (shown when pro is active) -->
-          <div id="licenseActivePanel" style="display:none; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:16px; margin-bottom:20px;">
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-              <span style="font-size:22px;">&#x2705;</span>
-              <div>
-                <div style="font-weight:700; font-size:15px; color:#10b981;" id="licenseActiveName">QuoteCraft Pro &mdash; Active</div>
-                <div style="font-size:12px; color:var(--text-muted);" id="licenseActiveEmail"></div>
-              </div>
-            </div>
-            <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:13px; color:var(--text-muted); margin-bottom:12px;">
-              <span>Key: <strong id="licenseActiveSerial" style="color:var(--text); font-family:monospace;">&mdash;</strong></span>
-              <span>Plan: <strong id="licenseActivePlan" style="color:var(--text);">&mdash;</strong></span>
-              <span>Issued: <strong id="licenseActiveIssued" style="color:var(--text);">&mdash;</strong></span>
-              <span id="licenseExpiryWrap">Expires: <strong id="licenseActiveExpiry" style="color:var(--text);">&mdash;</strong></span>
-              <span id="licenseGraceWrap" style="display:none;">Offline Grace: <strong id="licenseGraceStatus" style="color:#10b981;">&mdash;</strong></span>
-            </div>
-            <div style="display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;">
-              <button type="button" id="licenseRefreshBtn" class="btn btn-ghost" style="font-size:12px; color:var(--text);">🔄 Refresh Status</button>
-              <button type="button" id="licenseDeactivateBtn" class="btn btn-ghost" style="font-size:12px; color:#ef4444;">Deactivate this device</button>
-              <span id="licenseRefreshMsg" style="font-size:12px; color:var(--text-muted);"></span>
-            </div>
-          </div>
-
-          <!-- Plan comparison -->
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
-            <div style="background:var(--bg-secondary, #1a1e28); border:1px solid var(--border-color, #2a3142); border-radius:10px; padding:16px;">
-              <div style="font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.05em;">&#x1F193; Free Starter</div>
-              <ul style="list-style:none; margin:0; padding:0; font-size:13px; display:flex; flex-direction:column; gap:6px;">
-                <li style="color:var(--text-muted);">Up to 3 active clients</li>
-                <li style="color:var(--text-muted);">Standard PDF templates</li>
-                <li style="color:var(--text-muted);">Manual payment recording</li>
-                <li style="color:var(--text-muted);">Local ZIP backups</li>
-              </ul>
-            </div>
-            <div style="background:linear-gradient(135deg, rgba(79,70,229,0.12) 0%, rgba(16,185,129,0.08) 100%); border:1px solid rgba(79,70,229,0.4); border-radius:10px; padding:16px; position:relative; overflow:hidden;">
-              <div style="position:absolute; top:10px; right:12px; font-size:10px; background:rgba(79,70,229,0.2); color:#818cf8; padding:2px 8px; border-radius:10px; font-weight:700;">RECOMMENDED</div>
-              <div style="font-size:13px; font-weight:600; color:#818cf8; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.05em;">&#x26A1; Pro</div>
-              <ul style="list-style:none; margin:0; padding:0; font-size:13px; display:flex; flex-direction:column; gap:6px;">
-                <li style="color:var(--text);">&#x2705; Unlimited clients &amp; documents</li>
-                <li style="color:var(--text);">&#x2705; Paystack payment link generation</li>
-                <li style="color:var(--text);">&#x2705; 1-click Paystack verification</li>
-                <li style="color:var(--text);">&#x2705; WhatsApp invoice &amp; quote sharing</li>
-                <li style="color:var(--text);">&#x2705; WHT &amp; FIRS tax engine (7.5% VAT)</li>
-                <li style="color:var(--text);">&#x2705; Custom PDF themes &amp; branding</li>
-                <li style="color:var(--text);">&#x2705; Priority support</li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Pricing and upgrade -->
-          <div id="licensePurchasePanel" style="background:var(--bg-secondary, #1a1e28); border:1px solid var(--border-color, #2a3142); border-radius:12px; padding:20px; margin-bottom:20px;">
-            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
-              <div>
-                <div style="font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Official Commercial Pricing:</div>
-                <div style="display:flex; align-items:baseline; gap:20px; flex-wrap:wrap;">
-                  <div>
-                    <span style="font-size:24px; font-weight:800; color:#10b981;">&#x20A6;15,000</span>
-                    <span style="font-size:13px; font-weight:600; color:var(--text-muted); margin-left:4px;">Lifetime Access</span>
-                  </div>
-                  <div style="border-left:1px solid var(--border-color, #2a3142); padding-left:16px;">
-                    <span style="font-size:20px; font-weight:700; color:#3b82f6;">&#x20A6;5,000</span>
-                    <span style="font-size:13px; color:var(--text-muted); margin-left:4px;">/ Year</span>
-                  </div>
-                </div>
-              </div>
-              <button type="button" id="licenseUpgradeBtn" class="btn btn-primary" style="background:linear-gradient(135deg, #10b981, #059669); border:none; padding:12px 24px; font-size:14px; font-weight:700; border-radius:8px; box-shadow:0 4px 12px rgba(16,185,129,0.3); cursor:pointer;">
-                &#x26A1; Get QuoteCraft Pro &#x2192;
-              </button>
-            </div>
-            <div style="margin-top:12px; font-size:12px; color:var(--text-muted); line-height:1.5;">
-              Instant on-screen license activation upon checkout. A permanent backup key is also emailed to your address.
-            </div>
-          </div>
-
-          <!-- License key activation input -->
-          <div>
-            <label for="licenseKeyInput" style="font-size:13px; font-weight:600; display:block; margin-bottom:8px;">Activate License Key</label>
-            <div style="display:flex; gap:8px; align-items:stretch;">
-              <input type="text" id="licenseKeyInput" placeholder="QC-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false"
-                style="flex:1; padding:10px 14px; font-size:14px; font-family:monospace; background:var(--bg-input, #1e293b); color:var(--text); border:1px solid var(--border); border-radius:6px; outline:none; text-transform:uppercase;">
-              <button type="button" id="licenseActivateBtn" class="btn btn-primary" style="padding:10px 18px; white-space:nowrap;">&#x2705; Activate</button>
-            </div>
-            <div style="margin-top:4px; font-size:12px; color:var(--text-muted);">Format: 4 groups of 5 characters (e.g. <code>QC-7A2K9-4MPQ8-XT5R2-9WZ3D</code>). Online activation requires internet connectivity on first setup.</div>
-            <div id="licenseActivateMsg" style="margin-top:8px; font-size:13px; min-height:18px;"></div>
-          </div>
-        </div>
-
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Save settings</button>
-        </div>
-
-      </form>
-    </section>
-
-    <section id="page-email-settings" class="page">
-      <div class="page-header email-header">
-        <div>
-          <h1>Email Configuration</h1>
-          <p class="subtitle">Send quotes and invoices directly from your own email account. No third-party servers, no credentials stored off-device — everything stays local.</p>
-        </div>
-        <div class="email-header-actions">
-          <button type="button" id="es-save-btn" class="btn btn-primary">💾 Save Settings</button>
-        </div>
-      </div>
-
-      <div class="card email-settings-full">
+          <!-- Pane 7: Email Configuration -->
+          <div class="settings-pane" id="pane-email">
+            <div class="card email-settings-full">
         <h2>Quick Presets</h2>
         <p class="subtitle">Select your email provider to auto-fill recommended server hosts and ports:</p>
         <div id="email-provider-pills" class="provider-presets"></div>
@@ -3679,23 +3356,215 @@
       <div class="email-bottom-actions">
         <button type="button" id="es-save-btn-bottom" class="btn btn-primary">💾 Save Settings</button>
       </div>
-    </section>
+          </div>
 
-    <!-- Audit Log -->
-    <section id="page-audit-log" class="page">
-      <div class="page-header">
-        <div>
-          <h1>Audit Log</h1>
-          <p class="subtitle">Chronological, read-only record of changes to your data.</p>
-        </div>
-        <div class="detail-actions">
-          <button type="button" class="btn btn-secondary btn-small" id="auditExportCsvBtn">📊 Export CSV</button>
-          <button type="button" class="btn btn-secondary btn-small" id="auditPrintBtn">🖨️ Print / PDF</button>
-        </div>
-      </div>
+          <!-- Pane 8: Numbering -->
+          <div class="settings-pane" id="pane-numbering">
+            <div class="card">
+          <h2>Numbering</h2>
+          <p class="subtitle">Numbers are assigned automatically and won't repeat. Start numbers set where counting begins.</p>
 
-      <!-- Filter Bar -->
-      <div class="audit-filter-card">
+          <div class="form-row">
+            <div class="field">
+              <label for="invoice_prefix">Invoice prefix</label>
+              <input type="text" id="invoice_prefix" name="invoice_prefix" value="INV-">
+              <span class="field-error" data-error-for="invoice_prefix"></span>
+            </div>
+            <div class="field">
+              <label for="invoice_start_number">Invoice start number</label>
+              <input type="number" id="invoice_start_number" name="invoice_start_number" min="1" step="1" value="1">
+              <span class="field-error" data-error-for="invoice_start_number"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="quote_prefix">Quote prefix</label>
+              <input type="text" id="quote_prefix" name="quote_prefix" value="Q-">
+              <span class="field-error" data-error-for="quote_prefix"></span>
+            </div>
+            <div class="field">
+              <label for="quote_start_number">Quote start number</label>
+              <input type="number" id="quote_start_number" name="quote_start_number" min="1" step="1" value="1">
+              <span class="field-error" data-error-for="quote_start_number"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="credit_note_prefix">Credit note prefix</label>
+              <input type="text" id="credit_note_prefix" name="credit_note_prefix" value="CN-">
+              <span class="field-error" data-error-for="credit_note_prefix"></span>
+            </div>
+            <div class="field">
+              <label for="credit_note_start_number">Credit note start number</label>
+              <input type="number" id="credit_note_start_number" name="credit_note_start_number" min="1" step="1" value="1">
+              <span class="field-error" data-error-for="credit_note_start_number"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="number_padding">Number padding (digits)</label>
+              <input type="number" id="number_padding" name="number_padding" min="1" max="10" step="1" value="4">
+              <span class="field-hint">e.g. 4 → INV-0001. Numbers are zero-padded to this width.</span>
+            </div>
+            <div class="field">
+              <label>Include year in number</label>
+              <div class="toggle-row">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="number_include_year" name="number_include_year" value="1">
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="toggle-label">Prefix with current year (e.g. INV-2025-0001)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+            <div class="settings-pane-footer">
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+          </div>
+
+          <!-- Pane 9: Time Tracking -->
+          <div class="settings-pane" id="pane-timetracking">
+            <div class="card">
+          <h2>Time Tracking</h2>
+          <p class="subtitle">How a stopped timer becomes a billed-hour entry.</p>
+          <div class="form-row">
+            <div class="field">
+              <label for="timerRounding">Round stopped timers to the nearest</label>
+              <select id="timerRounding">
+                <option value="0">Exact (no rounding)</option>
+                <option value="1">1 minute</option>
+                <option value="5">5 minutes</option>
+                <option value="6" selected>6 minutes (0.1 hour)</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+              </select>
+              <span class="hint">Stopping a timer logs elapsed time rounded to this increment. If the timer ran less than half the increment, stopping is refused so no 0-hour entry is created.</span>
+            </div>
+            <div class="field">
+              <label for="timerRoundingStatus">Status</label>
+              <span id="timerRoundingStatus" class="timer-status-text">6-minute rounding.</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <button type="button" id="timerRoundingSaveBtn" class="btn btn-primary">Save timer settings</button>
+            </div>
+          </div>
+        </div>
+          </div>
+
+          <!-- Pane 10: Shortcuts -->
+          <div class="settings-pane" id="pane-shortcuts">
+            <div class="card" id="shortcutsCard">
+          <h2>Keyboard Shortcuts</h2>
+          <p class="subtitle">Work faster without touching the mouse. Shortcuts are disabled while you're typing in a field or a dialog is open.</p>
+
+          <div class="shortcuts-list">
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">N</span>
+              <span>New quote</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">I</span>
+              <span>New invoice (open the Invoices screen)</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">C</span>
+              <span>New client</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">Ctrl&nbsp;+&nbsp;S</span>
+              <span>Save the current form or dialog</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">/</span>
+              <span>Focus search on the current screen</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-kbd">?</span>
+              <span>Open this reference from any screen</span>
+            </div>
+          </div>
+        </div>
+          </div>
+
+          <!-- Pane 11: App Lock -->
+          <div class="settings-pane" id="pane-applock">
+            <div class="card" id="appLockCard">
+          <h2>App Lock (PIN)</h2>
+          <p class="subtitle">Require a PIN before QuoteCraft opens — a deterrent for anyone with casual access to this computer.</p>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label class="toggle-row" for="appLockToggle">
+                <span class="toggle-switch">
+                  <input type="checkbox" id="appLockToggle">
+                  <span class="toggle-track"></span>
+                </span>
+                <span>Require a PIN to open QuoteCraft</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="appLockConfig" class="hidden">
+            <div class="app-lock-status" id="appLockStatus"></div>
+            <div class="form-row">
+              <div class="field app-lock-current-field">
+                <label for="appLockCurrentPin">Current PIN</label>
+                <input type="password" id="appLockCurrentPin" autocomplete="current-password" maxlength="64" placeholder="Required to change or disable">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label for="appLockNewPin">New PIN</label>
+                <input type="password" id="appLockNewPin" autocomplete="new-password" maxlength="64" placeholder="At least 4 characters">
+              </div>
+              <div class="field">
+                <label for="appLockNewPinConfirm">Confirm new PIN</label>
+                <input type="password" id="appLockNewPinConfirm" autocomplete="new-password" maxlength="64" placeholder="Repeat the PIN">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label for="appLockInactivity">Lock after inactivity</label>
+                <select id="appLockInactivity">
+                  <option value="0">Never (lock only on launch)</option>
+                  <option value="1">1 minute</option>
+                  <option value="2">2 minutes</option>
+                  <option value="5" selected>5 minutes</option>
+                  <option value="10">10 minutes</option>
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button type="button" id="appLockSaveBtn" class="btn btn-primary">Save PIN</button>
+                <button type="button" id="appLockDisableBtn" class="btn btn-ghost link-btn">Turn lock off</button>
+              </div>
+            </div>
+            <div class="app-lock-msg" id="appLockMsg"></div>
+          </div>
+
+          <div class="app-lock-recovery">
+            <strong>Read this before turning the lock on.</strong>
+            <p>Your data never leaves this device and there is no cloud account to verify you, so a forgotten PIN <em>cannot</em> be recovered by us — by design. If you forget it, the only ways back in are restoring a backup made <strong>before</strong> the lock was enabled, or deleting the app's data file on this device (which resets everything). Anyone with physical access to this computer could do the same, so treat App Lock as a deterrent, not absolute protection, and pick a PIN you will remember.</p>
+          </div>
+        </div>
+          </div>
+
+          <!-- Pane 12: Audit Log -->
+          <div class="settings-pane" id="pane-audit">
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;">
+              <button type="button" class="btn btn-secondary btn-small" id="auditExportCsvBtn">📊 Export CSV</button>
+              <button type="button" class="btn btn-secondary btn-small" id="auditPrintBtn">🖨️ Print / PDF</button>
+            </div>
+            <div class="audit-filter-card">
         <div class="report-chip-row">
           <span class="report-chip-label">Quick Range:</span>
           <div class="date-chip-bar" id="auditChipBar">
@@ -3765,7 +3634,280 @@
           </table>
         </div>
       </div>
-    </section>
+          </div>
+
+          <!-- Pane 13: Backup & Export -->
+          <div class="settings-pane" id="pane-backup">
+            <div class="card">
+          <h2>Backup &amp; Restore</h2>
+          <p class="subtitle">Export all of your data into a single file, or restore from an earlier backup. Backups include clients, quotes, invoices, payments, company settings, and your logo.</p>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="exportBackupBtn">Export</label>
+              <button type="button" id="exportBackupBtn" class="btn btn-secondary">Export Backup</button>
+              <span class="hint">Saves everything as one file you can keep anywhere (USB drive, cloud folder, etc.).</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label for="restoreBackupBtn">Restore</label>
+              <button type="button" id="restoreBackupBtn" class="btn btn-ghost">Restore from Backup</button>
+              <span class="hint">Replaces current data with the contents of a previous backup. A timestamped copy of your current data is saved first.</span>
+            </div>
+          </div>
+
+          <hr class="card-divider">
+          <h3 class="card-subtitle">Automatic backups</h3>
+          <p class="subtitle">QuoteCraft keeps a rolling set of recent backups for you, running invisibly in the background — it never blocks while you work.</p>
+
+          <div class="form-row">
+            <div class="field field-span-2">
+              <label class="toggle-row" for="autobackupEnabled">
+                <span class="toggle-switch">
+                  <input type="checkbox" id="autobackupEnabled">
+                  <span class="toggle-track"></span>
+                </span>
+                <span>Automatically back up my data</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="autobackupConfig" class="hidden">
+            <div class="form-row">
+              <div class="field">
+                <label for="autobackupSchedule">Back up</label>
+                <select id="autobackupSchedule">
+                  <option value="daily">Daily</option>
+                  <option value="on_close">When the app closes</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="autobackupRetainCount">Keep recent backups</label>
+                <select id="autobackupRetainCount">
+                  <option value="3">3</option>
+                  <option value="7" selected>7</option>
+                  <option value="14">14</option>
+                  <option value="30">30</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field field-span-2">
+                <label for="autobackupFolder">Backup folder</label>
+                <div class="backup-folder-row">
+                  <input type="text" id="autobackupFolder" readonly placeholder="Choose a folder to store backups">
+                  <button type="button" id="autobackupFolderBtn" class="btn btn-secondary">Choose folder</button>
+                  <button type="button" id="autobackupDefaultFolderBtn" class="btn btn-ghost" title="Use default AppData folder">Use Default</button>
+                </div>
+                <span class="hint">Older backups beyond the "keep" count are removed automatically, so a bad backup never wipes out your only good one.</span>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field field-span-2">
+                <label for="autobackupSaveBtn">Status</label>
+                <div class="backup-status-row">
+                  <span id="autobackupStatus" class="backup-status-text">Not yet configured.</span>
+                  <button type="button" id="autobackupSaveBtn" class="btn btn-primary">Save</button>
+                  <button type="button" id="autobackupNowBtn" class="btn btn-secondary">Back up now</button>
+                </div>
+              </div>
+            </div>
+            <div id="autobackupRecent" class="backup-recent hidden"></div>
+            <div class="app-lock-msg" id="autobackupMsg"></div>
+          </div>
+        </div>
+            <div class="card settings-card" id="dataExportCard">
+          <h2>Data Portability &amp; Export</h2>
+          <p class="subtitle">Download all your business data as CSV files in a single ZIP archive. Use for backups, migrations, or GDPR compliance.</p>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+            <button type="button" id="exportAllDataBtn" class="btn btn-secondary">📦 Export All Business Data (.zip)</button>
+          </div>
+          <span class="hint">Exports: clients, invoices, quotes, payments, expenses, and time entries as CSV files.</span>
+        </div>
+
+        <!-- Software Updates -->
+          </div>
+
+          <!-- Pane 14: Diagnostics -->
+          <div class="settings-pane" id="pane-diagnostics">
+            <div class="card" id="diagnosticsCard">
+          <h2>System Diagnostics & Health</h2>
+          <p class="subtitle">Diagnostic information for troubleshooting, data health, and technical support.</p>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:16px;">
+            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
+              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">App Version</div>
+              <div id="diagAppVersion" style="font-size:14px; font-weight:600;">—</div>
+            </div>
+            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
+              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">Database Integrity</div>
+              <div id="diagDbIntegrity" style="font-size:14px; font-weight:600; color:#3fb950;">—</div>
+            </div>
+            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
+              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">Database Size</div>
+              <div id="diagDbSize" style="font-size:14px; font-weight:600;">—</div>
+            </div>
+            <div style="background:var(--bg-secondary, #1a1e28); padding:12px; border-radius:6px; border:1px solid var(--border-color, #2a3142);">
+              <div style="font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">Attachments Storage</div>
+              <div id="diagAttachmentsSize" style="font-size:14px; font-weight:600;">—</div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+            <button type="button" id="verifyDbBtn" class="btn btn-secondary">🔍 Verify Database</button>
+            <button type="button" id="exportDiagnosticsBtn" class="btn btn-secondary">Export Diagnostic Report (.json)</button>
+            <button type="button" id="exportLogsBtn" class="btn btn-secondary">📋 Export Application Logs (.log)</button>
+          </div>
+          <span class="hint">Includes non-sensitive system specs, database health, and runtime diagnostic logs for technical support.</span>
+        </div>
+
+        <!-- Data Portability / GDPR Export -->
+          </div>
+
+          <!-- Pane 15: Updates -->
+          <div class="settings-pane" id="pane-updates">
+            <div class="card settings-card">
+          <h2>Software Updates</h2>
+          <p class="subtitle">Keep QuoteCraft updated with the latest performance enhancements, security patches, and features.</p>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:12px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span id="updateStatusBadge" class="badge" style="background:var(--bg-secondary, #1a1e28); border:1px solid var(--border-color, #2a3142); padding:6px 12px; font-size:13px; font-weight:500;">
+                Current Version: <strong id="updaterCurrentVersion">v…</strong>
+              </span>
+              <span id="updateStatusMessage" style="font-size:13px; color:var(--text-muted, #8b949e);">Up to date</span>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+              <button type="button" id="checkForUpdatesBtn" class="btn btn-secondary">🔄 Check for Updates</button>
+              <button type="button" id="installUpdateBtn" class="btn btn-primary hidden">✨ Restart & Install Update</button>
+            </div>
+          </div>
+
+          <div id="updateProgressBarContainer" class="hidden" style="margin-top:14px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted, #8b949e); margin-bottom:4px;">
+              <span>Downloading update...</span>
+              <span id="updateProgressPercent">0%</span>
+            </div>
+            <div style="width:100%; height:6px; background:var(--bg-secondary, #1a1e28); border-radius:3px; overflow:hidden;">
+              <div id="updateProgressBar" style="width:0%; height:100%; background:var(--primary, #4f46e5); transition:width 0.2s ease;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- QuoteCraft Pro License -->
+          </div>
+
+          <!-- Pane 16: License -->
+          <div class="settings-pane" id="pane-license">
+            <div class="card settings-card" id="licenseCard">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+            <div>
+              <h2 style="margin:0 0 4px 0;">&#x26A1; QuoteCraft Pro License</h2>
+              <p class="subtitle" style="margin:0;">Activate your Pro license to unlock all premium features including Paystack integration, WhatsApp sharing, unlimited clients, and full FIRS tax compliance tools.</p>
+            </div>
+            <div id="licenseBadgeWrap">
+              <span id="licenseStatusBadge" class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border:1px solid rgba(107,114,128,0.3); font-size:13px; padding:6px 14px; border-radius:20px; font-weight:600;">
+                &#x1F512; Free Tier
+              </span>
+            </div>
+          </div>
+
+          <!-- Current license info (shown when pro is active) -->
+          <!-- Current license info (shown when pro is active) -->
+          <div id="licenseActivePanel" style="display:none; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:16px; margin-bottom:20px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+              <span style="font-size:22px;">&#x2705;</span>
+              <div>
+                <div style="font-weight:700; font-size:15px; color:#10b981;" id="licenseActiveName">QuoteCraft Pro &mdash; Active</div>
+                <div style="font-size:12px; color:var(--text-muted);" id="licenseActiveEmail"></div>
+              </div>
+            </div>
+            <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+              <span>Key: <strong id="licenseActiveSerial" style="color:var(--text); font-family:monospace;">&mdash;</strong></span>
+              <span>Plan: <strong id="licenseActivePlan" style="color:var(--text);">&mdash;</strong></span>
+              <span>Issued: <strong id="licenseActiveIssued" style="color:var(--text);">&mdash;</strong></span>
+              <span id="licenseExpiryWrap">Expires: <strong id="licenseActiveExpiry" style="color:var(--text);">&mdash;</strong></span>
+              <span id="licenseGraceWrap" style="display:none;">Offline Grace: <strong id="licenseGraceStatus" style="color:#10b981;">&mdash;</strong></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;">
+              <button type="button" id="licenseRefreshBtn" class="btn btn-ghost" style="font-size:12px; color:var(--text);">🔄 Refresh Status</button>
+              <button type="button" id="licenseDeactivateBtn" class="btn btn-ghost" style="font-size:12px; color:#ef4444;">Deactivate this device</button>
+              <span id="licenseRefreshMsg" style="font-size:12px; color:var(--text-muted);"></span>
+            </div>
+          </div>
+
+          <!-- Plan comparison -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+            <div style="background:var(--bg-secondary, #1a1e28); border:1px solid var(--border-color, #2a3142); border-radius:10px; padding:16px;">
+              <div style="font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.05em;">&#x1F193; Free Starter</div>
+              <ul style="list-style:none; margin:0; padding:0; font-size:13px; display:flex; flex-direction:column; gap:6px;">
+                <li style="color:var(--text-muted);">Up to 3 active clients</li>
+                <li style="color:var(--text-muted);">Standard PDF templates</li>
+                <li style="color:var(--text-muted);">Manual payment recording</li>
+                <li style="color:var(--text-muted);">Local ZIP backups</li>
+              </ul>
+            </div>
+            <div style="background:linear-gradient(135deg, rgba(79,70,229,0.12) 0%, rgba(16,185,129,0.08) 100%); border:1px solid rgba(79,70,229,0.4); border-radius:10px; padding:16px; position:relative; overflow:hidden;">
+              <div style="position:absolute; top:10px; right:12px; font-size:10px; background:rgba(79,70,229,0.2); color:#818cf8; padding:2px 8px; border-radius:10px; font-weight:700;">RECOMMENDED</div>
+              <div style="font-size:13px; font-weight:600; color:#818cf8; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.05em;">&#x26A1; Pro</div>
+              <ul style="list-style:none; margin:0; padding:0; font-size:13px; display:flex; flex-direction:column; gap:6px;">
+                <li style="color:var(--text);">&#x2705; Unlimited clients &amp; documents</li>
+                <li style="color:var(--text);">&#x2705; Paystack payment link generation</li>
+                <li style="color:var(--text);">&#x2705; 1-click Paystack verification</li>
+                <li style="color:var(--text);">&#x2705; WhatsApp invoice &amp; quote sharing</li>
+                <li style="color:var(--text);">&#x2705; WHT &amp; FIRS tax engine (7.5% VAT)</li>
+                <li style="color:var(--text);">&#x2705; Custom PDF themes &amp; branding</li>
+                <li style="color:var(--text);">&#x2705; Priority support</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Pricing and upgrade -->
+          <div id="licensePurchasePanel" style="background:var(--bg-secondary, #1a1e28); border:1px solid var(--border-color, #2a3142); border-radius:12px; padding:20px; margin-bottom:20px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+              <div>
+                <div style="font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Official Commercial Pricing:</div>
+                <div style="display:flex; align-items:baseline; gap:20px; flex-wrap:wrap;">
+                  <div>
+                    <span style="font-size:24px; font-weight:800; color:#10b981;">&#x20A6;15,000</span>
+                    <span style="font-size:13px; font-weight:600; color:var(--text-muted); margin-left:4px;">Lifetime Access</span>
+                  </div>
+                  <div style="border-left:1px solid var(--border-color, #2a3142); padding-left:16px;">
+                    <span style="font-size:20px; font-weight:700; color:#3b82f6;">&#x20A6;5,000</span>
+                    <span style="font-size:13px; color:var(--text-muted); margin-left:4px;">/ Year</span>
+                  </div>
+                </div>
+              </div>
+              <button type="button" id="licenseUpgradeBtn" class="btn btn-primary" style="background:linear-gradient(135deg, #10b981, #059669); border:none; padding:12px 24px; font-size:14px; font-weight:700; border-radius:8px; box-shadow:0 4px 12px rgba(16,185,129,0.3); cursor:pointer;">
+                &#x26A1; Get QuoteCraft Pro &#x2192;
+              </button>
+            </div>
+            <div style="margin-top:12px; font-size:12px; color:var(--text-muted); line-height:1.5;">
+              Instant on-screen license activation upon checkout. A permanent backup key is also emailed to your address.
+            </div>
+          </div>
+
+          <!-- License key activation input -->
+          <div>
+            <label for="licenseKeyInput" style="font-size:13px; font-weight:600; display:block; margin-bottom:8px;">Activate License Key</label>
+            <div style="display:flex; gap:8px; align-items:stretch;">
+              <input type="text" id="licenseKeyInput" placeholder="QC-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false"
+                style="flex:1; padding:10px 14px; font-size:14px; font-family:monospace; background:var(--bg-input, #1e293b); color:var(--text); border:1px solid var(--border); border-radius:6px; outline:none; text-transform:uppercase;">
+              <button type="button" id="licenseActivateBtn" class="btn btn-primary" style="padding:10px 18px; white-space:nowrap;">&#x2705; Activate</button>
+            </div>
+            <div style="margin-top:4px; font-size:12px; color:var(--text-muted);">Format: 4 groups of 5 characters (e.g. <code>QC-7A2K9-4MPQ8-XT5R2-9WZ3D</code>). Online activation requires internet connectivity on first setup.</div>
+            <div id="licenseActivateMsg" style="margin-top:8px; font-size:13px; min-height:18px;"></div>
+          </div>
+        </div>
+          </div>
+        </div>
+      </form>
+    </main>
+  </div>
+</section>
 
 
 

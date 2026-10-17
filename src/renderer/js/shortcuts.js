@@ -108,11 +108,15 @@
       return;
     }
     window.QuoteCraftUtils.goToPage('settings');
-    const card = document.getElementById('shortcutsCard');
-    if (card) {
-      card.classList.add('shortcuts-highlight');
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => card.classList.remove('shortcuts-highlight'), 2600);
+    if (window.QuoteCraftSettings && window.QuoteCraftSettings.switchSubtab) {
+      window.QuoteCraftSettings.switchSubtab('shortcuts', 'shortcutsCard');
+    } else {
+      const card = document.getElementById('shortcutsCard');
+      if (card) {
+        card.classList.add('shortcuts-highlight');
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => card.classList.remove('shortcuts-highlight'), 2600);
+      }
     }
   }
 

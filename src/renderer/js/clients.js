@@ -1250,8 +1250,12 @@
           });
           if (wantUpgrade) {
             window.QuoteCraftUtils.goToPage('settings');
-            const licCard = document.getElementById('licenseStatusBadge') || document.getElementById('licenseKeyInput');
-            if (licCard) licCard.scrollIntoView({ behavior: 'smooth' });
+            if (window.QuoteCraftSettings && window.QuoteCraftSettings.switchSubtab) {
+              window.QuoteCraftSettings.switchSubtab('license', 'licenseKeyInput');
+            } else {
+              const licCard = document.getElementById('licenseStatusBadge') || document.getElementById('licenseKeyInput');
+              if (licCard) licCard.scrollIntoView({ behavior: 'smooth' });
+            }
           }
           return;
         }
