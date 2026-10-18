@@ -47,10 +47,10 @@ const releaseBody = `## QuoteCraft ${TAG} — Official Release 🎉
 QuoteCraft is a fast, offline-first invoice and quote management desktop application tailored for freelancers, contractors, and growing businesses.
 
 ### 🚀 What's New in ${TAG}:
-- **Modern Settings Hub**: Complete redesign of Settings into a clean, modern two-column preferences layout with category sub-navigation (General, Payments, Communication, Workflow, Security & Data, System).
-- **Unified Navigation**: Integrated Email Configuration and Audit Log directly into Settings, simplifying the main application sidebar.
-- **Sticky Save Header**: Always-accessible "Save Changes" action bar so you never have to scroll past 18 cards to save your business details.
-- **Deep-Link Navigation**: Command palette shortcuts, keyboard references, and upgrade alerts now seamlessly jump directly to their respective settings sub-tabs with visual highlighting.
+- **Modern Auto-Hide Menu Bar**: The menu bar on Windows/Linux now automatically hides for a clean, distraction-free interface (press **Alt** to toggle), while preserving full native macOS application menus.
+- **Global Keyboard Shortcuts & Navigation**: Fast shortcuts for document creation (**Ctrl+N** for quotes, **Ctrl+Shift+N** for invoices, **Ctrl+Shift+C** for clients), quick search (**Ctrl+F**), and direct view navigation.
+- **Redesigned About Window**: Replaced legacy OS dialogs with a native, themed in-app modal featuring real-time environment diagnostics, SQLite/WASM engine integrity, local storage directory viewer, copy system info tool, and dynamic license tier status.
+- **License Key Display & Wrap Fix**: Fixed license serial key text overflow on high-resolution displays and compact panes with responsive word-breaking.
 - **Performance & Polish**: Refined dark and light mode aesthetics, card styling, and overall desktop responsiveness.
 
 ### 📦 Installation (Windows):
