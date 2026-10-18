@@ -305,6 +305,7 @@
             <h1>Clients</h1>
             <p class="subtitle">Manage the people and companies you send quotes and invoices to.</p>
           </div>
+          <button type="button" id="clientsImportCsvBtn" class="btn btn-secondary">Import CSV</button>
           <button type="button" id="clientsExportCsvBtn" class="btn btn-secondary">Export CSV</button>
           <button type="button" id="addClientBtn" class="btn btn-primary">Add Client</button>
         </div>
@@ -3719,13 +3720,76 @@
             <div class="app-lock-msg" id="autobackupMsg"></div>
           </div>
         </div>
-            <div class="card settings-card" id="dataExportCard">
-          <h2>Data Portability &amp; Export</h2>
-          <p class="subtitle">Download all your business data as CSV files in a single ZIP archive. Use for backups, migrations, or GDPR compliance.</p>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
-            <button type="button" id="exportAllDataBtn" class="btn btn-secondary">📦 Export All Business Data (.zip)</button>
+        <div class="card settings-card" id="dataExportCard">
+          <h2>Data Portability &amp; Accounting Hub</h2>
+          <p class="subtitle">Import client contacts or line items from spreadsheets, and export filtered accounting ledgers for tax compliance and audit reporting.</p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px;">
+            <!-- Column 1: Filtered Accounting & Tax Exports -->
+            <div style="background: var(--bg-secondary, #1a1e28); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color, #2a3142); display: flex; flex-direction: column; gap: 12px;">
+              <div style="font-weight: 600; font-size: 14px;">📊 Tax &amp; Accounting Ledgers</div>
+              <p class="subtitle" style="font-size: 12px; margin: 0;">Export structured, Excel-ready CSV files with formatted columns and date filters.</p>
+
+              <div>
+                <label for="csvLedgerDataset" style="font-size: 12px; display: block; margin-bottom: 4px;">Dataset</label>
+                <select id="csvLedgerDataset" style="width: 100%;">
+                  <option value="invoices">Invoices Ledger (dates, subtotal, tax, balances)</option>
+                  <option value="payments">Payments Received (reconciliation &amp; methods)</option>
+                  <option value="expenses">Expenses Ledger (categories, tax, vendor spend)</option>
+                  <option value="time_entries">Time Tracking Log (billable hours &amp; rates)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style="font-size: 12px; display: block; margin-bottom: 4px;">Date Range</label>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                  <button type="button" class="btn btn-sm btn-secondary csv-range-preset active" data-range="all">All Time</button>
+                  <button type="button" class="btn btn-sm btn-secondary csv-range-preset" data-range="month">This Month</button>
+                  <button type="button" class="btn btn-sm btn-secondary csv-range-preset" data-range="quarter">Last Quarter</button>
+                  <button type="button" class="btn btn-sm btn-secondary csv-range-preset" data-range="ytd">Year to Date</button>
+                  <button type="button" class="btn btn-sm btn-secondary csv-range-preset" data-range="custom">Custom</button>
+                </div>
+              </div>
+
+              <div id="csvCustomDateRow" class="hidden" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div>
+                  <label for="csvExportStartDate" style="font-size: 11px;">From</label>
+                  <input type="date" id="csvExportStartDate" style="width: 100%;">
+                </div>
+                <div>
+                  <label for="csvExportEndDate" style="font-size: 11px;">To</label>
+                  <input type="date" id="csvExportEndDate" style="width: 100%;">
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+                <span id="csvLedgerSummaryText" style="font-size: 12px; color: var(--text-muted);">Calculating records…</span>
+                <button type="button" id="exportFilteredCsvBtn" class="btn btn-primary" style="padding: 6px 14px;">📊 Export CSV</button>
+              </div>
+            </div>
+
+            <!-- Column 2: Data Import & Full Backup -->
+            <div style="background: var(--bg-secondary, #1a1e28); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color, #2a3142); display: flex; flex-direction: column; gap: 14px;">
+              <div style="font-weight: 600; font-size: 14px;">📥 CSV Data Import</div>
+              <p class="subtitle" style="font-size: 12px; margin: 0;">Migrate from existing spreadsheets, QuickBooks, or Wave with automatic column mapping.</p>
+
+              <div style="display: flex; gap: 8px; flex-direction: column;">
+                <button type="button" id="openClientCsvImportBtn" class="btn btn-secondary" style="text-align: left; justify-content: flex-start;">
+                  👥 Import Clients from CSV…
+                </button>
+                <button type="button" id="openLineItemCsvImportBtn" class="btn btn-secondary" style="text-align: left; justify-content: flex-start;">
+                  📦 Import Line Items Library from CSV…
+                </button>
+              </div>
+
+              <div style="margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border-color, #2a3142);">
+                <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">Complete System Archive</div>
+                <button type="button" id="exportAllDataBtn" class="btn btn-secondary" style="width: 100%;">
+                  📦 Export Complete System Backup (.zip)
+                </button>
+              </div>
+            </div>
           </div>
-          <span class="hint">Exports: clients, invoices, quotes, payments, expenses, and time entries as CSV files.</span>
         </div>
 
         <!-- Software Updates -->
@@ -5232,6 +5296,83 @@
     </div>
   </div>
 
+  <!-- ── CSV Import Wizard Modal ──────────────────────────────────────── -->
+  <div id="csvImportModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="csvImportModalTitle" style="z-index: 1000;">
+    <div class="modal" style="max-width: 680px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h2 id="csvImportModalTitle">📥 Import Data from CSV</h2>
+        <button type="button" class="modal-close" id="csvImportModalClose" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="modal-body" style="overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        <!-- Step 1: File Selection -->
+        <div id="csvImportStep1" class="csv-import-step">
+          <div style="border: 2px dashed var(--border-color, #2a3142); border-radius: 8px; padding: 24px; text-align: center; background: var(--bg-secondary, #1a1e28);">
+            <div style="font-size: 32px; margin-bottom: 8px;">📄</div>
+            <h3 style="margin-bottom: 6px; font-size: 15px;">Choose a CSV file to import</h3>
+            <p class="subtitle" style="margin-bottom: 16px; font-size: 13px;">Supports Excel, QuickBooks, Wave, Google Sheets, or custom CSV exports.</p>
+            <button type="button" id="csvBrowseBtn" class="btn btn-primary">📁 Browse CSV File…</button>
+            <input type="file" id="csvFileInput" accept=".csv,.txt" style="display: none;">
+          </div>
+          <div id="csvFileInfo" class="hidden" style="margin-top: 12px; background: rgba(56, 139, 253, 0.1); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 6px; padding: 10px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong id="csvFileName">—</strong>
+              <span id="csvFileMeta" style="color: var(--text-muted); margin-left: 8px;">—</span>
+            </div>
+            <button type="button" id="csvChangeFileBtn" class="btn btn-ghost" style="padding: 2px 8px; font-size: 12px;">Change file</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Column Mapping & Options (shown once file loaded) -->
+        <div id="csvImportStep2" class="csv-import-step hidden" style="display: flex; flex-direction: column; gap: 16px;">
+          <div>
+            <h4 style="margin-bottom: 4px; font-size: 14px;">Confirm Column Mapping</h4>
+            <p class="subtitle" style="font-size: 12px; margin: 0;">We've automatically detected the matching fields. Adjust any mappings below if needed.</p>
+          </div>
+
+          <div style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color, #2a3142); border-radius: 6px;">
+            <table class="data-table" style="width: 100%; font-size: 13px; border-collapse: collapse;">
+              <thead>
+                <tr style="background: var(--bg-secondary, #1a1e28); text-align: left;">
+                  <th style="padding: 8px 12px;">CSV Header</th>
+                  <th style="padding: 8px 12px;">Sample Value</th>
+                  <th style="padding: 8px 12px;">QuoteCraft Field</th>
+                </tr>
+              </thead>
+              <tbody id="csvMappingTableBody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Deduplication Strategy -->
+          <div style="background: var(--bg-secondary, #1a1e28); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color, #2a3142);">
+            <div style="font-weight: 600; font-size: 13px; margin-bottom: 8px;">Handling Duplicates:</div>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                <input type="radio" name="csvDedupeOption" value="skip" checked> Skip duplicate records
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                <input type="radio" name="csvDedupeOption" value="overwrite"> Update existing records
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                <input type="radio" name="csvDedupeOption" value="create"> Import all as new
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result / Feedback Banner -->
+        <div id="csvImportResult" class="hidden" style="padding: 12px; border-radius: 6px; font-size: 13px;"></div>
+      </div>
+
+      <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-top: 1px solid var(--border-color, #2a3142);">
+        <button type="button" class="btn btn-secondary" id="csvImportCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="csvImportExecuteBtn" disabled>Import Records</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Onboarding Wizard Modal (3-step first-run setup) ────────────────── -->
   <div id="onboardingWizard" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="wizardTitle" style="z-index: 900;">
     <div class="modal" style="max-width: 600px;">
@@ -5428,6 +5569,7 @@
   <script src="js/app-lock.js"></script>
   <script src="js/notifications.js"></script>
   <script src="js/about.js"></script>
+  <script src="js/csv-portability.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

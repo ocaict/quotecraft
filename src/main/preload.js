@@ -213,8 +213,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('updater:status', handler);
   },
 
-  // Data Portability / GDPR Export
+  // Data Portability / GDPR Export & CSV Hub
   exportAllData: () => ipcRenderer.invoke('data:exportAll'),
+  csvSelectAndPreview: (type) => ipcRenderer.invoke('csv:selectAndPreview', type),
+  csvParsePreview: (opts) => ipcRenderer.invoke('csv:parsePreview', opts),
+  csvImportClients: (opts) => ipcRenderer.invoke('csv:importClients', opts),
+  csvImportLineItems: (opts) => ipcRenderer.invoke('csv:importLineItems', opts),
+  csvExportLedger: (opts) => ipcRenderer.invoke('csv:exportLedger', opts),
+  csvGetLedgerSummary: (opts) => ipcRenderer.invoke('csv:getLedgerSummary', opts),
 
   // Paystack Payment Gateway
   paystackTestConnection: (secretKey) => ipcRenderer.invoke('paystack:testConnection', secretKey),

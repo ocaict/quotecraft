@@ -2469,6 +2469,162 @@ function deleteClient(id) {
   return { ok: true, deleted };
 }
 
+function bulkImportClients(records = [], options = {}) {
+  const {
+    deduplicateBy = 'email_or_phone',
+    onDuplicate = 'skip',
+  } = options;
+
+  if (!Array.isArray(records) || records.length === 0) {
+    return { ok: true, total: 0, imported: 0, updated: 0, skipped: 0, errors: [] };
+  }
+
+  const existingClients = getClients({ includeArchived: true }) || [];
+  const byEmail = new Map();
+  const byPhone = new Map();
+
+  for (const c of existingClients) {
+    if (c.email && c.email.trim()) {
+      byEmail.set(c.email.trim().toLowerCase(), c);
+    }
+    if (c.phone && c.phone.trim()) {
+      const cleanPhone = c.phone.replace(/[^0-9+]/g, '');
+      if (cleanPhone) byPhone.set(cleanPhone, c);
+    }
+  }
+
+  let imported = 0;
+  let updated = 0;
+  let skipped = 0;
+  const errors = [];
+  const now = new Date().toISOString();
+
+  db.run('BEGIN');
+  try {
+    for (let i = 0; i < records.length; i++) {
+      const rec = records[i];
+      const name = String(rec.name || rec.company_name || '').trim();
+      if (!name) {
+        errors.push({ index: i, reason: 'Missing name or company name' });
+        continue;
+      }
+
+      const email = String(rec.email || '').trim().toLowerCase();
+      const phone = String(rec.phone || '').trim();
+      const cleanPhone = phone.replace(/[^0-9+]/g, '');
+
+      let existing = null;
+      if (deduplicateBy !== 'none') {
+        if ((deduplicateBy === 'email_or_phone' || deduplicateBy === 'email') && email && byEmail.has(email)) {
+          existing = byEmail.get(email);
+        } else if ((deduplicateBy === 'email_or_phone' || deduplicateBy === 'phone') && cleanPhone && byPhone.has(cleanPhone)) {
+          existing = byPhone.get(cleanPhone);
+        }
+      }
+
+      if (existing) {
+        if (onDuplicate === 'skip') {
+          skipped++;
+          continue;
+        } else if (onDuplicate === 'overwrite') {
+          db.run(
+            `UPDATE clients SET
+               name = ?, email = ?, phone = ?, company_name = ?, address_line1 = ?,
+               address_line2 = ?, city = ?, state = ?, postal_code = ?, country = ?,
+               notes = ?, tags = ?, default_hourly_rate = ?, default_currency = ?, updated_at = ?
+             WHERE id = ?`,
+            [
+              name,
+              email || existing.email || '',
+              phone || existing.phone || '',
+              String(rec.company_name || existing.company_name || '').trim(),
+              String(rec.address_line1 || existing.address_line1 || '').trim(),
+              String(rec.address_line2 || existing.address_line2 || '').trim(),
+              String(rec.city || existing.city || '').trim(),
+              String(rec.state || existing.state || '').trim(),
+              String(rec.postal_code || existing.postal_code || '').trim(),
+              String(rec.country || existing.country || '').trim(),
+              String(rec.notes || existing.notes || ''),
+              normalizeTags(rec.tags || existing.tags),
+              normalizeNullableRate(rec.default_hourly_rate != null ? rec.default_hourly_rate : existing.default_hourly_rate),
+              normalizeNullableCurrency(rec.default_currency || existing.default_currency),
+              now,
+              existing.id,
+            ]
+          );
+          updated++;
+          continue;
+        }
+      }
+
+      db.run(
+        `INSERT INTO clients (
+          name, email, phone, company_name, address_line1, address_line2, city,
+          state, postal_code, country, notes, tags, default_hourly_rate, default_currency, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          name,
+          email,
+          phone,
+          String(rec.company_name || '').trim(),
+          String(rec.address_line1 || '').trim(),
+          String(rec.address_line2 || '').trim(),
+          String(rec.city || '').trim(),
+          String(rec.state || '').trim(),
+          String(rec.postal_code || '').trim(),
+          String(rec.country || '').trim(),
+          String(rec.notes || ''),
+          normalizeTags(rec.tags),
+          normalizeNullableRate(rec.default_hourly_rate),
+          normalizeNullableCurrency(rec.default_currency),
+          now,
+          now,
+        ]
+      );
+
+      const idRes = db.exec('SELECT last_insert_rowid() AS id');
+      const newId = idRes[0].values[0][0];
+
+      const newClientObj = { id: newId, name, email, phone };
+      if (email) byEmail.set(email, newClientObj);
+      if (cleanPhone) byPhone.set(cleanPhone, newClientObj);
+
+      imported++;
+    }
+
+    db.run('COMMIT');
+    saveToDisk();
+
+    addAuditEntry({
+      entityType: 'client',
+      entityRef: `Bulk Import (${imported} new, ${updated} updated)`,
+      action: 'imported',
+      description: `Bulk imported clients: ${imported} added, ${updated} updated, ${skipped} skipped.`,
+    });
+
+    return {
+      ok: true,
+      total: records.length,
+      imported,
+      updated,
+      skipped,
+      errors,
+    };
+  } catch (err) {
+    db.run('ROLLBACK');
+    return {
+      ok: false,
+      error: 'Bulk client import failed: ' + err.message,
+      total: records.length,
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      errors: [{ reason: err.message }],
+    };
+  }
+}
+
+
 // ---------- Client Contacts ----------
 
 function getClientContacts(clientId) {
@@ -3143,6 +3299,105 @@ function deleteLineItemTemplate(id) {
   saveToDisk();
   return { ok: true, deleted };
 }
+
+function bulkImportLineItems(records = [], options = {}) {
+  const { onDuplicate = 'skip' } = options;
+  if (!Array.isArray(records) || records.length === 0) {
+    return { ok: true, total: 0, imported: 0, updated: 0, skipped: 0, errors: [] };
+  }
+
+  const existingItems = getLineItemTemplates() || [];
+  const byName = new Map();
+  for (const item of existingItems) {
+    if (item.name) {
+      byName.set(item.name.trim().toLowerCase(), item);
+    }
+  }
+
+  let imported = 0;
+  let updated = 0;
+  let skipped = 0;
+  const errors = [];
+  const now = new Date().toISOString();
+
+  db.run('BEGIN');
+  try {
+    for (let i = 0; i < records.length; i++) {
+      const rec = records[i];
+      const name = String(rec.name || rec.description || '').trim();
+      if (!name) {
+        errors.push({ index: i, reason: 'Missing item name or description' });
+        continue;
+      }
+
+      const normName = name.toLowerCase();
+      const existing = byName.get(normName);
+
+      const description = String(rec.description || '').trim();
+      const unitPrice = Number(rec.unit_price) >= 0 ? Number(rec.unit_price) : 0;
+      const taxRate = Number(rec.tax_rate) >= 0 ? Number(rec.tax_rate) : 0;
+      const unitLabel = String(rec.unit_label || '').trim();
+
+      if (existing) {
+        if (onDuplicate === 'skip') {
+          skipped++;
+          continue;
+        } else if (onDuplicate === 'overwrite') {
+          db.run(
+            `UPDATE line_item_templates
+             SET description = ?, unit_price = ?, tax_rate = ?, unit_label = ?, updated_at = ?
+             WHERE id = ?`,
+            [description || existing.description, unitPrice, taxRate, unitLabel || existing.unit_label, now, existing.id]
+          );
+          updated++;
+          continue;
+        }
+      }
+
+      db.run(
+        `INSERT INTO line_item_templates (name, description, unit_price, tax_rate, unit_label, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [name, description, unitPrice, taxRate, unitLabel, now, now]
+      );
+
+      const idRes = db.exec('SELECT last_insert_rowid() AS id');
+      const newId = idRes[0].values[0][0];
+      byName.set(normName, { id: newId, name, description, unit_price: unitPrice, tax_rate: taxRate, unit_label: unitLabel });
+      imported++;
+    }
+
+    db.run('COMMIT');
+    saveToDisk();
+
+    addAuditEntry({
+      entityType: 'template',
+      entityRef: `Bulk Line Items (${imported} new, ${updated} updated)`,
+      action: 'imported',
+      description: `Bulk imported line item templates: ${imported} added, ${updated} updated, ${skipped} skipped.`,
+    });
+
+    return {
+      ok: true,
+      total: records.length,
+      imported,
+      updated,
+      skipped,
+      errors,
+    };
+  } catch (err) {
+    db.run('ROLLBACK');
+    return {
+      ok: false,
+      error: 'Bulk line item import failed: ' + err.message,
+      total: records.length,
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      errors: [{ reason: err.message }],
+    };
+  }
+}
+
 
 // ---------- Payment Instruction Presets ----------
 
@@ -6295,9 +6550,33 @@ function createFinalInvoiceFromDeposit(depositInvoiceId, overrides) {
   return { ok: true, alreadyGenerated: false, invoice: finInv };
 }
 
-function listInvoices() {
+function listInvoices(filter = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (filter.startDate && String(filter.startDate).trim()) {
+    conditions.push('date_created >= ?');
+    params.push(String(filter.startDate).trim());
+  }
+
+  if (filter.endDate && String(filter.endDate).trim()) {
+    conditions.push('date_created <= ?');
+    params.push(String(filter.endDate).trim());
+  }
+
+  if (filter.status && filter.status !== 'all') {
+    conditions.push('status = ?');
+    params.push(String(filter.status).trim());
+  }
+
+  if (filter.clientId) {
+    conditions.push('client_id = ?');
+    params.push(Number(filter.clientId));
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const invoices = rowsToArray(
-    db.exec(`SELECT * FROM invoices ORDER BY created_at DESC, id DESC`)
+    db.exec(`SELECT * FROM invoices ${where} ORDER BY created_at DESC, id DESC`, params)
   );
   return invoices.map((inv) => {
     refreshInvoiceBalance(inv);
@@ -6307,6 +6586,7 @@ function listInvoices() {
     return inv;
   });
 }
+
 
 const ALLOWED_INVOICE_STATUSES = ['draft', 'sent', 'paid', 'partially_paid', 'overdue'];
 
@@ -9159,6 +9439,7 @@ module.exports = {
   countClientHistory,
   archiveClient,
   deleteClient,
+  bulkImportClients,
   getClientContacts,
   getContactById,
   saveClientContacts,
@@ -9232,6 +9513,7 @@ module.exports = {
   addLineItemTemplate,
   updateLineItemTemplate,
   deleteLineItemTemplate,
+  bulkImportLineItems,
   EXPENSE_CATEGORIES,
   createExpense,
   updateExpense,

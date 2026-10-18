@@ -1500,4 +1500,5 @@
     }
   };
   window.QuoteCraftClients.openOverview = openOverview;
+  window.QuoteCraftClients.reload = loadClients;
 })();

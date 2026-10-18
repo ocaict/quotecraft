@@ -334,5 +334,8 @@
     if (e.detail === 'items') loadItems();
   });
 
+  window.QuoteCraftItems = window.QuoteCraftItems || {};
+  window.QuoteCraftItems.reload = loadItems;
+
   init();
 })();

@@ -1351,3 +1351,16 @@ body.table-density-compact .badge-status {
   line-height: 1.4;
 }
 
+/* ---------- CSV Portability Hub ---------- */
+.csv-range-preset {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.csv-range-preset.active {
+  background: var(--color-primary, #3b82f6) !important;
+  color: #fff !important;
+  border-color: var(--color-primary, #3b82f6) !important;
+}
+

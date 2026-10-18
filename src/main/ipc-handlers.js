@@ -25,6 +25,17 @@ const {
   renderInvoicePrintHtml,
 } = require('./pdf-export');
 const {
+  parseCsv,
+  detectClientColumnMapping,
+  detectLineItemColumnMapping,
+  prepareClientRecords,
+  prepareLineItemRecords,
+  generateInvoicesLedgerCsv,
+  generatePaymentsLedgerCsv,
+  generateExpensesLedgerCsv,
+  generateTimeEntriesLedgerCsv,
+} = require('./csv-service');
+const {
   getCompanyProfile,
   saveCompanyProfile,
   getDashboardStats,
@@ -35,6 +46,7 @@ const {
   countClientHistory,
   archiveClient,
   deleteClient,
+  bulkImportClients,
   createQuote,
   duplicateQuote,
   updateQuote,
@@ -80,6 +92,7 @@ const {
   addLineItemTemplate,
   updateLineItemTemplate,
   deleteLineItemTemplate,
+  bulkImportLineItems,
   getClientContacts,
   getContactById,
   saveClientContacts,
@@ -2782,6 +2795,223 @@ function registerIpcHandlers() {
       return { ok: false, error: err.message };
     }
   });
+
+  // -------------------------------------------------------------------------
+  // CSV Data Portability Hub (Import & Export)
+  // -------------------------------------------------------------------------
+  ipcMain.handle('csv:selectAndPreview', async (_event, type = 'clients') => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: type === 'line_items' ? 'Select Line Items CSV' : 'Select Clients CSV',
+        properties: ['openFile'],
+        filters: [
+          { name: 'CSV / Text Files', extensions: ['csv', 'txt'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+        return { ok: true, cancelled: true };
+      }
+
+      const filePath = result.filePaths[0];
+      const fileName = path.basename(filePath);
+      const rawContent = fs.readFileSync(filePath, 'utf8');
+      const stats = fs.statSync(filePath);
+
+      const parsed = parseCsv(rawContent);
+      const mapping = type === 'line_items'
+        ? detectLineItemColumnMapping(parsed.headers)
+        : detectClientColumnMapping(parsed.headers);
+
+      return {
+        ok: true,
+        cancelled: false,
+        filePath,
+        fileName,
+        fileSize: stats.size,
+        headers: parsed.headers,
+        delimiter: parsed.delimiter,
+        totalRows: parsed.rows.length,
+        sampleRows: parsed.rows.slice(0, 5),
+        detectedMapping: mapping.mapping,
+        unmapped: mapping.unmapped,
+      };
+    } catch (err) {
+      logger.error('[csv:selectAndPreview] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('csv:parsePreview', async (_event, { csvText, type = 'clients' }) => {
+    try {
+      if (!csvText || typeof csvText !== 'string' || !csvText.trim()) {
+        return { ok: false, error: 'CSV content is empty.' };
+      }
+      const parsed = parseCsv(csvText);
+      const mapping = type === 'line_items'
+        ? detectLineItemColumnMapping(parsed.headers)
+        : detectClientColumnMapping(parsed.headers);
+
+      return {
+        ok: true,
+        headers: parsed.headers,
+        delimiter: parsed.delimiter,
+        totalRows: parsed.rows.length,
+        sampleRows: parsed.rows.slice(0, 5),
+        detectedMapping: mapping.mapping,
+        unmapped: mapping.unmapped,
+      };
+    } catch (err) {
+      logger.error('[csv:parsePreview] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('csv:importClients', async (_event, { filePath, csvText, mapping, options = {} }) => {
+    try {
+      let content = csvText;
+      if (filePath && fs.existsSync(filePath)) {
+        content = fs.readFileSync(filePath, 'utf8');
+      }
+      if (!content || !content.trim()) {
+        return { ok: false, error: 'No CSV data provided.' };
+      }
+
+      const parsed = parseCsv(content);
+      const effectiveMapping = mapping || detectClientColumnMapping(parsed.headers).mapping;
+      const { clients, errors } = prepareClientRecords(parsed.rows, effectiveMapping);
+
+      const result = bulkImportClients(clients, options);
+      if (errors.length > 0) {
+        result.validationErrors = errors;
+      }
+      return result;
+    } catch (err) {
+      logger.error('[csv:importClients] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('csv:importLineItems', async (_event, { filePath, csvText, mapping, options = {} }) => {
+    try {
+      let content = csvText;
+      if (filePath && fs.existsSync(filePath)) {
+        content = fs.readFileSync(filePath, 'utf8');
+      }
+      if (!content || !content.trim()) {
+        return { ok: false, error: 'No CSV data provided.' };
+      }
+
+      const parsed = parseCsv(content);
+      const effectiveMapping = mapping || detectLineItemColumnMapping(parsed.headers).mapping;
+      const { items, errors } = prepareLineItemRecords(parsed.rows, effectiveMapping);
+
+      const result = bulkImportLineItems(items, options);
+      if (errors.length > 0) {
+        result.validationErrors = errors;
+      }
+      return result;
+    } catch (err) {
+      logger.error('[csv:importLineItems] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('csv:getLedgerSummary', async (_event, { dataset, filter = {} }) => {
+    try {
+      let count = 0;
+      let total = 0;
+
+      if (dataset === 'invoices') {
+        const list = listInvoices(filter) || [];
+        count = list.length;
+        total = list.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
+      } else if (dataset === 'payments') {
+        const report = getPaymentsReport(filter) || {};
+        const payments = report.payments || [];
+        count = payments.length;
+        total = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      } else if (dataset === 'expenses') {
+        const expenses = listExpenses(filter) || [];
+        count = expenses.length;
+        total = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+      } else if (dataset === 'time_entries') {
+        const entries = listTimeEntries({
+          date_from: filter.startDate,
+          date_to: filter.endDate,
+        }) || [];
+        count = entries.length;
+        total = entries.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      } else {
+        return { ok: false, error: 'Unknown dataset: ' + dataset };
+      }
+
+      return { ok: true, count, total: Math.round(total * 100) / 100 };
+    } catch (err) {
+      logger.error('[csv:getLedgerSummary] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('csv:exportLedger', async (_event, { dataset, filter = {} }) => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      let defaultFilename = `quotecraft-${dataset}-ledger-${today}.csv`;
+      let csvContent = '';
+      let rowCount = 0;
+
+      if (dataset === 'invoices') {
+        const list = listInvoices(filter) || [];
+        rowCount = list.length;
+        csvContent = generateInvoicesLedgerCsv(list);
+      } else if (dataset === 'payments') {
+        const report = getPaymentsReport(filter) || {};
+        const payments = report.payments || [];
+        rowCount = payments.length;
+        csvContent = generatePaymentsLedgerCsv(payments);
+      } else if (dataset === 'expenses') {
+        const expenses = listExpenses(filter) || [];
+        rowCount = expenses.length;
+        csvContent = generateExpensesLedgerCsv(expenses);
+      } else if (dataset === 'time_entries') {
+        const entries = listTimeEntries({
+          date_from: filter.startDate,
+          date_to: filter.endDate,
+        }) || [];
+        rowCount = entries.length;
+        csvContent = generateTimeEntriesLedgerCsv(entries);
+      } else {
+        return { ok: false, error: 'Unknown dataset: ' + dataset };
+      }
+
+      const result = await dialog.showSaveDialog({
+        title: `Export ${dataset.replace('_', ' ')} CSV Ledger`,
+        defaultPath: defaultFilename,
+        filters: [{ name: 'CSV File', extensions: ['csv'] }],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { ok: true, cancelled: true };
+      }
+
+      // Prepend UTF-8 BOM (\uFEFF) for optimal Excel compatibility on Windows
+      const bomBuffer = Buffer.from('\uFEFF', 'utf8');
+      const dataBuffer = Buffer.from(csvContent, 'utf8');
+      fs.writeFileSync(result.filePath, Buffer.concat([bomBuffer, dataBuffer]));
+
+      return {
+        ok: true,
+        cancelled: false,
+        savedPath: result.filePath,
+        rowCount,
+      };
+    } catch (err) {
+      logger.error('[csv:exportLedger] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
 
   // -------------------------------------------------------------------------
   // Paystack Payment Gateway Handlers
