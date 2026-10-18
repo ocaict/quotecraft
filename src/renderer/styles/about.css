@@ -1,0 +1,229 @@
+/* About Modal Styling */
+.modal-about {
+  max-width: 500px;
+  width: 90%;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.about-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px 24px 20px;
+  background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-card) 100%);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.about-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.about-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.about-logo-wrapper {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.about-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(88, 166, 255, 0.22);
+  display: block;
+}
+
+.about-title {
+  margin: 0 0 6px 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.about-version-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  letter-spacing: normal;
+}
+
+.about-tagline {
+  margin: 0 0 14px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 380px;
+  line-height: 1.45;
+}
+
+/* License Pill */
+.about-license-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.about-license-pill:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.about-license-pill.pro {
+  background: rgba(63, 185, 80, 0.1);
+  border-color: rgba(63, 185, 80, 0.35);
+  color: var(--success);
+}
+
+.about-license-pill.community {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+}
+
+.about-license-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Environment Details Grid */
+.about-body {
+  padding: 20px 24px;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+  font-size: 12px;
+}
+
+.about-grid-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="light"] .about-grid-row {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.about-grid-row:last-child {
+  border-bottom: none;
+}
+
+.about-grid-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.about-grid-val {
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 11.5px;
+  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.about-data-path-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0 4px;
+  font-size: 11.5px;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: var(--font);
+}
+
+.about-data-path-btn:hover {
+  color: var(--accent-hover);
+}
+
+/* Actions Row */
+.about-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.about-actions .btn {
+  flex: 1;
+  font-size: 12px;
+  padding: 8px 12px;
+  justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Footer note & copyright */
+.about-footer {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+.about-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.about-footer a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}

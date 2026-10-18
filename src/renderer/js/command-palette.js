@@ -312,6 +312,19 @@
           }
         }
       }
+    },
+    {
+      id: 'help-about',
+      label: 'About QuoteCraft',
+      category: 'Help',
+      icon: ICONS.help,
+      shortcut: '',
+      keywords: 'about version system info diagnostics license credits quote craft copyright',
+      action: function () {
+        if (window.QuoteCraftAbout && window.QuoteCraftAbout.open) {
+          window.QuoteCraftAbout.open();
+        }
+      }
     }
   ];
 

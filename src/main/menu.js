@@ -24,7 +24,10 @@ function buildAppMenu(mainWindow) {
           {
             label: app.name,
             submenu: [
-              { role: 'about' },
+              {
+                label: `About ${app.name}`,
+                click: () => sendAction('open-about'),
+              },
               { type: 'separator' },
               {
                 label: 'Preferences…',
@@ -191,15 +194,7 @@ function buildAppMenu(mainWindow) {
         },
         {
           label: 'About QuoteCraft',
-          click: () => {
-            dialog.showMessageBox(mainWindow, {
-              type: 'info',
-              title: 'About QuoteCraft',
-              message: `QuoteCraft v${version}`,
-              detail: `Professional quote, invoice, expense, and time tracking management for freelancers and small businesses.\n\nElectron: ${process.versions.electron}\nNode: ${process.versions.node}\nChrome: ${process.versions.chrome}`,
-              buttons: ['OK'],
-            });
-          },
+          click: () => sendAction('open-about'),
         },
       ],
     },

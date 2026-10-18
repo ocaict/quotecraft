@@ -275,6 +275,10 @@
         } else {
           window.dispatchEvent(new CustomEvent('qc-open-command-palette'));
         }
+      } else if (action === 'open-about') {
+        if (window.QuoteCraftAbout && window.QuoteCraftAbout.open) {
+          window.QuoteCraftAbout.open();
+        }
       }
     });
   }

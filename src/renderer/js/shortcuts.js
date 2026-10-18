@@ -186,6 +186,17 @@
     }
 
     if (e.key === 'Escape') {
+      const aboutModal = document.getElementById('aboutModal');
+      if (aboutModal && !aboutModal.classList.contains('hidden')) {
+        e.preventDefault();
+        if (window.QuoteCraftAbout && window.QuoteCraftAbout.close) {
+          window.QuoteCraftAbout.close();
+        } else {
+          aboutModal.classList.add('hidden');
+        }
+        return;
+      }
+
       const modal = document.getElementById('shortcutsModal');
       if (modal && !modal.classList.contains('hidden')) {
         e.preventDefault();

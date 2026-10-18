@@ -29,6 +29,7 @@
   <link rel="stylesheet" href="styles/app-lock.css">
   <link rel="stylesheet" href="styles/command-palette.css">
   <link rel="stylesheet" href="styles/notifications.css">
+  <link rel="stylesheet" href="styles/about.css">
   <script src="js/theme.js"></script>
 </head>
 <body>
@@ -3987,6 +3988,71 @@
     <span id="busyLabel">Working…</span>
   </div>
 
+  <!-- About QuoteCraft Modal -->
+  <div id="aboutModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
+    <div class="modal modal-about">
+      <div class="about-hero">
+        <button type="button" class="about-close-btn" id="aboutModalClose" title="Close" aria-label="Close">&times;</button>
+        <div class="about-logo-wrapper">
+          <img src="assets/icons/icon.png" alt="QuoteCraft Logo" class="about-logo">
+        </div>
+        <h2 id="aboutModalTitle" class="about-title">
+          QuoteCraft
+          <span id="aboutVersionBadge" class="about-version-badge">v1.0.4</span>
+        </h2>
+        <p class="about-tagline">Modern offline-first desktop suite for quotes, invoices, expenses, and time tracking.</p>
+        <a href="#" id="aboutLicensePill" class="about-license-pill community" role="button">
+          <span class="about-license-dot"></span>
+          <span id="aboutLicenseLabel">🛡️ Free Community Edition</span>
+        </a>
+      </div>
+
+      <div class="about-body">
+        <div class="about-grid">
+          <div class="about-grid-row">
+            <span class="about-grid-label">Platform</span>
+            <span id="aboutOsVal" class="about-grid-val">—</span>
+          </div>
+          <div class="about-grid-row">
+            <span class="about-grid-label">Runtime</span>
+            <span id="aboutRuntimeVal" class="about-grid-val">—</span>
+          </div>
+          <div class="about-grid-row">
+            <span class="about-grid-label">Database Engine</span>
+            <span id="aboutDbVal" class="about-grid-val">—</span>
+          </div>
+          <div class="about-grid-row">
+            <span class="about-grid-label">Data Directory</span>
+            <span class="about-grid-val">
+              <span id="aboutDataPathVal" title="Click Open Folder">Local SQLite Storage</span>
+              <button type="button" id="aboutOpenDataFolderBtn" class="about-data-path-btn">Open Folder</button>
+            </span>
+          </div>
+        </div>
+
+        <div class="about-actions">
+          <button type="button" id="aboutCopySystemInfoBtn" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copy System Info</span>
+          </button>
+          <button type="button" id="aboutCheckUpdatesBtn" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span>Check Updates</span>
+          </button>
+          <button type="button" id="aboutGithubBtn" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+            <span>GitHub</span>
+          </button>
+        </div>
+
+        <div class="about-footer">
+          <div>© 2026 QuoteCraft Authors / OCA ICT. All rights reserved.</div>
+          <div style="margin-top: 2px;">Your data is stored 100% locally on this machine and never sent to cloud servers.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="shortcutsModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle">
     <div class="modal modal-shortcuts" style="max-width: 540px;">
       <div class="modal-header">
@@ -5361,6 +5427,7 @@
   <script src="js/command-palette.js"></script>
   <script src="js/app-lock.js"></script>
   <script src="js/notifications.js"></script>
+  <script src="js/about.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
