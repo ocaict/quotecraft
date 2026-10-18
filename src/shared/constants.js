@@ -290,6 +290,26 @@ function buildWhatsAppQuoteMessage({ quote, client, profile } = {}) {
   return lines.join('\n');
 }
 
+function getCurrencyByCode(code) {
+  if (!code) return { code: 'USD', name: 'US Dollar', symbol: '$' };
+  const found = CURRENCIES.find((c) => c.code === String(code).toUpperCase());
+  return found || { code: String(code).toUpperCase(), name: String(code).toUpperCase(), symbol: String(code).toUpperCase() };
+}
+
+function computeBaseAmountCents(amount, exchangeRate) {
+  const amt = Number(amount) || 0;
+  const rate = Number(exchangeRate) > 0 ? Number(exchangeRate) : 1.0;
+  return Math.round(amt * rate * 100);
+}
+
+function convertCurrency(amount, fromRate, toRate) {
+  const amt = Number(amount) || 0;
+  const fRate = Number(fromRate) > 0 ? Number(fromRate) : 1.0;
+  const tRate = Number(toRate) > 0 ? Number(toRate) : 1.0;
+  const baseAmount = amt * fRate;
+  return Math.round((baseAmount / tRate) * 100) / 100;
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     QUOTE_STATUSES,
@@ -299,6 +319,9 @@ if (typeof module !== 'undefined') {
     NIGERIAN_BANKS,
     isValidNuban,
     getPaymentBankDetails,
+    getCurrencyByCode,
+    computeBaseAmountCents,
+    convertCurrency,
     formatWhatsAppMoney,
     normalizeNigerianPhone,
     formatWhatsAppPhone,
@@ -316,6 +339,9 @@ if (typeof window !== 'undefined') {
     NIGERIAN_BANKS,
     isValidNuban,
     getPaymentBankDetails,
+    getCurrencyByCode,
+    computeBaseAmountCents,
+    convertCurrency,
     formatWhatsAppMoney,
     normalizeNigerianPhone,
     formatWhatsAppPhone,
@@ -323,3 +349,4 @@ if (typeof window !== 'undefined') {
     buildWhatsAppQuoteMessage,
   };
 }
+

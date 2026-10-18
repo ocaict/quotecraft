@@ -881,11 +881,19 @@ function renderQuotePdf(quote, client, profile, opts) {
   const taxRows = buildPdfTaxRows(quote.line_items || [], quote.subtotal, quote.discount_amount, currency, quote.tax_lines);
   taxRows.forEach((r) => totalRows.push(r));
 
+  const baseCurrency = (profile && profile.default_currency) || 'USD';
+  const exchangeRate = Number(quote.exchange_rate) || 1.0;
+  const quoteExtraRows = [];
+  if (currency !== baseCurrency && exchangeRate !== 1.0) {
+    const baseTotal = Math.round((Number(quote.total) || 0) * exchangeRate * 100) / 100;
+    quoteExtraRows.push([`Base Equiv. (${baseCurrency})`, `@ ${exchangeRate} = ${money(baseTotal, baseCurrency)}`]);
+  }
+
   drawTotals(ctx, {
     rows: totalRows,
     grandLabel: 'GRAND TOTAL',
     grandValue: money(quote.total, currency),
-    extra: [],
+    extra: quoteExtraRows,
   });
 
   if (quote.notes || quote.terms) {
@@ -986,6 +994,13 @@ function renderInvoicePdf(invoice, client, profile, opts) {
   } else if (credited > 0.0001) {
     extraRows.push(['Credited', `\u2212${money(credited, currency)}`]);
     extraRows.push(['Net paid', money(netPaid, currency)]);
+  }
+
+  const baseCurrency = (profile && profile.default_currency) || 'USD';
+  const exchangeRate = Number(invoice.exchange_rate) || 1.0;
+  if (currency !== baseCurrency && exchangeRate !== 1.0) {
+    const baseTotal = Math.round((Number(invoice.total) || 0) * exchangeRate * 100) / 100;
+    extraRows.push([`Base Equiv. (${baseCurrency})`, `@ ${exchangeRate} = ${money(baseTotal, baseCurrency)}`]);
   }
 
   drawTotals(ctx, {

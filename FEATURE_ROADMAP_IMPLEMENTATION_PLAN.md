@@ -11,7 +11,7 @@ This roadmap outlines the recommended architectural upgrades and feature additio
 | **Phase 1** | **CSV Data Portability Hub** | Import clients & export tax/accounting data | ✅ **Completed** | ⭐⭐⭐⭐⭐ |
 | **Phase 2** | **Visual Dashboard Cash Flow Chart** | Interactive SVG cash flow & revenue trends | ✅ **Completed** | ⭐⭐⭐⭐⭐ |
 | **Phase 3** | **PDF Branding & Template Styles** | Brand accent colors & document layout presets | ✅ **Completed** | ⭐⭐⭐⭐ |
-| **Phase 4** | **Multi-Currency Document Billing** | Foreign currency invoicing with base P&L snapshot | ⏳ Planned | ⭐⭐⭐⭐ |
+| **Phase 4** | **Multi-Currency Document Billing** | Foreign currency invoicing with base P&L snapshot | ✅ **Completed** | ⭐⭐⭐⭐ |
 | **Phase 5** | **In-App Quick Document Preview & HTML Receipts** | Instant preview modal & shareable HTML invoice | ⏳ Planned | ⭐⭐⭐⭐ |
 
 ---
@@ -104,7 +104,7 @@ Allow businesses and creative agencies to align quotes and invoices with their b
 
 ---
 
-## Phase 4: Multi-Currency Invoicing & Exchange Rate Snapshots
+## Phase 4: Multi-Currency Invoicing & Exchange Rate Snapshots — ✅ COMPLETED
 
 ### Objective
 Empower contractors and agencies who bill international clients in USD, EUR, or GBP while tracking local business accounts and tax reporting in their domestic currency (e.g., NGN).

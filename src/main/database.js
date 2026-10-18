@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { app } = require('electron');
 const { encryptSecret, decryptSecret, getStorageMechanismName } = require('./secure-storage');
-const { NIGERIAN_BANKS, isValidNuban } = require('../shared/constants');
+const { NIGERIAN_BANKS, isValidNuban, computeBaseAmountCents } = require('../shared/constants');
 
 const DB_DIR = app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(__dirname, '../../data');
 const DB_FILE = process.env.TEST_DB_PATH || path.join(DB_DIR, 'quotecraft.sqlite');
@@ -365,6 +365,7 @@ function createTables() {
       terms           TEXT DEFAULT '',
       currency        TEXT NOT NULL DEFAULT 'USD',
       exchange_rate   REAL NOT NULL DEFAULT 1.0,
+      base_amount_cents INTEGER DEFAULT NULL,
       acceptance_method TEXT DEFAULT NULL,
       acceptance_note TEXT DEFAULT NULL,
       accepted_by     TEXT DEFAULT NULL,
@@ -426,6 +427,7 @@ function createTables() {
       terms           TEXT DEFAULT '',
       currency        TEXT NOT NULL DEFAULT 'USD',
       exchange_rate   REAL NOT NULL DEFAULT 1.0,
+      base_amount_cents INTEGER DEFAULT NULL,
       invoice_type    TEXT NOT NULL DEFAULT 'standard',
       deposit_percent REAL DEFAULT NULL,
       deposit_amount  REAL DEFAULT NULL,
@@ -1593,6 +1595,22 @@ const MIGRATIONS = [
       }
       if (!cols.has('pdf_layout_style')) {
         db.run(`ALTER TABLE company_profile ADD COLUMN pdf_layout_style TEXT NOT NULL DEFAULT 'standard'`);
+      }
+    },
+  },
+  {
+    version: 50,
+    up: () => {
+      // Phase 4: Multi-Currency Invoicing & Exchange Rate Snapshots - add base_amount_cents
+      const quoteCols = new Set(db.exec(`PRAGMA table_info(quotes)`)[0].values.map((v) => v[1]));
+      if (!quoteCols.has('base_amount_cents')) {
+        db.run(`ALTER TABLE quotes ADD COLUMN base_amount_cents INTEGER DEFAULT NULL`);
+        db.run(`UPDATE quotes SET base_amount_cents = ROUND(total * COALESCE(exchange_rate, 1.0) * 100) WHERE base_amount_cents IS NULL`);
+      }
+      const invCols = new Set(db.exec(`PRAGMA table_info(invoices)`)[0].values.map((v) => v[1]));
+      if (!invCols.has('base_amount_cents')) {
+        db.run(`ALTER TABLE invoices ADD COLUMN base_amount_cents INTEGER DEFAULT NULL`);
+        db.run(`UPDATE invoices SET base_amount_cents = ROUND(total * COALESCE(exchange_rate, 1.0) * 100) WHERE base_amount_cents IS NULL`);
       }
     },
   },
@@ -3790,13 +3808,14 @@ function createInvoiceFromExpenses(payload) {
   let invoiceId = null;
   db.run('BEGIN');
   try {
+    const baseAmountCents = computeBaseAmountCents(total, 1.0);
     db.run(
       `INSERT INTO invoices (
         invoice_number, client_id, project_id, status,
         date_created, date_due,
         subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
-        currency, exchange_rate, notes, terms, invoice_type, created_at, updated_at
-      ) VALUES (?, ?, ?, 'draft', ?, ?, ?, 0, 0, ?, 0, ?, ?, 1.0, ?, ?, 'standard', ?, ?)`,
+        currency, exchange_rate, base_amount_cents, notes, terms, invoice_type, created_at, updated_at
+      ) VALUES (?, ?, ?, 'draft', ?, ?, ?, 0, 0, ?, 0, ?, ?, 1.0, ?, ?, ?, 'standard', ?, ?)`,
       [
         invoiceNumber,
         clientId,
@@ -3807,6 +3826,7 @@ function createInvoiceFromExpenses(payload) {
         total,
         total,
         currency,
+        baseAmountCents,
         payload.notes || '',
         payload.terms || (profile && profile.default_terms) || '',
         now,
@@ -4569,6 +4589,7 @@ function createQuote(data, lineItems) {
   let createdQuoteId = null;
 
   const totals = computeDocumentTotals(data, lineItems);
+  const baseAmountCents = computeBaseAmountCents(totals.total, exchangeRate);
 
   db.run('BEGIN');
   try {
@@ -4576,8 +4597,8 @@ function createQuote(data, lineItems) {
       `INSERT INTO quotes (
         quote_number, quote_number_root, version, is_latest, client_id, contact_id, project_id, status, date_created, valid_until,
         subtotal, discount_amount, discount_type, discount_value, tax_rate, tax_lines,
-        tax_amount, total, currency, exchange_rate, notes, terms, internal_notes, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        tax_amount, total, currency, exchange_rate, base_amount_cents, notes, terms, internal_notes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         quoteNumber,
         quoteNumber,
@@ -4599,6 +4620,7 @@ function createQuote(data, lineItems) {
         totals.total,
         currency,
         exchangeRate,
+        baseAmountCents,
         data.notes || '',
         data.terms || '',
         data.internal_notes || '',
@@ -4709,12 +4731,13 @@ function updateQuote(id, data, lineItems) {
     try {
       db.run(`UPDATE quotes SET is_latest = 0 WHERE quote_number_root = ? OR quote_number = ?`, [root, root]);
 
+      const baseAmountCents = computeBaseAmountCents(totals.total, exchangeRate);
       const insertRes = db.run(
         `INSERT INTO quotes (
           quote_number, quote_number_root, version, is_latest, client_id, contact_id, project_id, status, date_created, valid_until,
           subtotal, discount_amount, discount_type, discount_value, tax_rate, tax_lines,
-          tax_amount, total, currency, exchange_rate, notes, terms, internal_notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          tax_amount, total, currency, exchange_rate, base_amount_cents, notes, terms, internal_notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newQuoteNumber,
           root,
@@ -4736,6 +4759,7 @@ function updateQuote(id, data, lineItems) {
           totals.total,
           currency,
           exchangeRate,
+          baseAmountCents,
           data.notes || '',
           data.terms || '',
           data.internal_notes !== undefined ? data.internal_notes : (existing.internal_notes || ''),
@@ -4787,12 +4811,13 @@ function updateQuote(id, data, lineItems) {
   // Draft in-place update
   db.run('BEGIN');
   try {
+    const baseAmountCents = computeBaseAmountCents(totals.total, exchangeRate);
     db.run(
       `UPDATE quotes SET
         client_id = ?, contact_id = ?, project_id = ?, date_created = ?, valid_until = ?,
         subtotal = ?, discount_amount = ?, discount_type = ?,
         discount_value = ?, tax_rate = ?, tax_lines = ?, tax_amount = ?, total = ?,
-        currency = ?, exchange_rate = ?, notes = ?, terms = ?, internal_notes = ?, updated_at = ?
+        currency = ?, exchange_rate = ?, base_amount_cents = ?, notes = ?, terms = ?, internal_notes = ?, updated_at = ?
        WHERE id = ?`,
       [
         data.client_id,
@@ -4810,6 +4835,7 @@ function updateQuote(id, data, lineItems) {
         totals.total,
         currency,
         exchangeRate,
+        baseAmountCents,
         data.notes || '',
         data.terms || '',
         data.internal_notes !== undefined ? data.internal_notes : (existing.internal_notes || ''),
@@ -4863,6 +4889,9 @@ function updateQuote(id, data, lineItems) {
 function getQuote(id) {
   const quote = rowToObject(db.exec('SELECT * FROM quotes WHERE id = ?', [id]));
   if (!quote) return null;
+  quote.base_amount_cents = quote.base_amount_cents != null
+    ? Number(quote.base_amount_cents)
+    : computeBaseAmountCents(quote.total, quote.exchange_rate);
   if (quote.tax_lines && typeof quote.tax_lines === 'string') {
     try { quote.tax_lines = JSON.parse(quote.tax_lines); } catch (_) {}
   }
@@ -4883,6 +4912,9 @@ function listQuotes(opts) {
     : `SELECT * FROM quotes WHERE is_latest = 1 ORDER BY created_at DESC, id DESC`;
   const quotes = rowsToArray(db.exec(sql));
   return quotes.map((q) => {
+    q.base_amount_cents = q.base_amount_cents != null
+      ? Number(q.base_amount_cents)
+      : computeBaseAmountCents(q.total, q.exchange_rate);
     const client = getClient(q.client_id);
     q.client = client ? { id: client.id, name: client.name, company_name: client.company_name } : null;
     q.project = q.project_id ? projectSummary(q.project_id) : null;
@@ -5354,6 +5386,9 @@ function getInvoiceLineItems(invoiceId) {
 function getInvoice(id) {
   const invoice = rowToObject(db.exec('SELECT * FROM invoices WHERE id = ?', [id]));
   if (!invoice) return null;
+  invoice.base_amount_cents = invoice.base_amount_cents != null
+    ? Number(invoice.base_amount_cents)
+    : computeBaseAmountCents(invoice.total, invoice.exchange_rate);
   if (invoice.tax_lines && typeof invoice.tax_lines === 'string') {
     try { invoice.tax_lines = JSON.parse(invoice.tax_lines); } catch (_) {}
   }
@@ -5579,13 +5614,14 @@ function updateInvoice(id, data, lineItems) {
 
   db.run('BEGIN');
   try {
+    const baseAmountCents = computeBaseAmountCents(total, exchangeRate);
     db.run(
       `UPDATE invoices SET
         client_id = ?, contact_id = ?, project_id = ?, date_created = ?, date_due = ?,
         subtotal = ?, discount_amount = ?, discount_type = ?,
         discount_value = ?, tax_rate = ?, tax_lines = ?, tax_amount = ?, total = ?,
         wht_rate = ?, wht_amount = ?, balance_due = ?,
-        currency = ?, exchange_rate = ?, notes = ?, terms = ?, updated_at = ?
+        currency = ?, exchange_rate = ?, base_amount_cents = ?, notes = ?, terms = ?, updated_at = ?
        WHERE id = ?`,
       [
         data.client_id,
@@ -5606,6 +5642,7 @@ function updateInvoice(id, data, lineItems) {
         balanceDue,
         currency,
         exchangeRate,
+        baseAmountCents,
         data.notes !== undefined ? data.notes : (existing.notes || ''),
         data.terms !== undefined ? data.terms : (existing.terms || ''),
         now,
@@ -5693,6 +5730,8 @@ function createInvoice(data, inputLineItems) {
   const now = new Date().toISOString();
   let invoiceId = null;
 
+  const baseAmountCents = computeBaseAmountCents(totals.total, exchangeRate);
+
   db.run('BEGIN');
   try {
     db.run(
@@ -5702,11 +5741,11 @@ function createInvoice(data, inputLineItems) {
         subtotal, tax_rate, tax_lines, tax_amount, discount_amount, total,
         wht_rate, wht_amount, wht_credit_received, wht_credit_note_ref,
         amount_paid, balance_due,
-        currency, exchange_rate,
+        currency, exchange_rate, base_amount_cents,
         discount_type, discount_value,
         notes, terms,
         invoice_type, edit_locked, recurring_profile_id, is_recurring, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         null,
@@ -5730,6 +5769,7 @@ function createInvoice(data, inputLineItems) {
         totals.net_payable,
         currency,
         exchangeRate,
+        baseAmountCents,
         data.discount_type || 'none',
         Number(data.discount_value) || 0,
         data.notes || '',
@@ -6049,16 +6089,17 @@ function duplicateInvoice(id) {
   db.run('BEGIN');
   try {
     const sourceTaxLines = source.tax_lines ? (typeof source.tax_lines === 'string' ? source.tax_lines : JSON.stringify(source.tax_lines)) : null;
+    const baseAmountCents = computeBaseAmountCents(source.total, source.exchange_rate);
     db.run(
       `INSERT INTO invoices (
          invoice_number, quote_id, client_id, contact_id, project_id, status,
          date_created, date_due, date_sent,
          subtotal, tax_rate, tax_lines, tax_amount, discount_amount, total, amount_paid, balance_due,
-         currency, exchange_rate,
+         currency, exchange_rate, base_amount_cents,
          notes, terms,
          invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
          recurring_profile_id, is_recurring, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         null,
@@ -6079,6 +6120,7 @@ function duplicateInvoice(id) {
         Number(source.total) || 0,
         source.currency || 'USD',
         Number(source.exchange_rate) || 1.0,
+        baseAmountCents,
         source.notes || '',
         source.terms || '',
         'standard',
@@ -6241,16 +6283,17 @@ function convertQuoteToInvoice(quoteId, overrides) {
       depositPercent = Math.round((depositAmount / quoteTotal) * 10000) / 100;
     }
 
+    const depositBaseAmountCents = computeBaseAmountCents(depositAmount, quote.exchange_rate);
     db.run('BEGIN');
     try {
       db.run(
         `INSERT INTO invoices (
           invoice_number, quote_id, client_id, contact_id, project_id, status, date_created, date_sent, date_due,
           subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
-          currency, exchange_rate, notes, terms,
+          currency, exchange_rate, base_amount_cents, notes, terms,
           invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           invoiceNumber,
           quoteId,
@@ -6269,6 +6312,7 @@ function convertQuoteToInvoice(quoteId, overrides) {
           depositAmount,
           quote.currency || 'USD',
           Number(quote.exchange_rate) || 1.0,
+          depositBaseAmountCents,
           over.notes !== undefined ? over.notes : (quote.notes || ''),
           over.terms !== undefined ? over.terms : (quote.terms || ''),
           'deposit',
@@ -6326,15 +6370,16 @@ function convertQuoteToInvoice(quoteId, overrides) {
   // Full invoice conversion
   db.run('BEGIN');
   try {
+    const fullBaseAmountCents = computeBaseAmountCents(quote.total, quote.exchange_rate);
     const quoteTaxLinesVal = quote.tax_lines ? (typeof quote.tax_lines === 'string' ? quote.tax_lines : JSON.stringify(quote.tax_lines)) : null;
     db.run(
       `INSERT INTO invoices (
         invoice_number, quote_id, client_id, contact_id, project_id, status, date_created, date_sent, date_due,
         subtotal, tax_rate, tax_lines, tax_amount, discount_amount, total, amount_paid, balance_due,
-        currency, exchange_rate, notes, terms,
+        currency, exchange_rate, base_amount_cents, notes, terms,
         invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         quoteId,
@@ -6355,6 +6400,7 @@ function convertQuoteToInvoice(quoteId, overrides) {
         Number(quote.total) || 0,
         quote.currency || 'USD',
         Number(quote.exchange_rate) || 1.0,
+        fullBaseAmountCents,
         over.notes !== undefined ? over.notes : '',
         over.terms !== undefined ? over.terms : (quote.terms || ''),
         'standard',
@@ -6471,14 +6517,16 @@ function createFinalInvoiceFromDeposit(depositInvoiceId, overrides) {
   let finalInvoiceId = null;
   db.run('BEGIN');
   try {
+    const finalRate = Number(quote.exchange_rate) || Number(depositInv.exchange_rate) || 1.0;
+    const finalBaseAmountCents = computeBaseAmountCents(finalBalance, finalRate);
     db.run(
       `INSERT INTO invoices (
         invoice_number, quote_id, client_id, contact_id, project_id, status, date_created, date_sent, date_due,
         subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
-        currency, exchange_rate, notes, terms,
+        currency, exchange_rate, base_amount_cents, notes, terms,
         invoice_type, deposit_percent, deposit_amount, original_quote_total, deposit_invoice_id, is_final_generated,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         quote.id,
@@ -6496,7 +6544,8 @@ function createFinalInvoiceFromDeposit(depositInvoiceId, overrides) {
         0,
         finalBalance,
         quote.currency || depositInv.currency || 'USD',
-        Number(quote.exchange_rate) || Number(depositInv.exchange_rate) || 1.0,
+        finalRate,
+        finalBaseAmountCents,
         over.notes !== undefined ? over.notes : (quote.notes || ''),
         over.terms !== undefined ? over.terms : (quote.terms || ''),
         'final',
@@ -6610,6 +6659,9 @@ function listInvoices(filter = {}) {
     db.exec(`SELECT * FROM invoices ${where} ORDER BY created_at DESC, id DESC`, params)
   );
   return invoices.map((inv) => {
+    inv.base_amount_cents = inv.base_amount_cents != null
+      ? Number(inv.base_amount_cents)
+      : computeBaseAmountCents(inv.total, inv.exchange_rate);
     refreshInvoiceBalance(inv);
     const client = getClient(inv.client_id);
     inv.client = client ? { id: client.id, name: client.name, company_name: client.company_name } : null;
@@ -7847,14 +7899,15 @@ function generateNextRecurringInvoice(profileId, forceDate) {
 
   db.run('BEGIN');
   try {
+    const baseAmountCents = computeBaseAmountCents(source.total, source.exchange_rate);
     db.run(
       `INSERT INTO invoices (
          invoice_number, quote_id, client_id, contact_id, project_id, status,
          date_created, date_due, date_sent,
          subtotal, tax_amount, discount_amount, total, amount_paid, balance_due,
-         currency, exchange_rate,
+         currency, exchange_rate, base_amount_cents,
          notes, terms, recurring_profile_id, is_recurring, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNumber,
         null,
@@ -7873,6 +7926,7 @@ function generateNextRecurringInvoice(profileId, forceDate) {
         Number(source.total) || 0,
         source.currency || 'USD',
         Number(source.exchange_rate) || 1.0,
+        baseAmountCents,
         source.notes || '',
         source.terms || '',
         profile.id,
@@ -9745,6 +9799,7 @@ module.exports = {
   deletePaymentInstructionPreset,
   setInvoiceWhtCredit,
   computeDocumentTotals,
+  computeBaseAmountCents,
   getPaymentBankDetails,
   NIGERIAN_BANKS,
   isValidNuban,

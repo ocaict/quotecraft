@@ -2530,13 +2530,39 @@
     const label = invoiceFormExchangeRateField.querySelector('label');
     const hint = invoiceFormExchangeRateField.querySelector('.hint');
     if (label) label.textContent = `Exchange rate (${selected} to base ${baseCode})`;
-    if (hint) hint.textContent = `1 ${selected} = [rate] ${baseCode}. Used only for reporting.`;
+    if (hint) hint.textContent = `1 ${selected} = [rate] ${baseCode}. Recorded in base_amount_cents for multi-currency reporting.`;
+
+    const presetNote = document.getElementById('invoiceCurrencyPresetNote');
+    if (presetNote) {
+      const isForeign = ['USD', 'GBP', 'EUR'].includes(selected);
+      const isBase = selected === baseCode;
+      const rateVal = Number(invoiceFormExchangeRate ? invoiceFormExchangeRate.value : 1) || 1.0;
+      
+      let noteHtml = '';
+      if (isForeign) {
+        noteHtml += `<strong>Foreign Currency (${selected})</strong>: Invoices exported to PDF will automatically display your <em>Domiciliary / International Wire</em> account presets.`;
+      } else {
+        noteHtml += `<strong>Domestic Currency (${selected})</strong>: Invoices will use your primary local bank preset.`;
+      }
+      if (!isBase && rateVal !== 1.0) {
+        noteHtml += `<br><span style="color: var(--text-muted); font-size: 11.5px;">Exchange rate snapshot: 1 ${selected} = ${rateVal} ${baseCode}</span>`;
+      }
+      presetNote.innerHTML = noteHtml;
+      presetNote.style.display = 'block';
+    }
+
     if (selected === baseCode) {
       invoiceFormExchangeRateField.style.display = 'none';
       if (invoiceFormExchangeRate) invoiceFormExchangeRate.value = '1';
     } else {
       invoiceFormExchangeRateField.style.display = '';
     }
+  }
+
+  if (invoiceFormExchangeRate) {
+    invoiceFormExchangeRate.addEventListener('input', () => {
+      updateInvoiceExchangeRateVisibility();
+    });
   }
 
   async function populateInvoiceLibrarySelect() {
