@@ -39,6 +39,7 @@ const {
   getCompanyProfile,
   saveCompanyProfile,
   getDashboardStats,
+  getCashFlowTimeline,
   getClients,
   getClient,
   addClient,
@@ -517,6 +518,16 @@ function registerIpcHandlers() {
       return { ok: true, stats };
     } catch (err) {
       return { ok: false, errors: { general: `Failed to load dashboard: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('dashboard:cashFlow', async (_event, options = {}) => {
+    try {
+      const data = getCashFlowTimeline(options);
+      return data;
+    } catch (err) {
+      logger.error('[dashboard:cashFlow] ' + err.message);
+      return { ok: false, error: err.message };
     }
   });
 

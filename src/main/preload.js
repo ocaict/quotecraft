@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getCompanyProfile: () => ipcRenderer.invoke('company:get'),
   getDashboardStats: () => ipcRenderer.invoke('dashboard:stats'),
+  getCashFlowTimeline: (options) => ipcRenderer.invoke('dashboard:cashFlow', options),
   pickLogo: () => ipcRenderer.invoke('company:pickLogo'),
   saveCompanyProfile: (profile) => ipcRenderer.invoke('company:save', profile),
 

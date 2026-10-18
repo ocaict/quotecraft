@@ -806,6 +806,8 @@
     await checkDueRecurringDashboard();
     await checkDueRemindersDashboard();
     await loadStats();
+    // Phase 2: Cash Flow Timeline
+    if (window.CashFlowChart) window.CashFlowChart.load('6m');
   }
 
   document.addEventListener('pagechange', async (e) => {
@@ -817,6 +819,8 @@
       await checkDueRecurringDashboard();
       await checkDueRemindersDashboard();
       loadStats();
+      // Phase 2: refresh cash flow chart on page re-visit
+      if (window.CashFlowChart) window.CashFlowChart.load();
     }
   });
 

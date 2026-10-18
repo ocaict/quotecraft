@@ -8055,6 +8055,145 @@ function getDashboardStats() {
   };
 }
 
+function getCashFlowTimeline(options = {}) {
+  const { range = '6m' } = options;
+  const profile = getCompanyProfile();
+  const baseCurrency = (profile && (profile.reporting_currency || profile.default_currency)) || 'USD';
+
+  const today = new Date();
+  let monthCount = 6;
+  if (range === '12m') monthCount = 12;
+  else if (range === 'ytd') monthCount = Math.max(1, today.getMonth() + 1);
+
+  const months = [];
+  const pad = (n) => String(n).padStart(2, '0');
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  for (let i = monthCount - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    const label = `${monthNames[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
+    months.push({ key, label, fullMonth: monthNames[d.getMonth()], year: d.getFullYear() });
+  }
+
+  const startMonthKey = months[0].key;
+  const endMonthKey = months[months.length - 1].key;
+  const startDate = `${startMonthKey}-01`;
+  const endDate = `${endMonthKey}-31`;
+
+  // 1. Grouped payments (gross)
+  const paidRes = rowsToArray(db.exec(
+    `SELECT 
+       strftime('%Y-%m', p.payment_date) AS m,
+       SUM(p.amount * COALESCE(i.exchange_rate, 1.0)) AS total
+     FROM payments p
+     JOIN invoices i ON p.invoice_id = i.id
+     WHERE p.payment_date >= ? AND p.payment_date <= ?
+     GROUP BY strftime('%Y-%m', p.payment_date)`,
+    [startDate, endDate]
+  ));
+  const paidMap = {};
+  for (const r of paidRes) {
+    if (r.m) paidMap[r.m] = Number(r.total) || 0;
+  }
+
+  // 2. Grouped credit notes
+  const creditRes = rowsToArray(db.exec(
+    `SELECT 
+       strftime('%Y-%m', cn.date_created) AS m,
+       SUM(cn.amount * COALESCE(i.exchange_rate, 1.0)) AS total
+     FROM credit_notes cn
+     JOIN invoices i ON cn.invoice_id = i.id
+     WHERE cn.date_created >= ? AND cn.date_created <= ?
+     GROUP BY strftime('%Y-%m', cn.date_created)`,
+    [startDate, endDate]
+  ));
+  const creditMap = {};
+  for (const r of creditRes) {
+    if (r.m) creditMap[r.m] = Number(r.total) || 0;
+  }
+
+  // 3. Grouped expenses
+  const expenseRes = rowsToArray(db.exec(
+    `SELECT 
+       strftime('%Y-%m', date) AS m,
+       SUM(amount * COALESCE(exchange_rate, 1.0)) AS total
+     FROM expenses
+     WHERE date >= ? AND date <= ?
+     GROUP BY strftime('%Y-%m', date)`,
+    [startDate, endDate]
+  ));
+  const expenseMap = {};
+  for (const r of expenseRes) {
+    if (r.m) expenseMap[r.m] = Number(r.total) || 0;
+  }
+
+  // 4. Grouped invoices
+  const invoiceRes = rowsToArray(db.exec(
+    `SELECT 
+       strftime('%Y-%m', date_created) AS m,
+       SUM(total * COALESCE(exchange_rate, 1.0)) AS total
+     FROM invoices
+     WHERE date_created >= ? AND date_created <= ?
+     GROUP BY strftime('%Y-%m', date_created)`,
+    [startDate, endDate]
+  ));
+  const invoiceMap = {};
+  for (const r of invoiceRes) {
+    if (r.m) invoiceMap[r.m] = Number(r.total) || 0;
+  }
+
+  let totalMoneyIn = 0;
+  let totalMoneyOut = 0;
+  let totalInvoiced = 0;
+  let hasActivity = false;
+
+  const timeline = months.map((m) => {
+    const grossPaid = paidMap[m.key] || 0;
+    const credit = creditMap[m.key] || 0;
+    const moneyIn = Math.max(0, Math.round((grossPaid - credit) * 100) / 100);
+    const moneyOut = Math.round((expenseMap[m.key] || 0) * 100) / 100;
+    const invoiced = Math.round((invoiceMap[m.key] || 0) * 100) / 100;
+    const netProfit = Math.round((moneyIn - moneyOut) * 100) / 100;
+
+    if (moneyIn > 0 || moneyOut > 0 || invoiced > 0) {
+      hasActivity = true;
+    }
+
+    totalMoneyIn += moneyIn;
+    totalMoneyOut += moneyOut;
+    totalInvoiced += invoiced;
+
+    return {
+      monthKey: m.key,
+      label: m.label,
+      fullMonth: m.fullMonth,
+      year: m.year,
+      moneyIn,
+      moneyOut,
+      netProfit,
+      invoiced,
+    };
+  });
+
+  totalMoneyIn = Math.round(totalMoneyIn * 100) / 100;
+  totalMoneyOut = Math.round(totalMoneyOut * 100) / 100;
+  totalInvoiced = Math.round(totalInvoiced * 100) / 100;
+  const totalNetProfit = Math.round((totalMoneyIn - totalMoneyOut) * 100) / 100;
+
+  return {
+    ok: true,
+    range,
+    currency: baseCurrency,
+    totalMoneyIn,
+    totalMoneyOut,
+    totalNetProfit,
+    totalInvoiced,
+    hasActivity,
+    timeline,
+  };
+}
+
 // ---------- Recurring summary (Dashboard KPI widget) ----------
 function getRecurringSummary() {
   const todayStr = toDateString(new Date());
@@ -9429,6 +9568,7 @@ module.exports = {
   getCompanyProfile,
   saveCompanyProfile,
   getDashboardStats,
+  getCashFlowTimeline,
   getDatabaseBuffer,
   validateBackupBuffer,
   restoreDatabaseFromBuffer,

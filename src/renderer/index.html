@@ -289,6 +289,54 @@
         </div>
       </div>
 
+      <!-- Cash Flow Timeline Chart -->
+      <div class="card cashflow-card" id="cashflowCard">
+        <div class="cashflow-header">
+          <div>
+            <h2 class="cashflow-title">Cash Flow Timeline</h2>
+            <p class="cashflow-subtitle" id="cashflowSubtitle">Loading…</p>
+          </div>
+          <div class="cashflow-range-tabs" role="tablist" aria-label="Cash flow range">
+            <button type="button" id="cfRange6m"  class="cashflow-tab active" role="tab" aria-selected="true"  data-range="6m">6M</button>
+            <button type="button" id="cfRange12m" class="cashflow-tab"        role="tab" aria-selected="false" data-range="12m">12M</button>
+            <button type="button" id="cfRangeYtd" class="cashflow-tab"        role="tab" aria-selected="false" data-range="ytd">YTD</button>
+          </div>
+        </div>
+
+        <!-- Summary KPIs -->
+        <div class="cashflow-kpis">
+          <div class="cashflow-kpi">
+            <span class="cashflow-kpi-label">Money In</span>
+            <span class="cashflow-kpi-value cf-in" id="cfTotalIn">—</span>
+          </div>
+          <div class="cashflow-kpi">
+            <span class="cashflow-kpi-label">Money Out</span>
+            <span class="cashflow-kpi-value cf-out" id="cfTotalOut">—</span>
+          </div>
+          <div class="cashflow-kpi">
+            <span class="cashflow-kpi-label">Net Profit</span>
+            <span class="cashflow-kpi-value" id="cfTotalNet">—</span>
+          </div>
+        </div>
+
+        <!-- Bar Chart -->
+        <div class="cashflow-chart-wrap" id="cashflowChartWrap">
+          <div class="cashflow-empty-state" id="cashflowEmptyState">
+            <span class="cashflow-empty-icon">📊</span>
+            <span>No cash flow data for this period yet.</span>
+          </div>
+          <div class="cashflow-bars" id="cashflowBars" aria-hidden="true"></div>
+          <div class="cashflow-x-axis" id="cashflowXAxis"></div>
+        </div>
+
+        <!-- Legend -->
+        <div class="cashflow-legend">
+          <span class="cashflow-legend-dot dot-in"></span><span>Money In</span>
+          <span class="cashflow-legend-dot dot-out"></span><span>Money Out</span>
+          <span class="cashflow-legend-dot dot-net"></span><span>Net Profit</span>
+        </div>
+      </div>
+
       <div class="card dashboard-list-card">
         <h2>Recent activity</h2>
         <div id="dashboardActivity">
@@ -5553,6 +5601,7 @@
   <script src="js/whatsapp-share.js"></script>
   <script src="js/quotes.js"></script>
   <script src="js/invoices.js"></script>
+  <script src="js/cashflow-chart.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/payments.js"></script>
   <script src="js/expenses.js"></script>

@@ -1364,3 +1364,196 @@ body.table-density-compact .badge-status {
   border-color: var(--color-primary, #3b82f6) !important;
 }
 
+
+/* ------------------------------------------------------------------------------
+   Phase 2 – Cash Flow Timeline Chart
+   ------------------------------------------------------------------------------ */
+
+/* Card */
+.cashflow-card {
+  padding: 20px 24px 16px;
+  margin-bottom: 20px;
+}
+
+/* Header row */
+.cashflow-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.cashflow-title {
+  margin: 0 0 2px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.cashflow-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Range tabs */
+.cashflow-range-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--input-bg, rgba(255,255,255,0.06));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+.cashflow-tab {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.cashflow-tab:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+}
+.cashflow-tab.active {
+  background: var(--accent, #3b82f6);
+  color: #fff;
+}
+
+/* KPI strip */
+.cashflow-kpis {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.cashflow-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cashflow-kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.cashflow-kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.cashflow-kpi-value.cf-in  { color: #22c55e; }
+.cashflow-kpi-value.cf-out { color: #f97316; }
+.cashflow-kpi-value.profit-positive { color: #22c55e; }
+.cashflow-kpi-value.profit-negative { color: #ef4444; }
+
+/* Chart wrap */
+.cashflow-chart-wrap {
+  position: relative;
+  min-height: 140px;
+  margin-bottom: 8px;
+}
+.cashflow-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 130px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.cashflow-empty-icon {
+  font-size: 28px;
+}
+
+/* Bar columns */
+.cashflow-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 150px;
+  padding-bottom: 4px;
+}
+.cf-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  cursor: default;
+}
+.cf-bars-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 100%;
+  width: 100%;
+  justify-content: center;
+}
+.cf-bar-wrap {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  flex: 1;
+  min-width: 6px;
+  max-width: 18px;
+}
+.cf-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  transition: opacity 0.15s;
+}
+.cf-col:hover .cf-bar {
+  opacity: 0.85;
+}
+.bar-in  { background: linear-gradient(180deg, #22d3ee 0%, #0ea5e9 100%); }
+.bar-out { background: linear-gradient(180deg, #fb923c 0%, #f97316 100%); }
+.bar-net-pos { background: linear-gradient(180deg, #4ade80 0%, #22c55e 100%); }
+.bar-net-neg { background: linear-gradient(180deg, #f87171 0%, #ef4444 100%); }
+
+/* X-axis labels */
+.cashflow-x-axis {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.cf-x-label {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Legend */
+.cashflow-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.cashflow-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.dot-in  { background: #0ea5e9; }
+.dot-out { background: #f97316; }
+.dot-net { background: #22c55e; }
