@@ -3,7 +3,20 @@ const path = require('path');
 
 function buildAppMenu(mainWindow) {
   const isMac = process.platform === 'darwin';
+  const isDev = !app.isPackaged;
   const version = app.getVersion();
+
+  const sendNavigate = (page, subtab = null, action = null) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('menu:navigate', { page, subtab, action });
+    }
+  };
+
+  const sendAction = (action, payload = null) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('menu:action', action, payload);
+    }
+  };
 
   const template = [
     ...(isMac
@@ -12,6 +25,12 @@ function buildAppMenu(mainWindow) {
             label: app.name,
             submenu: [
               { role: 'about' },
+              { type: 'separator' },
+              {
+                label: 'Preferences…',
+                accelerator: 'CmdOrCtrl+,',
+                click: () => sendNavigate('settings', 'profile'),
+              },
               { type: 'separator' },
               { role: 'services' },
               { type: 'separator' },
@@ -28,16 +47,42 @@ function buildAppMenu(mainWindow) {
       label: 'File',
       submenu: [
         {
-          label: 'Export Backup',
-          accelerator: 'CmdOrCtrl+Shift+B',
-          click: () => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('menu:navigate', 'settings');
-            }
-          },
+          label: 'New Quote',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => sendNavigate('quotes', null, 'new-quote'),
+        },
+        {
+          label: 'New Invoice',
+          accelerator: 'CmdOrCtrl+Shift+N',
+          click: () => sendNavigate('invoices', null, 'new-invoice'),
+        },
+        {
+          label: 'New Client',
+          accelerator: 'CmdOrCtrl+Shift+C',
+          click: () => sendNavigate('clients', null, 'new-client'),
         },
         { type: 'separator' },
-        isMac ? { role: 'close' } : { role: 'quit' },
+        {
+          label: 'Command Palette…',
+          accelerator: 'CmdOrCtrl+K',
+          click: () => sendAction('command-palette'),
+        },
+        ...(!isMac
+          ? [
+              {
+                label: 'Settings…',
+                accelerator: 'CmdOrCtrl+,',
+                click: () => sendNavigate('settings', 'profile'),
+              },
+            ]
+          : []),
+        {
+          label: 'Export Backup…',
+          accelerator: 'CmdOrCtrl+Shift+B',
+          click: () => sendNavigate('settings', 'backup'),
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit', accelerator: 'CmdOrCtrl+Q' },
       ],
     },
     {
@@ -50,20 +95,62 @@ function buildAppMenu(mainWindow) {
         { role: 'copy' },
         { role: 'paste' },
         { role: 'selectAll' },
+        { type: 'separator' },
+        {
+          label: 'Quick Search',
+          accelerator: 'CmdOrCtrl+F',
+          click: () => sendAction('quick-search'),
+        },
       ],
     },
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
+        {
+          label: 'Dashboard',
+          accelerator: 'CmdOrCtrl+1',
+          click: () => sendNavigate('dashboard'),
+        },
+        {
+          label: 'Quotes',
+          accelerator: 'CmdOrCtrl+2',
+          click: () => sendNavigate('quotes'),
+        },
+        {
+          label: 'Invoices',
+          accelerator: 'CmdOrCtrl+3',
+          click: () => sendNavigate('invoices'),
+        },
+        {
+          label: 'Clients',
+          accelerator: 'CmdOrCtrl+4',
+          click: () => sendNavigate('clients'),
+        },
+        {
+          label: 'Revenue Report',
+          accelerator: 'CmdOrCtrl+5',
+          click: () => sendNavigate('revenue-report'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle Dark / Light Theme',
+          accelerator: 'CmdOrCtrl+Shift+T',
+          click: () => sendAction('toggle-theme'),
+        },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+        ...(isDev
+          ? [
+              { type: 'separator' },
+              { role: 'reload' },
+              { role: 'forceReload' },
+              { role: 'toggleDevTools' },
+            ]
+          : []),
       ],
     },
     {
@@ -79,12 +166,29 @@ function buildAppMenu(mainWindow) {
       label: 'Help',
       submenu: [
         {
-          label: 'QuoteCraft Documentation',
+          label: 'Keyboard Shortcuts Reference',
+          accelerator: 'CmdOrCtrl+/',
+          click: () => sendNavigate('settings', 'shortcuts'),
+        },
+        {
+          label: 'Check for Software Updates…',
+          click: () => sendNavigate('settings', 'updates'),
+        },
+        {
+          label: 'QuoteCraft Pro License…',
+          click: () => sendNavigate('settings', 'license'),
+        },
+        {
+          label: 'System Diagnostics & Health…',
+          click: () => sendNavigate('settings', 'diagnostics'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Documentation & Guides',
           click: async () => {
             await shell.openExternal('https://github.com/ocaict/quotecraft');
           },
         },
-        { type: 'separator' },
         {
           label: 'About QuoteCraft',
           click: () => {
@@ -107,3 +211,4 @@ function buildAppMenu(mainWindow) {
 module.exports = {
   buildAppMenu,
 };
+

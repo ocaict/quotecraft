@@ -196,6 +196,89 @@
     }
   }
 
+  // Application Menu IPC Handlers (Native Menu & Keyboard Accelerators)
+  if (window.electronAPI && window.electronAPI.onMenuNavigate) {
+    window.electronAPI.onMenuNavigate((data) => {
+      if (!data) return;
+      const { page, subtab, action } = data;
+
+      // 1. Navigate to target page if specified
+      if (page && window.QuoteCraftUtils && window.QuoteCraftUtils.goToPage) {
+        window.QuoteCraftUtils.goToPage(page);
+      }
+
+      // 2. Switch settings subtab if specified
+      if (subtab && window.QuoteCraftSettings && window.QuoteCraftSettings.switchSubtab) {
+        window.QuoteCraftSettings.switchSubtab(subtab);
+      }
+
+      // 3. Trigger document creation actions
+      if (action === 'new-quote') {
+        if (window.QuoteCraftUtils && window.QuoteCraftUtils.goToPage) {
+          window.QuoteCraftUtils.goToPage('quotes');
+        }
+        const btn = document.getElementById('newQuoteBtn') || document.getElementById('dashNewQuoteBtn');
+        if (btn) btn.click();
+      } else if (action === 'new-invoice') {
+        if (window.QuoteCraftUtils && window.QuoteCraftUtils.goToPage) {
+          window.QuoteCraftUtils.goToPage('invoices');
+        }
+        const btn = document.getElementById('newInvoiceBtn') || document.getElementById('dashNewInvoiceBtn');
+        if (btn) btn.click();
+      } else if (action === 'new-client') {
+        if (window.QuoteCraftUtils && window.QuoteCraftUtils.goToPage) {
+          window.QuoteCraftUtils.goToPage('clients');
+        }
+        const btn = document.getElementById('addClientBtn') || document.getElementById('newClientBtn');
+        if (btn) btn.click();
+      }
+    });
+  }
+
+  if (window.electronAPI && window.electronAPI.onMenuAction) {
+    window.electronAPI.onMenuAction((action) => {
+      if (!action) return;
+
+      if (action === 'command-palette') {
+        if (window.QuoteCraftCommandPalette && window.QuoteCraftCommandPalette.toggle) {
+          window.QuoteCraftCommandPalette.toggle();
+        } else {
+          window.dispatchEvent(new CustomEvent('qc-open-command-palette'));
+        }
+      } else if (action === 'toggle-theme') {
+        if (window.QuoteCraftTheme && window.QuoteCraftTheme.getMode && window.QuoteCraftTheme.setMode) {
+          const currentMode = window.QuoteCraftTheme.getMode();
+          const nextMode = currentMode === 'light' ? 'dark' : 'light';
+          window.QuoteCraftTheme.setMode(nextMode);
+          if (window.QuoteCraftUtils && window.QuoteCraftUtils.showToast) {
+            window.QuoteCraftUtils.showToast(`Switched to ${nextMode} theme`, 'info');
+          }
+        }
+      } else if (action === 'quick-search') {
+        const activePageEl = document.querySelector('.page.active');
+        const activePage = activePageEl ? activePageEl.id.replace('page-', '') : '';
+        const searchInputMap = {
+          clients: 'clientSearch',
+          projects: 'projectSearch',
+          items: 'itemSearch',
+          quotes: 'quoteSearch',
+          invoices: 'invoiceSearch',
+          payments: 'paymentsSearch',
+          expenses: 'expensesSearch',
+          'client-profitability': 'cpSearchInput',
+        };
+        const searchInputId = searchInputMap[activePage];
+        const searchInput = searchInputId ? document.getElementById(searchInputId) : null;
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        } else {
+          window.dispatchEvent(new CustomEvent('qc-open-command-palette'));
+        }
+      }
+    });
+  }
+
   checkDatabaseRecovery();
   initLocaleSettings();
 })();

@@ -47,6 +47,7 @@ async function createWindow() {
     title: 'QuoteCraft',
     icon: iconPath,
     backgroundColor: '#0f1117',
+    autoHideMenuBar: true,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

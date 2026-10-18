@@ -1333,7 +1333,35 @@
         if (activeName) activeName.textContent = `QuoteCraft Pro \u2014 Active`;
         if (activeEmail) activeEmail.textContent = lic.licensee_email || '';
         if (activePlan) activePlan.textContent = lic.plan === 'lifetime' ? 'Lifetime' : 'Annual';
-        if (activeSerial) activeSerial.textContent = lic.serial || lic.license_key || '\u2014';
+        const rawKey = lic.serial || lic.license_key || '';
+        if (activeSerial) {
+          activeSerial.dataset.fullKey = rawKey;
+          activeSerial.dataset.expanded = 'false';
+          if (rawKey.length > 32) {
+            activeSerial.textContent = `${rawKey.slice(0, 18)}…${rawKey.slice(-10)}`;
+            activeSerial.title = `${rawKey}\n(Click to toggle full key)`;
+            activeSerial.style.cursor = 'pointer';
+          } else {
+            activeSerial.textContent = rawKey || '—';
+            activeSerial.title = rawKey;
+            activeSerial.style.cursor = 'default';
+          }
+
+          if (!activeSerial.dataset.hasToggleListener) {
+            activeSerial.dataset.hasToggleListener = 'true';
+            activeSerial.addEventListener('click', () => {
+              const full = activeSerial.dataset.fullKey;
+              if (!full || full.length <= 32) return;
+              if (activeSerial.dataset.expanded === 'true') {
+                activeSerial.textContent = `${full.slice(0, 18)}…${full.slice(-10)}`;
+                activeSerial.dataset.expanded = 'false';
+              } else {
+                activeSerial.textContent = full;
+                activeSerial.dataset.expanded = 'true';
+              }
+            });
+          }
+        }
         if (activeIssued) {
           activeIssued.textContent = lic.issued_at ? new Date(lic.issued_at).toLocaleDateString() : '\u2014';
         }
@@ -1470,6 +1498,27 @@
         window.open(purchaseUrl, '_blank');
       }
       window.QuoteCraftUtils.showToast('Opening QuoteCraft Pro purchase page in your browser\u2026', 'info');
+    });
+  }
+
+  const copyKeyBtn = document.getElementById('licenseCopyKeyBtn');
+  if (copyKeyBtn) {
+    copyKeyBtn.addEventListener('click', async () => {
+      const activeSerial = document.getElementById('licenseActiveSerial');
+      const key = (activeSerial && activeSerial.dataset.fullKey) || (activeSerial && activeSerial.textContent) || '';
+      if (!key || key === '—') return;
+      try {
+        await navigator.clipboard.writeText(key);
+        window.QuoteCraftUtils.showToast('License key copied to clipboard!', 'success');
+      } catch (_) {
+        const textarea = document.createElement('textarea');
+        textarea.value = key;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        window.QuoteCraftUtils.showToast('License key copied to clipboard!', 'success');
+      }
     });
   }
 

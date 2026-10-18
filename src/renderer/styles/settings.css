@@ -828,3 +828,17 @@
   margin-top: 8px;
 }
 
+/* License panel key display styling & overflow prevention */
+#licenseActivePanel {
+  overflow: hidden;
+  max-width: 100%;
+}
+
+#licenseActiveSerial {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  max-width: 100%;
+}
+
+

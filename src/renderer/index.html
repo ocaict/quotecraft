@@ -3816,8 +3816,7 @@
           </div>
 
           <!-- Current license info (shown when pro is active) -->
-          <!-- Current license info (shown when pro is active) -->
-          <div id="licenseActivePanel" style="display:none; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:16px; margin-bottom:20px;">
+          <div id="licenseActivePanel" style="display:none; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:16px; margin-bottom:20px; overflow:hidden;">
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
               <span style="font-size:22px;">&#x2705;</span>
               <div>
@@ -3825,8 +3824,15 @@
                 <div style="font-size:12px; color:var(--text-muted);" id="licenseActiveEmail"></div>
               </div>
             </div>
+
+            <!-- Key display (dedicated row with word-break and copy button) -->
+            <div style="margin-bottom:12px; font-size:13px; color:var(--text-muted); display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-weight:500;">License Key:</span>
+              <code id="licenseActiveSerial" style="color:var(--text); font-family:monospace; font-size:12px; background:rgba(0,0,0,0.25); border:1px solid rgba(16,185,129,0.25); padding:4px 8px; border-radius:4px; word-break:break-all; overflow-wrap:anywhere; max-width:100%; display:inline-block; user-select:all;">&mdash;</code>
+              <button type="button" id="licenseCopyKeyBtn" class="btn btn-ghost btn-xs" style="padding:2px 8px; font-size:11px; display:inline-flex; align-items:center; gap:4px;" title="Copy License Key">📋 Copy</button>
+            </div>
+
             <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:13px; color:var(--text-muted); margin-bottom:12px;">
-              <span>Key: <strong id="licenseActiveSerial" style="color:var(--text); font-family:monospace;">&mdash;</strong></span>
               <span>Plan: <strong id="licenseActivePlan" style="color:var(--text);">&mdash;</strong></span>
               <span>Issued: <strong id="licenseActiveIssued" style="color:var(--text);">&mdash;</strong></span>
               <span id="licenseExpiryWrap">Expires: <strong id="licenseActiveExpiry" style="color:var(--text);">&mdash;</strong></span>

@@ -229,5 +229,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   refreshLicense: () => ipcRenderer.invoke('license:refresh'),
   getLicenseFeatures: () => ipcRenderer.invoke('license:getFeatures'),
   startLicenseTestPurchase: (opts) => ipcRenderer.invoke('license:startTestPurchase', opts),
+
+  // Application Menu Events
+  onMenuNavigate: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('menu:navigate', handler);
+    return () => ipcRenderer.removeListener('menu:navigate', handler);
+  },
+  onMenuAction: (callback) => {
+    const handler = (_event, action, payload) => callback(action, payload);
+    ipcRenderer.on('menu:action', handler);
+    return () => ipcRenderer.removeListener('menu:action', handler);
+  },
 });
+
 
