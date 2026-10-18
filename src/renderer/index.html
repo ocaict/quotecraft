@@ -3052,9 +3052,100 @@
             </label>
           </div>
         </div>
-            <div class="settings-pane-footer">
-              <button type="submit" class="btn btn-primary">Save Changes</button>
+
+        <div class="card" id="pdfBrandingCard">
+          <h2>Brand Color &amp; Layout Preset</h2>
+          <p class="subtitle">Customize your brand accent color and PDF layout geometry for client documents.</p>
+
+          <div style="display: grid; grid-template-columns: 1fr 280px; gap: 24px; margin-top: 16px;" class="pdf-branding-grid">
+            <div class="pdf-branding-controls">
+              <!-- Accent Color Section -->
+              <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Brand Accent Color</label>
+                <p class="hint" style="margin-top: 0; margin-bottom: 10px;">Overrides primary theme colors on headings, borders, and document badges.</p>
+                
+                <div class="pdf-accent-swatches" id="pdfAccentSwatches">
+                  <button type="button" class="pdf-swatch-btn" data-color="#1F2937" title="Classic Navy (#1F2937)" style="background: #1F2937;"></button>
+                  <button type="button" class="pdf-swatch-btn" data-color="#4F46E5" title="Indigo (#4F46E5)" style="background: #4F46E5;"></button>
+                  <button type="button" class="pdf-swatch-btn" data-color="#059669" title="Emerald (#059669)" style="background: #059669;"></button>
+                  <button type="button" class="pdf-swatch-btn" data-color="#DC2626" title="Crimson (#DC2626)" style="background: #DC2626;"></button>
+                  <button type="button" class="pdf-swatch-btn" data-color="#7C3AED" title="Purple (#7C3AED)" style="background: #7C3AED;"></button>
+                  <button type="button" class="pdf-swatch-btn" data-color="#D97706" title="Amber (#D97706)" style="background: #D97706;"></button>
+                </div>
+
+                <div class="pdf-custom-accent-wrap" style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
+                  <input type="color" id="pdfAccentColorPicker" value="#1F2937" style="width: 36px; height: 34px; padding: 0; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+                  <input type="text" id="pdfAccentColor" name="pdf_accent_color" placeholder="#1F2937" maxlength="7" class="form-control" style="width: 140px; font-family: monospace; text-transform: uppercase;">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btnResetAccentColor">Reset to Theme</button>
+                </div>
+              </div>
+
+              <!-- Layout Preset Section -->
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Document Layout Preset</label>
+                <p class="hint" style="margin-top: 0; margin-bottom: 12px;">Controls page margins, vertical rhythm, and corporate header styling.</p>
+
+                <div class="pdf-layout-options" id="pdfLayoutOptions">
+                  <label class="pdf-layout-card">
+                    <input type="radio" name="pdf_layout_style" value="standard" checked>
+                    <div class="pdf-layout-card-content">
+                      <strong>Standard</strong>
+                      <small>Generous 48px margins and balanced spacing for most businesses.</small>
+                    </div>
+                  </label>
+
+                  <label class="pdf-layout-card">
+                    <input type="radio" name="pdf_layout_style" value="compact">
+                    <div class="pdf-layout-card-content">
+                      <strong>Compact</strong>
+                      <small>Tighter 36px margins, optimized to fit dense item lists on a single page.</small>
+                    </div>
+                  </label>
+
+                  <label class="pdf-layout-card">
+                    <input type="radio" name="pdf_layout_style" value="corporate">
+                    <div class="pdf-layout-card-content">
+                      <strong>Corporate</strong>
+                      <small>Full-width solid brand banner at the top with clean executive styling.</small>
+                    </div>
+                  </label>
+                </div>
+              </div>
             </div>
+
+            <!-- Live Mini Preview -->
+            <div class="pdf-branding-preview-container">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">Live Document Preview</label>
+              <div class="pdf-branding-preview-box" id="pdfBrandingPreview">
+                <div class="pdf-prev-corp-bar" id="pdfPrevCorpBar"></div>
+                <div class="pdf-prev-sheet" id="pdfPrevSheet">
+                  <div class="pdf-prev-header">
+                    <div class="pdf-prev-logo"></div>
+                    <div class="pdf-prev-badge" id="pdfPrevBadge">INVOICE</div>
+                  </div>
+                  <div class="pdf-prev-divider" id="pdfPrevDivider"></div>
+                  <div class="pdf-prev-client">
+                    <div class="pdf-prev-line w-50"></div>
+                    <div class="pdf-prev-line w-30"></div>
+                  </div>
+                  <div class="pdf-prev-table">
+                    <div class="pdf-prev-table-hdr" id="pdfPrevTableHdr"></div>
+                    <div class="pdf-prev-row"></div>
+                    <div class="pdf-prev-row"></div>
+                  </div>
+                  <div class="pdf-prev-totals">
+                    <div class="pdf-prev-total-pill" id="pdfPrevTotalPill"></div>
+                  </div>
+                </div>
+              </div>
+              <p class="hint" style="text-align: center; margin-top: 8px; font-size: 11px;">Interactive preview reflects active color &amp; layout</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-pane-footer">
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
           </div>
 
           <!-- Pane 4: Banking -->

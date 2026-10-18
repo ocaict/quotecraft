@@ -487,6 +487,198 @@
   line-height: 1.4;
 }
 
+/* ------------------ PDF Brand Customization & Layout ------------------ */
+
+.pdf-accent-swatches {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pdf-swatch-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  outline: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.pdf-swatch-btn:hover {
+  transform: scale(1.15);
+}
+
+.pdf-swatch-btn.active {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px var(--accent, #3b82f6), 0 2px 6px rgba(0, 0, 0, 0.3);
+  transform: scale(1.1);
+}
+
+.pdf-layout-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pdf-layout-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius, 6px);
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg-card);
+  transition: all 0.15s ease;
+}
+
+.pdf-layout-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.pdf-layout-card:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.pdf-layout-card input[type="radio"] {
+  accent-color: var(--accent);
+  margin: 0;
+  cursor: pointer;
+}
+
+.pdf-layout-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pdf-layout-card-content strong {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.pdf-layout-card-content small {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.pdf-branding-preview-box {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  height: 220px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+}
+
+.pdf-prev-corp-bar {
+  height: 0px;
+  background: #1f2937;
+  transition: height 0.2s ease, background-color 0.2s ease;
+  width: 100%;
+}
+
+.pdf-prev-corp-bar.active {
+  height: 18px;
+}
+
+.pdf-prev-sheet {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  transition: padding 0.2s ease;
+}
+
+.pdf-prev-sheet.compact {
+  padding: 8px 10px;
+  gap: 6px;
+}
+
+.pdf-prev-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pdf-prev-logo {
+  width: 44px;
+  height: 14px;
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.pdf-prev-badge {
+  font-size: 9px;
+  font-weight: 700;
+  color: #1f2937;
+  letter-spacing: 0.5px;
+  transition: color 0.2s ease;
+}
+
+.pdf-prev-divider {
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.pdf-prev-client {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pdf-prev-line {
+  height: 5px;
+  border-radius: 2px;
+  background: #e5e7eb;
+}
+
+.pdf-prev-line.w-50 { width: 50%; }
+.pdf-prev-line.w-30 { width: 30%; }
+
+.pdf-prev-table {
+  border-radius: 4px;
+  border: 1px solid #f3f4f6;
+  overflow: hidden;
+}
+
+.pdf-prev-table-hdr {
+  height: 14px;
+  background: #f3f4f6;
+  border-bottom: 1.5px solid #1f2937;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.pdf-prev-row {
+  height: 12px;
+  border-bottom: 1px solid #f9fafb;
+}
+
+.pdf-prev-totals {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+.pdf-prev-total-pill {
+  width: 55px;
+  height: 12px;
+  border-radius: 3px;
+  background: #1f2937;
+  transition: background-color 0.2s ease;
+}
+
 /* ---------- Toggle switch ---------- */
 .toggle-row {
   display: flex;

@@ -22,6 +22,7 @@ const {
 
 const {
   THEMES,
+  LAYOUT_STYLES,
   renderQuotePdf,
   renderInvoicePdf,
 } = require('../src/main/pdf-export');
@@ -30,7 +31,7 @@ async function runTests() {
   console.log('--- Starting PDF Template Themes Unit Tests ---');
 
   await initializeDatabase();
-  console.log('✓ Database initialized with Migration 32');
+  console.log('✓ Database initialized with Migration 32 & 49');
 
   // 1. Verify themes definition
   assert(THEMES.classic, 'Theme classic should exist');
@@ -45,7 +46,9 @@ async function runTests() {
   });
   const initialProfile = getCompanyProfile();
   assert.strictEqual(initialProfile.pdf_theme, 'classic', 'Default theme should be classic');
-  console.log('✓ Default profile pdf_theme is classic');
+  assert.strictEqual(initialProfile.pdf_accent_color, null, 'Default accent color should be null');
+  assert.strictEqual(initialProfile.pdf_layout_style, 'standard', 'Default layout style should be standard');
+  console.log('✓ Default profile pdf_theme is classic, accent is null, layout is standard');
 
   // 3. Save profile with new theme
   saveCompanyProfile({
@@ -100,6 +103,52 @@ async function runTests() {
   const darkInvoicePdfBytes = await renderInvoicePdf(invoice, { name: 'Acme Design Corp' }, updatedProfile, { theme: 'dark' });
   assert(darkInvoicePdfBytes && darkInvoicePdfBytes.length > 0, 'Dark Invoice PDF buffer should be generated');
   console.log(`✓ Dark Invoice PDF generated with opts override (bytes: ${darkInvoicePdfBytes.length})`);
+
+  // 5. Test LAYOUT_STYLES export
+  assert(LAYOUT_STYLES instanceof Set, 'LAYOUT_STYLES should be a Set');
+  assert(LAYOUT_STYLES.has('standard'), 'LAYOUT_STYLES should contain standard');
+  assert(LAYOUT_STYLES.has('compact'), 'LAYOUT_STYLES should contain compact');
+  assert(LAYOUT_STYLES.has('corporate'), 'LAYOUT_STYLES should contain corporate');
+  console.log('✓ LAYOUT_STYLES exported and contains standard, compact, corporate');
+
+  // 6. Test pdf_accent_color is saved and validated
+  saveCompanyProfile({ business_name: 'Brand Co', pdf_accent_color: '#E11D48' });
+  const brandProfile = getCompanyProfile();
+  assert.strictEqual(brandProfile.pdf_accent_color, '#E11D48', 'pdf_accent_color should match valid hex');
+  console.log('✓ Valid pdf_accent_color saved successfully');
+
+  // 7. Invalid hex is rejected (stored as null)
+  saveCompanyProfile({ business_name: 'Brand Co', pdf_accent_color: 'not-a-color' });
+  const invalidProfile = getCompanyProfile();
+  assert.strictEqual(invalidProfile.pdf_accent_color, null, 'Invalid hex should be normalized to null');
+  console.log('✓ Invalid pdf_accent_color rejected to null');
+
+  // 8. pdf_layout_style is saved and defaults verified
+  saveCompanyProfile({ business_name: 'Brand Co', pdf_layout_style: 'compact' });
+  assert.strictEqual(getCompanyProfile().pdf_layout_style, 'compact', 'pdf_layout_style should update to compact');
+
+  saveCompanyProfile({ business_name: 'Brand Co', pdf_layout_style: 'corporate' });
+  assert.strictEqual(getCompanyProfile().pdf_layout_style, 'corporate', 'pdf_layout_style should update to corporate');
+
+  saveCompanyProfile({ business_name: 'Brand Co', pdf_layout_style: 'invalid_layout' });
+  assert.strictEqual(getCompanyProfile().pdf_layout_style, 'standard', 'Invalid layout should fall back to standard');
+  console.log('✓ pdf_layout_style saved and validated with standard fallback');
+
+  // 9. Render invoice with accent color and compact layout
+  const compactPdfBytes = await renderInvoicePdf(invoice, { name: 'Acme Design Corp' }, brandProfile, {
+    accentColor: '#E11D48',
+    layoutStyle: 'compact',
+  });
+  assert(compactPdfBytes && compactPdfBytes.length > 0, 'Compact Invoice PDF should be generated');
+  console.log(`✓ Invoice PDF generated with accent color & compact layout (bytes: ${compactPdfBytes.length})`);
+
+  // 10. Render invoice with corporate layout
+  const corporatePdfBytes = await renderInvoicePdf(invoice, { name: 'Acme Design Corp' }, brandProfile, {
+    accentColor: '#059669',
+    layoutStyle: 'corporate',
+  });
+  assert(corporatePdfBytes && corporatePdfBytes.length > 0, 'Corporate Invoice PDF should be generated');
+  console.log(`✓ Invoice PDF generated with accent color & corporate banner layout (bytes: ${corporatePdfBytes.length})`);
 
   closeDatabase();
   if (fs.existsSync(testDbPath)) {

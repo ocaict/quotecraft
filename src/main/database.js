@@ -1583,6 +1583,19 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 49,
+    up: () => {
+      // Phase 3: PDF branding – add accent color override and layout style columns
+      const cols = new Set(db.exec(`PRAGMA table_info(company_profile)`)[0].values.map((v) => v[1]));
+      if (!cols.has('pdf_accent_color')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN pdf_accent_color TEXT DEFAULT NULL`);
+      }
+      if (!cols.has('pdf_layout_style')) {
+        db.run(`ALTER TABLE company_profile ADD COLUMN pdf_layout_style TEXT NOT NULL DEFAULT 'standard'`);
+      }
+    },
+  },
 ];
 
 function runMigrations() {
@@ -1628,6 +1641,9 @@ function getCompanyProfile() {
     profile.reporting_currency = profile.default_currency || 'USD';
   }
   profile.pdf_theme = profile.pdf_theme || 'classic';
+  profile.pdf_accent_color = profile.pdf_accent_color || null;
+  const allowedPdfLayouts = ['standard', 'compact', 'corporate'];
+  profile.pdf_layout_style = allowedPdfLayouts.includes(profile.pdf_layout_style) ? profile.pdf_layout_style : 'standard';
   profile.number_padding = profile.number_padding != null ? Number(profile.number_padding) : 4;
   profile.number_include_year = profile.number_include_year != null ? Number(profile.number_include_year) : 1;
   profile.date_format = profile.date_format || 'MMM D, YYYY';
@@ -1713,6 +1729,17 @@ function saveCompanyProfile(profile) {
       ? profile.default_quote_acceptance_instructions
       : (existing && existing.default_quote_acceptance_instructions) || 'To accept this quote, please reply to confirm via email or phone.',
     pdf_theme: profile.pdf_theme !== undefined ? profile.pdf_theme : (existing && existing.pdf_theme) || 'classic',
+    pdf_accent_color: (() => {
+      const v = profile.pdf_accent_color !== undefined ? profile.pdf_accent_color : (existing && existing.pdf_accent_color);
+      if (!v || String(v).trim() === '') return null;
+      // Validate hex format – must be 3 or 6 hex chars prefixed with #
+      return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(String(v).trim()) ? String(v).trim() : null;
+    })(),
+    pdf_layout_style: (() => {
+      const allowed = ['standard', 'compact', 'corporate'];
+      const v = profile.pdf_layout_style !== undefined ? profile.pdf_layout_style : (existing && existing.pdf_layout_style);
+      return allowed.includes(v) ? v : 'standard';
+    })(),
     number_padding: profile.number_padding !== undefined && profile.number_padding !== null && profile.number_padding !== ''
       ? Number(profile.number_padding)
       : (existing && existing.number_padding != null ? existing.number_padding : 4),
@@ -1732,7 +1759,8 @@ function saveCompanyProfile(profile) {
         default_hourly_rate = ?, invoice_prefix = ?, invoice_start_number = ?, quote_prefix = ?,
         quote_start_number = ?, default_terms = ?, payment_details = ?,
         credit_note_prefix = ?, credit_note_start_number = ?, default_quote_acceptance_instructions = ?,
-        pdf_theme = ?, number_padding = ?, number_include_year = ?,
+        pdf_theme = ?, pdf_accent_color = ?, pdf_layout_style = ?,
+        number_padding = ?, number_include_year = ?,
         date_format = ?, decimal_separator = ?, cac_number = ?, tin = ?,
         bank_name = ?, account_number = ?, account_name = ?,
         dom_bank_name = ?, dom_account_name = ?, dom_account_number = ?,
@@ -1747,7 +1775,8 @@ function saveCompanyProfile(profile) {
         fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
-        fields.pdf_theme, fields.number_padding, fields.number_include_year,
+        fields.pdf_theme, fields.pdf_accent_color, fields.pdf_layout_style,
+        fields.number_padding, fields.number_include_year,
         fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin,
         fields.bank_name, fields.account_number, fields.account_name,
         fields.dom_bank_name, fields.dom_account_name, fields.dom_account_number,
@@ -1763,13 +1792,14 @@ function saveCompanyProfile(profile) {
         postal_code, country, phone, email, website, tax_id, default_currency,
         reporting_currency, default_tax_rate, default_hourly_rate, invoice_prefix, invoice_start_number, quote_prefix,
         quote_start_number, default_terms, payment_details,
-        credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions, pdf_theme,
+        credit_note_prefix, credit_note_start_number, default_quote_acceptance_instructions,
+        pdf_theme, pdf_accent_color, pdf_layout_style,
         number_padding, number_include_year, date_format, decimal_separator, cac_number, tin,
         bank_name, account_number, account_name, dom_bank_name, dom_account_name, dom_account_number,
         dom_swift_code, dom_intermediary_bank,
         paystack_public_key, paystack_secret_key_encrypted, paystack_enabled, paystack_page_url,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         1, fields.business_name, fields.logo_path, fields.address_line1, fields.address_line2,
         fields.city, fields.state, fields.postal_code, fields.country, fields.phone, fields.email,
@@ -1777,7 +1807,8 @@ function saveCompanyProfile(profile) {
         fields.default_hourly_rate, fields.invoice_prefix, fields.invoice_start_number, fields.quote_prefix,
         fields.quote_start_number, fields.default_terms, fields.payment_details,
         fields.credit_note_prefix, fields.credit_note_start_number, fields.default_quote_acceptance_instructions,
-        fields.pdf_theme, fields.number_padding, fields.number_include_year,
+        fields.pdf_theme, fields.pdf_accent_color, fields.pdf_layout_style,
+        fields.number_padding, fields.number_include_year,
         fields.date_format, fields.decimal_separator, fields.cac_number, fields.tin,
         fields.bank_name, fields.account_number, fields.account_name,
         fields.dom_bank_name, fields.dom_account_name, fields.dom_account_number,

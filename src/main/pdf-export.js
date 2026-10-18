@@ -62,6 +62,26 @@ const COLORS = new Proxy(THEMES.classic, {
   },
 });
 
+// Validated LAYOUT_STYLES supported by the PDF renderer
+const LAYOUT_STYLES = new Set(['standard', 'compact', 'corporate']);
+
+/**
+ * Resolve and apply a brand accent colour on top of any theme.
+ * Returns the merged colour object.
+ */
+function applyAccentColor(baseColors, accentHex) {
+  if (!accentHex || !/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(accentHex)) {
+    return baseColors;
+  }
+  // Make a light tint (12% opacity) for headerFill from the accent
+  return Object.assign({}, baseColors, {
+    primary: accentHex,
+    // Keep headerFill only if theme already uses its own distinct colour;
+    // for minimal (white) replace with a subtle tint
+    headerFill: baseColors.headerFill === '#FFFFFF' ? accentHex + '20' : baseColors.headerFill,
+  });
+}
+
 function getThemeColors(themeName) {
   return THEMES[themeName] || THEMES.classic;
 }
@@ -214,10 +234,13 @@ function buildClientLines(client) {
 
 // ---------- Shared layout engine ----------
 
-function createDocument({ title, author, subject, theme }) {
+function createDocument({ title, author, subject, theme, accentColor, layoutStyle }) {
+  // Resolve layout margins
+  const docMargin = (layoutStyle === 'compact') ? 36 : MARGIN;
+
   const doc = new PDFDocument({
     size: PAGE_SIZE,
-    margin: MARGIN,
+    margin: docMargin,
     bufferPages: true,
     info: { Title: title, Author: author, Subject: subject },
   });
@@ -255,28 +278,46 @@ function createDocument({ title, author, subject, theme }) {
   });
 
   const pageW = doc.page.width;
-  const W = pageW - MARGIN * 2;
+  const docMarginEff = (layoutStyle === 'compact') ? 36 : MARGIN;
+  const W = pageW - docMarginEff * 2;
   const themeKey = theme && THEMES[theme] ? theme : 'classic';
-  const colors = getThemeColors(themeKey);
+  let colors = getThemeColors(themeKey);
+  // Phase 3: apply accent color override on top of base theme
+  colors = applyAccentColor(colors, accentColor);
   activeThemeColors = colors;
 
   return {
     doc,
     done,
     W,
-    rightX: MARGIN + W - 210,
+    margin: docMarginEff,
+    rightX: docMarginEff + W - 210,
     rightW: 210,
-    pageBottom: doc.page.height - MARGIN - FOOTER_ZONE,
+    pageBottom: doc.page.height - docMarginEff - FOOTER_ZONE,
     y: doc.y,
     theme: themeKey,
+    layoutStyle: LAYOUT_STYLES.has(layoutStyle) ? layoutStyle : 'standard',
     colors,
   };
 }
 
 function drawHeaderBrand(ctx, opts) {
-  const { doc, W, rightX, rightW } = ctx;
+  const { doc, W, rightX, rightW, layoutStyle } = ctx;
   const { profile, businessName, rightLabel, rightNumber, metaRows } = opts;
   let y = ctx.y;
+
+  if (layoutStyle === 'corporate') {
+    const barH = 28;
+    doc.rect(0, 0, doc.page.width, barH).fill(COLORS.primary);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#FFFFFF');
+    doc.text((businessName || 'QuoteCraft').toUpperCase(), MARGIN, 9, { width: Math.max(160, W - rightW) });
+    if (rightLabel) {
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#FFFFFF');
+      doc.text(`${String(rightLabel).toUpperCase()}${rightNumber ? ' ' + rightNumber : ''}`, rightX, 9, { width: rightW, align: 'right' });
+    }
+    y = Math.max(y, barH + 16);
+    ctx.y = y;
+  }
 
   const logoPath = profile && profile.logo_path;
   const embedLogo =
@@ -807,12 +848,16 @@ function renderQuotePdf(quote, client, profile, opts) {
   const currency = quote.currency || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
+  const accentColor = (opts && opts.accentColor) || (profile && profile.pdf_accent_color) || null;
+  const layoutStyle = (opts && opts.layoutStyle) || (profile && profile.pdf_layout_style) || 'standard';
 
   const ctx = createDocument({
     title: `Quote ${quote.quote_number}`,
     author: businessName,
     subject: 'Quotation',
     theme,
+    accentColor,
+    layoutStyle,
   });
   const { doc } = ctx;
 
@@ -865,6 +910,8 @@ function renderInvoicePdf(invoice, client, profile, opts) {
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const status = effectiveInvoiceStatus(invoice);
   const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
+  const accentColor = (opts && opts.accentColor) || (profile && profile.pdf_accent_color) || null;
+  const layoutStyle = (opts && opts.layoutStyle) || (profile && profile.pdf_layout_style) || 'standard';
 
   let docLabel = 'INVOICE';
   let grandLabel = 'TOTAL DUE';
@@ -881,6 +928,8 @@ function renderInvoicePdf(invoice, client, profile, opts) {
     author: businessName,
     subject: docLabel,
     theme,
+    accentColor,
+    layoutStyle,
   });
   const { doc } = ctx;
 
@@ -1457,12 +1506,16 @@ function renderCreditNotePdf(creditNote, invoice, client, profile, opts) {
   const currency = (invoice && invoice.currency) || (profile && profile.default_currency) || 'USD';
   const businessName = (profile && profile.business_name) || 'QuoteCraft';
   const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
+  const accentColor = (opts && opts.accentColor) || (profile && profile.pdf_accent_color) || null;
+  const layoutStyle = (opts && opts.layoutStyle) || (profile && profile.pdf_layout_style) || 'standard';
 
   const ctx = createDocument({
     title: `Credit Note ${creditNote.credit_note_number}`,
     author: businessName,
     subject: 'Credit Note',
     theme,
+    accentColor,
+    layoutStyle,
   });
   const { doc, W } = ctx;
 
@@ -1639,12 +1692,16 @@ function renderClientStatementPdf(statement, profile, opts) {
   const overdue = statement.overdue || {};
   const generatedOn = new Date().toISOString().slice(0, 10);
   const theme = (opts && opts.theme) || (profile && profile.pdf_theme) || 'classic';
+  const accentColor = (opts && opts.accentColor) || (profile && profile.pdf_accent_color) || null;
+  const layoutStyle = (opts && opts.layoutStyle) || (profile && profile.pdf_layout_style) || 'standard';
 
   const ctx = createDocument({
     title: `Statement of Account - ${client.name || 'Client'}`,
     author: businessName,
     subject: 'Statement of Account',
     theme,
+    accentColor,
+    layoutStyle,
   });
   const { doc } = ctx;
 
@@ -3182,6 +3239,7 @@ function renderInvoiceHtml(invoice, client, profile) {
 
 module.exports = {
   THEMES,
+  LAYOUT_STYLES,
   renderQuotePdf,
   renderInvoicePdf,
   renderCreditNotePdf,

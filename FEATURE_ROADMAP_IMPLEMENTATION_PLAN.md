@@ -9,8 +9,8 @@ This roadmap outlines the recommended architectural upgrades and feature additio
 | Phase | Feature | Focus Area | Status | Impact |
 | :---: | :--- | :--- | :---: | :---: |
 | **Phase 1** | **CSV Data Portability Hub** | Import clients & export tax/accounting data | ✅ **Completed** | ⭐⭐⭐⭐⭐ |
-| **Phase 2** | **Visual Dashboard Cash Flow Chart** | Interactive SVG cash flow & revenue trends | ⏳ Planned | ⭐⭐⭐⭐⭐ |
-| **Phase 3** | **PDF Branding & Template Styles** | Brand accent colors & document layout presets | ⏳ Planned | ⭐⭐⭐⭐ |
+| **Phase 2** | **Visual Dashboard Cash Flow Chart** | Interactive SVG cash flow & revenue trends | ✅ **Completed** | ⭐⭐⭐⭐⭐ |
+| **Phase 3** | **PDF Branding & Template Styles** | Brand accent colors & document layout presets | ✅ **Completed** | ⭐⭐⭐⭐ |
 | **Phase 4** | **Multi-Currency Document Billing** | Foreign currency invoicing with base P&L snapshot | ⏳ Planned | ⭐⭐⭐⭐ |
 | **Phase 5** | **In-App Quick Document Preview & HTML Receipts** | Instant preview modal & shareable HTML invoice | ⏳ Planned | ⭐⭐⭐⭐ |
 
@@ -50,7 +50,7 @@ Enable frictionless onboarding from other software (Excel, QuickBooks, Wave) and
 
 ---
 
-## Phase 2: Visual Dashboard Analytics & Cash Flow Chart
+## Phase 2: Visual Dashboard Analytics & Cash Flow Chart — ✅ COMPLETED
 
 ### Objective
 Upgrade the Dashboard from static numerical stat cards to an insightful, interactive financial overview without introducing heavy external charting dependencies.
@@ -72,13 +72,13 @@ Upgrade the Dashboard from static numerical stat cards to an insightful, interac
 
 ### File Targets:
 - `src/main/database.js` (`getCashFlowTimeline(months)`)
-- `src/renderer/js/dashboard.js` (SVG path generator & tooltip listener)
-- `src/renderer/styles/dashboard.css` (responsive chart styling & animations)
+- `src/renderer/js/dashboard.js` & `src/renderer/js/cashflow-chart.js` (SVG path generator & tooltip listener)
+- `src/renderer/styles/components.css` (responsive chart styling & animations)
 - `scripts/test-cashflow-analytics.js` (unit tests)
 
 ---
 
-## Phase 3: PDF Document Branding & Template Customization
+## Phase 3: PDF Document Branding & Template Customization — ✅ COMPLETED
 
 ### Objective
 Allow businesses and creative agencies to align quotes and invoices with their brand identity by introducing custom color accents and document layout templates.

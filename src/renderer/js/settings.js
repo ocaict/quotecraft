@@ -137,6 +137,8 @@
       date_format: 'MMM D, YYYY',
       decimal_separator: '.',
       pdf_theme: 'classic',
+      pdf_accent_color: null,
+      pdf_layout_style: 'standard',
       number_padding: 4,
       number_include_year: 1,
     };
@@ -152,6 +154,8 @@
         el.name !== 'logo_path' &&
         el.name !== 'themeMode' &&
         el.name !== 'pdf_theme' &&
+        el.name !== 'pdf_layout_style' &&
+        el.name !== 'pdf_accent_color' &&
         el.type !== 'radio' &&
         !isRadioGroup(el)
       ) {
@@ -172,6 +176,20 @@
     pdfThemeInputs.forEach((el) => {
       el.checked = el.value === (data.pdf_theme || 'classic');
     });
+    const pdfLayoutInputs = document.querySelectorAll('input[name="pdf_layout_style"]');
+    pdfLayoutInputs.forEach((el) => {
+      el.checked = el.value === (data.pdf_layout_style || 'standard');
+    });
+    const accentInput = document.getElementById('pdfAccentColor');
+    const accentPicker = document.getElementById('pdfAccentColorPicker');
+    if (accentInput) {
+      accentInput.value = data.pdf_accent_color || '';
+      if (accentPicker && data.pdf_accent_color && /^#[0-9A-Fa-f]{6}$/.test(data.pdf_accent_color)) {
+        accentPicker.value = data.pdf_accent_color;
+      }
+      updateAccentSwatches(data.pdf_accent_color || '');
+      updateLiveBrandingPreview();
+    }
     window.prepareCurrencySelect(currencySelect, data.default_currency || 'USD');
     if (reportingCurrencySelect) {
       window.prepareCurrencySelect(reportingCurrencySelect, data.reporting_currency || data.default_currency || 'USD');
@@ -230,6 +248,8 @@
         el.name &&
         el.name !== 'themeMode' &&
         el.name !== 'pdf_theme' &&
+        el.name !== 'pdf_layout_style' &&
+        el.name !== 'pdf_accent_color' &&
         el.type !== 'radio' &&
         !isRadioGroup(el)
       ) {
@@ -243,6 +263,15 @@
     const selectedPdfTheme = document.querySelector('input[name="pdf_theme"]:checked');
     if (selectedPdfTheme) {
       data.pdf_theme = selectedPdfTheme.value;
+    }
+    const selectedPdfLayout = document.querySelector('input[name="pdf_layout_style"]:checked');
+    if (selectedPdfLayout) {
+      data.pdf_layout_style = selectedPdfLayout.value;
+    }
+    const accentInput = document.getElementById('pdfAccentColor');
+    if (accentInput) {
+      const val = accentInput.value.trim();
+      data.pdf_accent_color = val && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(val) ? val : null;
     }
     data.default_tax_rate = data.default_tax_rate === '' ? '' : Number(data.default_tax_rate);
     data.invoice_start_number = data.invoice_start_number === '' ? '' : Number(data.invoice_start_number);
@@ -1698,6 +1727,145 @@
     switchSubtab(initialSubtab);
   }
 
+  function updateAccentSwatches(selectedHex) {
+    const swatches = document.querySelectorAll('#pdfAccentSwatches .pdf-swatch-btn');
+    const upperHex = (selectedHex || '').toUpperCase();
+    swatches.forEach((btn) => {
+      if (upperHex && btn.dataset.color.toUpperCase() === upperHex) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  function updateLiveBrandingPreview() {
+    const previewBox = document.getElementById('pdfBrandingPreview');
+    if (!previewBox) return;
+
+    const accentInput = document.getElementById('pdfAccentColor');
+    const accentHex = accentInput && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(accentInput.value.trim())
+      ? accentInput.value.trim()
+      : null;
+
+    const selectedTheme = (document.querySelector('input[name="pdf_theme"]:checked') || {}).value || 'classic';
+    const selectedLayout = (document.querySelector('input[name="pdf_layout_style"]:checked') || {}).value || 'standard';
+
+    const themePrimaries = {
+      classic: '#1F2937',
+      modern: '#4F46E5',
+      minimal: '#111827',
+      dark: '#6366F1',
+    };
+
+    const effectivePrimary = accentHex || themePrimaries[selectedTheme] || '#1F2937';
+
+    const corpBar = document.getElementById('pdfPrevCorpBar');
+    if (corpBar) {
+      if (selectedLayout === 'corporate') {
+        corpBar.classList.add('active');
+        corpBar.style.backgroundColor = effectivePrimary;
+      } else {
+        corpBar.classList.remove('active');
+        corpBar.style.backgroundColor = '';
+      }
+    }
+
+    const sheet = document.getElementById('pdfPrevSheet');
+    if (sheet) {
+      if (selectedLayout === 'compact') {
+        sheet.classList.add('compact');
+      } else {
+        sheet.classList.remove('compact');
+      }
+    }
+
+    const badge = document.getElementById('pdfPrevBadge');
+    if (badge) {
+      badge.style.color = effectivePrimary;
+    }
+    const totalPill = document.getElementById('pdfPrevTotalPill');
+    if (totalPill) {
+      totalPill.style.backgroundColor = effectivePrimary;
+    }
+    const tableHdr = document.getElementById('pdfPrevTableHdr');
+    if (tableHdr) {
+      tableHdr.style.borderBottomColor = effectivePrimary;
+      if (selectedTheme === 'modern') {
+        tableHdr.style.backgroundColor = effectivePrimary + '20';
+      } else if (selectedTheme === 'dark') {
+        tableHdr.style.backgroundColor = '#111827';
+      } else {
+        tableHdr.style.backgroundColor = '#f3f4f6';
+      }
+    }
+  }
+
+  function initPdfBrandingControls() {
+    const swatches = document.querySelectorAll('#pdfAccentSwatches .pdf-swatch-btn');
+    const accentInput = document.getElementById('pdfAccentColor');
+    const accentPicker = document.getElementById('pdfAccentColorPicker');
+    const resetBtn = document.getElementById('btnResetAccentColor');
+
+    swatches.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const color = btn.dataset.color;
+        if (accentInput) accentInput.value = color;
+        if (accentPicker) accentPicker.value = color;
+        updateAccentSwatches(color);
+        updateLiveBrandingPreview();
+      });
+    });
+
+    if (accentInput) {
+      accentInput.addEventListener('input', () => {
+        let val = accentInput.value.trim();
+        if (val && !val.startsWith('#')) {
+          val = '#' + val;
+          accentInput.value = val;
+        }
+        if (/^#[0-9A-Fa-f]{6}$/.test(val) && accentPicker) {
+          accentPicker.value = val;
+        }
+        updateAccentSwatches(val);
+        updateLiveBrandingPreview();
+      });
+    }
+
+    if (accentPicker) {
+      accentPicker.addEventListener('input', () => {
+        const val = accentPicker.value.toUpperCase();
+        if (accentInput) accentInput.value = val;
+        updateAccentSwatches(val);
+        updateLiveBrandingPreview();
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        if (accentInput) accentInput.value = '';
+        if (accentPicker) accentPicker.value = '#1F2937';
+        updateAccentSwatches('');
+        updateLiveBrandingPreview();
+      });
+    }
+
+    const layoutInputs = document.querySelectorAll('input[name="pdf_layout_style"]');
+    layoutInputs.forEach((el) => {
+      el.addEventListener('change', () => {
+        updateLiveBrandingPreview();
+      });
+    });
+
+    const themeInputs = document.querySelectorAll('input[name="pdf_theme"]');
+    themeInputs.forEach((el) => {
+      el.addEventListener('change', () => {
+        updateLiveBrandingPreview();
+      });
+    });
+  }
+
+  initPdfBrandingControls();
   initSettingsSubnav();
 })();
 
