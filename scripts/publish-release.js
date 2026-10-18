@@ -42,16 +42,38 @@ const VERSION = pkg.version;
 const TAG = `v${VERSION}`;
 const SETUP_EXE = `QuoteCraft-Setup-${VERSION}.exe`;
 
-const releaseBody = `## QuoteCraft ${TAG} — Official Release 🎉
+const releaseBody = `## QuoteCraft ${TAG} — Feature Update Release 🎉
 
 QuoteCraft is a fast, offline-first invoice and quote management desktop application tailored for freelancers, contractors, and growing businesses.
 
 ### 🚀 What's New in ${TAG}:
-- **Modern Auto-Hide Menu Bar**: The menu bar on Windows/Linux now automatically hides for a clean, distraction-free interface (press **Alt** to toggle), while preserving full native macOS application menus.
-- **Global Keyboard Shortcuts & Navigation**: Fast shortcuts for document creation (**Ctrl+N** for quotes, **Ctrl+Shift+N** for invoices, **Ctrl+Shift+C** for clients), quick search (**Ctrl+F**), and direct view navigation.
-- **Redesigned About Window**: Replaced legacy OS dialogs with a native, themed in-app modal featuring real-time environment diagnostics, SQLite/WASM engine integrity, local storage directory viewer, copy system info tool, and dynamic license tier status.
-- **License Key Display & Wrap Fix**: Fixed license serial key text overflow on high-resolution displays and compact panes with responsive word-breaking.
-- **Performance & Polish**: Refined dark and light mode aesthetics, card styling, and overall desktop responsiveness.
+
+- **🌐 In-App Document Quick Look & Standalone HTML Receipts (Phase 5)**:
+  - Instant in-app modal preview for quotes, invoices, and payment receipts with zero external viewer requirements.
+  - Interactive toolbar with direct **Print**, **Download PDF**, **Export HTML Receipt**, **Send via Email**, and **Share via WhatsApp**.
+  - Smooth zoom controls (60% to 180%) and responsive paper rendering.
+  - Standalone, self-contained HTML receipts complete with dynamic online payment checkout buttons and inlined print styling.
+
+- **💱 Multi-Currency Document Billing & Exchange Rate Snapshots (Phase 4)**:
+  - Create quotes and invoices in foreign currencies (USD, EUR, GBP, NGN, etc.) with custom exchange rates.
+  - Automatic base-currency ledger equivalents (\`base_amount_cents\`) preserving local tax reporting and P&L accuracy.
+  - Automatic banking intelligence: intelligently maps local NUBAN accounts for domestic billing and foreign Domiciliary wire (IBAN/SWIFT) accounts for foreign currency documents.
+
+- **🎨 PDF Document Branding & Layout Presets (Phase 3)**:
+  - Custom brand accent color picker with curated professional palettes (Classic Navy, Emerald, Indigo, Warm Amber, etc.).
+  - 3 polished document layout styles: **Standard Modern**, **Compact Sleek**, and **Corporate Formal**.
+  - Real-time interactive document mini-preview directly inside Company Settings.
+
+- **📊 Visual Dashboard Cash Flow Analytics (Phase 2)**:
+  - Interactive SVG cash flow and revenue trajectory visualization.
+  - Quick range toggles: 30 Days, 90 Days, 6 Months, and 12 Months with rolling cash collection statistics.
+
+- **📂 CSV Data Portability Hub (Phase 1)**:
+  - Frictionless bulk client onboarding with smart column auto-detection and preview grid.
+  - Comprehensive accounting export suite: Invoices Ledger, Payments Ledger, Expenses Ledger, and Time Entries.
+
+- **🛡️ Quality & Test Coverage**:
+  - Full automated regression suite with **52/52 passing test suites** running under Node.js.
 
 ### 📦 Installation (Windows):
 1. Download **\`${SETUP_EXE}\`** below.
