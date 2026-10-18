@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkExpiredQuotes: () => ipcRenderer.invoke('quotes:checkExpired'),
   exportQuotePdf: (quoteId) => ipcRenderer.invoke('quotes:exportPdf', quoteId),
   previewQuotePdf: (quoteId) => ipcRenderer.invoke('quotes:previewPdf', quoteId),
+  getQuotePreviewData: (quoteId) => ipcRenderer.invoke('quotes:getPreviewData', quoteId),
   printQuote: (quoteId) => ipcRenderer.invoke('quotes:print', quoteId),
   exportShareableQuoteHtml: (quoteId) => ipcRenderer.invoke('quotes:exportShareableHtml', quoteId),
 
@@ -83,6 +84,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getInvoice: (id) => ipcRenderer.invoke('invoices:get', id),
   exportInvoicePdf: (invoiceId) => ipcRenderer.invoke('invoices:exportPdf', invoiceId),
   previewInvoicePdf: (invoiceId) => ipcRenderer.invoke('invoices:previewPdf', invoiceId),
+  getInvoicePreviewData: (invoiceId) => ipcRenderer.invoke('invoices:getPreviewData', invoiceId),
+  getPaymentReceiptData: (invoiceId, paymentId) => ipcRenderer.invoke('invoices:getReceiptData', invoiceId, paymentId),
   printInvoice: (invoiceId) => ipcRenderer.invoke('invoices:print', invoiceId),
   exportInvoicesPdfBatch: (ids) => ipcRenderer.invoke('invoices:exportPdfBatch', ids),
   setInvoiceStatus: (id, status) => ipcRenderer.invoke('invoices:setStatus', id, status),

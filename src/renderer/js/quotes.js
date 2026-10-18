@@ -1516,6 +1516,19 @@
       const menu = document.createElement('div');
       menu.className = 'row-actions-menu hidden';
 
+      const previewItem = document.createElement('button');
+      previewItem.type = 'button';
+      previewItem.className = 'row-action-item';
+      previewItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Quick Look Preview';
+      previewItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        if (window.QuoteCraftDocPreview) {
+          window.QuoteCraftDocPreview.open({ type: 'quote', id: q.id });
+        }
+      });
+
       const convItem = document.createElement('button');
       convItem.type = 'button';
       convItem.className = 'row-action-item';
@@ -1543,6 +1556,27 @@
           }
         } catch (err) {
           toast('Failed to export PDF: ' + err.message, 'error');
+        } finally {
+          window.QuoteCraftUtils.hideBusy();
+        }
+      });
+
+      const htmlItem = document.createElement('button');
+      htmlItem.type = 'button';
+      htmlItem.className = 'row-action-item';
+      htmlItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> HTML Receipt';
+      htmlItem.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.classList.add('hidden');
+        triggerBtn.classList.remove('active');
+        try {
+          window.QuoteCraftUtils.showBusy('Exporting HTML…');
+          const res = await window.electronAPI.exportShareableQuoteHtml(q.id);
+          if (res && res.ok && !res.cancelled && res.savedPath) {
+            toast('HTML saved to ' + res.savedPath, 'success');
+          }
+        } catch (err) {
+          toast('Failed to export HTML: ' + err.message, 'error');
         } finally {
           window.QuoteCraftUtils.hideBusy();
         }
@@ -1577,8 +1611,10 @@
         }
       });
 
+      menu.appendChild(previewItem);
       menu.appendChild(convItem);
       menu.appendChild(pdfItem);
+      menu.appendChild(htmlItem);
       menu.appendChild(dupItem);
       menu.appendChild(emailItem);
 
@@ -2438,6 +2474,10 @@
   if (detailPreviewBtn) {
     detailPreviewBtn.addEventListener('click', async () => {
       if (!currentDetailId) return;
+      if (window.QuoteCraftDocPreview) {
+        window.QuoteCraftDocPreview.open({ type: 'quote', id: currentDetailId });
+        return;
+      }
       detailPreviewBtn.disabled = true;
       window.QuoteCraftUtils.showBusy('Generating PDF preview\u2026');
       try {

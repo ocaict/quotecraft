@@ -1,0 +1,265 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Document Quick Look In-App Preview Modal
+   Phase 5 — Modern, web-native preview with live actions
+   ───────────────────────────────────────────────────────────────────────────── */
+
+#docPreviewModal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+#docPreviewModal.hidden {
+  display: none !important;
+  opacity: 0;
+}
+
+.doc-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 95vw;
+  max-width: 1100px;
+  height: 92vh;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  animation: docPreviewSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes docPreviewSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Header */
+.doc-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.doc-preview-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.doc-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 9999px;
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  flex-shrink: 0;
+}
+
+.doc-preview-meta {
+  min-width: 0;
+}
+
+.doc-preview-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.doc-preview-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Toolbar actions */
+.doc-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.doc-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.doc-preview-btn:hover {
+  background: var(--border-strong);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.doc-preview-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+}
+
+.doc-preview-btn.btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.doc-preview-btn.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+/* Zoom controls */
+.doc-preview-zoom-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  margin-left: 4px;
+}
+
+.doc-preview-zoom-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.doc-preview-zoom-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.doc-preview-zoom-val {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 6px;
+  color: var(--text);
+  min-width: 44px;
+  text-align: center;
+}
+
+.doc-preview-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 18px;
+  margin-left: 4px;
+}
+
+.doc-preview-close:hover {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--error);
+}
+
+/* Stage / Viewport */
+.doc-preview-viewport {
+  flex: 1;
+  background: #0b0f19;
+  position: relative;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 32px 16px;
+}
+
+.doc-preview-frame-wrap {
+  width: 100%;
+  max-width: 880px;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top center;
+}
+
+.doc-preview-iframe {
+  width: 100%;
+  height: 850px;
+  border: none;
+  display: block;
+  background: #ffffff;
+}
+
+/* Loading state */
+.doc-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 15, 25, 0.85);
+  color: var(--text-muted);
+  font-size: 13px;
+  gap: 12px;
+  z-index: 10;
+}
+
+.doc-preview-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(88, 166, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: docPreviewSpin 0.7s linear infinite;
+}
+
+@keyframes docPreviewSpin {
+  to { transform: rotate(360deg); }
+}

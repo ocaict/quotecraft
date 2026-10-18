@@ -25,6 +25,11 @@ const {
   renderInvoicePrintHtml,
 } = require('./pdf-export');
 const {
+  generateInvoiceHtml,
+  generateQuoteHtml,
+  generatePaymentReceiptHtml,
+} = require('./receipt-generator');
+const {
   parseCsv,
   detectClientColumnMapping,
   detectLineItemColumnMapping,
@@ -1113,6 +1118,19 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('quotes:getPreviewData', async (event, quoteId) => {
+    try {
+      const quote = getQuote(quoteId);
+      if (!quote) return { ok: false, errors: { general: 'Quote not found.' } };
+      const client = getClient(quote.client_id);
+      const profile = getCompanyProfile();
+      const html = generateQuoteHtml(quote, client, profile);
+      return { ok: true, html, doc: quote, client, profile };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not load quote preview: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('quotes:exportShareableHtml', async (event, quoteId) => {
     try {
       const quote = getQuote(quoteId);
@@ -1121,7 +1139,7 @@ function registerIpcHandlers() {
       }
       const client = getClient(quote.client_id);
       const profile = getCompanyProfile();
-      const html = renderQuoteHtml(quote, client, profile);
+      const html = generateQuoteHtml(quote, client, profile);
 
       const safeNumber = String(quote.quote_number || 'quote').replace(/[^\w-]+/g, '_');
       const result = await dialog.showSaveDialog({
@@ -1258,6 +1276,37 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('invoices:getPreviewData', async (event, invoiceId) => {
+    try {
+      const invoice = getInvoice(invoiceId);
+      if (!invoice) return { ok: false, errors: { general: 'Invoice not found.' } };
+      const client = getClient(invoice.client_id);
+      const profile = getCompanyProfile();
+      const html = generateInvoiceHtml(invoice, client, profile);
+      return { ok: true, html, doc: invoice, client, profile };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not load invoice preview: ${err.message}` } };
+    }
+  });
+
+  ipcMain.handle('invoices:getReceiptData', async (event, invoiceId, paymentId) => {
+    try {
+      const invoice = getInvoice(invoiceId);
+      if (!invoice) return { ok: false, errors: { general: 'Invoice not found.' } };
+      const client = getClient(invoice.client_id);
+      const profile = getCompanyProfile();
+      let payment = null;
+      if (paymentId) {
+        const payments = getPaymentHistory(invoiceId);
+        payment = payments.find((p) => String(p.id) === String(paymentId)) || null;
+      }
+      const html = generatePaymentReceiptHtml(payment, invoice, client, profile);
+      return { ok: true, html, doc: invoice, payment, client, profile };
+    } catch (err) {
+      return { ok: false, errors: { general: `Could not load receipt preview: ${err.message}` } };
+    }
+  });
+
   ipcMain.handle('invoices:exportShareableHtml', async (event, invoiceId) => {
     try {
       const invoice = getInvoice(invoiceId);
@@ -1266,7 +1315,7 @@ function registerIpcHandlers() {
       }
       const client = getClient(invoice.client_id);
       const profile = getCompanyProfile();
-      const html = renderInvoiceHtml(invoice, client, profile);
+      const html = generateInvoiceHtml(invoice, client, profile);
 
       const safeNumber = String(invoice.invoice_number || 'invoice').replace(/[^\w-]+/g, '_');
       const result = await dialog.showSaveDialog({

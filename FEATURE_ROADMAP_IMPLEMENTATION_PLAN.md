@@ -12,7 +12,7 @@ This roadmap outlines the recommended architectural upgrades and feature additio
 | **Phase 2** | **Visual Dashboard Cash Flow Chart** | Interactive SVG cash flow & revenue trends | ✅ **Completed** | ⭐⭐⭐⭐⭐ |
 | **Phase 3** | **PDF Branding & Template Styles** | Brand accent colors & document layout presets | ✅ **Completed** | ⭐⭐⭐⭐ |
 | **Phase 4** | **Multi-Currency Document Billing** | Foreign currency invoicing with base P&L snapshot | ✅ **Completed** | ⭐⭐⭐⭐ |
-| **Phase 5** | **In-App Quick Document Preview & HTML Receipts** | Instant preview modal & shareable HTML invoice | ⏳ Planned | ⭐⭐⭐⭐ |
+| **Phase 5** | **In-App Quick Document Preview & HTML Receipts** | Instant preview modal & shareable HTML invoice | ✅ **Completed** | ⭐⭐⭐⭐ |
 
 ---
 
@@ -128,7 +128,7 @@ Empower contractors and agencies who bill international clients in USD, EUR, or 
 
 ---
 
-## Phase 5: In-App Document Quick Look & Shareable HTML Receipts
+## Phase 5: In-App Document Quick Look & Shareable HTML Receipts — ✅ COMPLETED
 
 ### Objective
 Eliminate the friction of opening external PDF reader programs just to review an invoice, and provide lightweight, modern web-native receipt sharing.

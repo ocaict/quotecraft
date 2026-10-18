@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="styles/command-palette.css">
   <link rel="stylesheet" href="styles/notifications.css">
   <link rel="stylesheet" href="styles/about.css">
+  <link rel="stylesheet" href="styles/document-preview.css">
   <script src="js/theme.js"></script>
 </head>
 <body>
@@ -5410,6 +5411,62 @@
     </div>
   </div>
 
+  <!-- ── In-App Document Quick Look Modal ──────────────────────────────── -->
+  <div id="docPreviewModal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="docPreviewTitle">
+    <div class="doc-preview-dialog">
+      <div class="doc-preview-header">
+        <div class="doc-preview-title-wrap">
+          <span id="docPreviewBadge" class="doc-preview-badge">INVOICE</span>
+          <div class="doc-preview-meta">
+            <h3 id="docPreviewTitle" class="doc-preview-title">Document Preview</h3>
+            <div id="docPreviewSubtitle" class="doc-preview-subtitle">—</div>
+          </div>
+        </div>
+
+        <div class="doc-preview-toolbar">
+          <button type="button" id="docPreviewPrintBtn" class="doc-preview-btn" title="Print Document">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            Print
+          </button>
+          <button type="button" id="docPreviewPdfBtn" class="doc-preview-btn btn-primary" title="Save PDF to Disk">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Download PDF
+          </button>
+          <button type="button" id="docPreviewHtmlBtn" class="doc-preview-btn" title="Save Shareable HTML Receipt">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+            HTML Receipt
+          </button>
+          <button type="button" id="docPreviewEmailBtn" class="doc-preview-btn" title="Send via Email">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+            Email
+          </button>
+          <button type="button" id="docPreviewWhatsAppBtn" class="doc-preview-btn" title="Share via WhatsApp">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+            WhatsApp
+          </button>
+
+          <div class="doc-preview-zoom-group">
+            <button type="button" id="docPreviewZoomOutBtn" class="doc-preview-zoom-btn" title="Zoom Out">−</button>
+            <span id="docPreviewZoomResetBtn" class="doc-preview-zoom-val" title="Reset Zoom">100%</span>
+            <button type="button" id="docPreviewZoomInBtn" class="doc-preview-zoom-btn" title="Zoom In">+</button>
+          </div>
+
+          <button type="button" id="docPreviewCloseBtn" class="doc-preview-close" title="Close Preview (Esc)">&times;</button>
+        </div>
+      </div>
+
+      <div class="doc-preview-viewport">
+        <div id="docPreviewFrameWrap" class="doc-preview-frame-wrap">
+          <iframe id="docPreviewIframe" class="doc-preview-iframe" title="Document Preview Content"></iframe>
+        </div>
+        <div id="docPreviewLoading" class="doc-preview-loading">
+          <div class="doc-preview-spinner"></div>
+          <span>Rendering Document Preview…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Payment Preset Modal -->
   <div id="paymentPresetModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="paymentPresetModalTitle">
     <div class="modal" style="max-width: 500px;">
@@ -5692,6 +5749,7 @@
   <script src="js/items.js"></script>
   <script src="js/document-email.js"></script>
   <script src="js/whatsapp-share.js"></script>
+  <script src="js/document-preview.js"></script>
   <script src="js/quotes.js"></script>
   <script src="js/invoices.js"></script>
   <script src="js/cashflow-chart.js"></script>
