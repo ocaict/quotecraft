@@ -3934,6 +3934,47 @@
           </div>
         </div>
 
+        <!-- Danger Zone Card -->
+        <div class="card settings-card danger-zone-card" id="dangerZoneCard">
+          <div class="danger-zone-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="danger-zone-icon"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div>
+              <h2 class="danger-zone-title">Danger Zone &amp; Reset Options</h2>
+              <p class="danger-zone-subtitle">Manage application defaults or perform a complete factory reset.</p>
+            </div>
+          </div>
+
+          <!-- Tier A: Reset Preferences -->
+          <div class="danger-zone-row">
+            <div class="danger-zone-row-info">
+              <div class="danger-zone-row-label">Reset Preferences &amp; Defaults</div>
+              <div class="danger-zone-row-desc">Reverts invoice numbering, default tax rates, PDF accent colour, and layout style to factory defaults. Your clients, quotes, invoices and all business data are <strong>not</strong> affected.</div>
+            </div>
+            <button type="button" id="resetPreferencesBtn" class="btn btn-secondary btn-reset-prefs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              Reset Preferences
+            </button>
+          </div>
+
+          <div class="danger-zone-divider"></div>
+
+          <!-- Tier B: Factory Reset -->
+          <div class="danger-zone-row">
+            <div class="danger-zone-row-info">
+              <div class="danger-zone-row-label danger-label">Factory Reset — Erase All Business Data</div>
+              <div class="danger-zone-row-desc">Permanently deletes <strong>all</strong> clients, quotes, invoices, payments, expenses, projects, time entries, and uploaded attachments. A timestamped safety backup is created automatically before anything is deleted.</div>
+              <label class="danger-zone-checkbox-row" for="preserveLicenseChk">
+                <input type="checkbox" id="preserveLicenseChk" checked>
+                <span>Keep my Pro License activation</span>
+              </label>
+            </div>
+            <button type="button" id="factoryResetBtn" class="btn btn-danger btn-factory-reset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              Erase All Data&hellip;
+            </button>
+          </div>
+        </div>
+
         <!-- Software Updates -->
           </div>
 
@@ -4320,6 +4361,42 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="confirmCancelBtn">Cancel</button>
         <button type="button" class="btn btn-primary" id="confirmOkBtn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="resetConfirmModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="resetConfirmModalTitle">
+    <div class="modal modal-danger">
+      <div class="modal-header">
+        <div class="danger-modal-title-group" style="display:flex; align-items:center; gap:8px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" width="20" height="20"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <h2 id="resetConfirmModalTitle" style="margin:0; font-size:18px; color:var(--text, #1e293b);">Factory Reset — Erase All Data</h2>
+        </div>
+        <button type="button" class="modal-close" id="resetConfirmModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="danger-callout" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+          <p style="margin: 0 0 6px; font-weight: 600; color: #dc2626;">This action is permanent and cannot be undone.</p>
+          <p style="margin: 0; font-size: 13px; color: var(--text-muted);">All clients, quotes, invoices, payments, expenses, time entries, projects, and custom attachments will be permanently erased.</p>
+        </div>
+        <div class="reset-confirm-checklist" style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+            <li>A timestamped safety backup will be saved in your <code>backups</code> folder before wiping.</li>
+            <li>Pro License activation will be <strong id="resetLicenseStatusText" style="color: var(--text);">preserved</strong>.</li>
+            <li>QuoteCraft will reload immediately with a pristine clean database.</li>
+          </ul>
+        </div>
+        <div class="field" style="margin-top: 14px;">
+          <label for="resetConfirmInput" style="font-size: 13px; font-weight: 500; display: block; margin-bottom: 6px;">To confirm, type <strong style="color: #dc2626;">RESET</strong> below:</label>
+          <input type="text" id="resetConfirmInput" placeholder="RESET" autocomplete="off" spellcheck="false" style="width: 100%; font-family: monospace; font-size: 14px; letter-spacing: 1px;">
+        </div>
+      </div>
+      <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; border-top: 1px solid var(--border);">
+        <button type="button" class="btn btn-ghost" id="resetConfirmCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="resetConfirmSubmitBtn" disabled style="display:inline-flex; align-items:center; gap:6px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          Permanently Erase &amp; Reset
+        </button>
       </div>
     </div>
   </div>

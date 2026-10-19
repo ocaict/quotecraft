@@ -251,6 +251,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('menu:action', handler);
     return () => ipcRenderer.removeListener('menu:action', handler);
   },
+
+  // Application Reset
+  resetAppPreferences: () => ipcRenderer.invoke('settings:resetPreferences'),
+  factoryResetApp: (opts) => ipcRenderer.invoke('settings:factoryReset', opts),
 });
 
 

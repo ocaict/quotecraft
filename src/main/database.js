@@ -9643,6 +9643,209 @@ function clearLicenseInfo() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Application Reset
+// ---------------------------------------------------------------------------
+
+/**
+ * Tier A: Reset Preferences & Defaults.
+ *
+ * Reverts application configuration columns in company_profile to their
+ * factory defaults (numbering, tax, theme, PDF style) without touching any
+ * business data (clients, quotes, invoices, etc.).
+ *
+ * @returns {{ ok: boolean, profile: object }}
+ */
+function resetPreferencesToDefault() {
+  const now = new Date().toISOString();
+  db.run(
+    `UPDATE company_profile SET
+       invoice_prefix        = 'INV-',
+       invoice_start_number  = 1,
+       quote_prefix          = 'Q-',
+       default_tax_rate      = 0,
+       default_hourly_rate   = NULL,
+       default_currency      = 'USD',
+       pdf_accent_color      = '#0ea5e9',
+       pdf_layout_style      = 'standard',
+       updated_at            = ?
+     WHERE id = 1`,
+    [now]
+  );
+  addAuditEntry({
+    entityType: 'settings',
+    entityRef:  'company_profile',
+    action:     'reset_preferences',
+    description: 'Application preferences reset to factory defaults.',
+  });
+  saveToDisk();
+  return { ok: true, profile: getCompanyProfile() };
+}
+
+/**
+ * Tier B: Factory Reset — Erase All Business Data.
+ *
+ * 1. Creates a timestamped safety backup ZIP in the default backups folder
+ *    before any destructive query executes.
+ * 2. Optionally preserves the Pro licence row.
+ * 3. Drops & recreates all user-data tables via createTables() + runMigrations().
+ * 4. Deletes logo and attachment files from disk.
+ * 5. Flushes the blank database to disk.
+ *
+ * This function is intentionally synchronous so that the IPC handler can
+ * await it and return a single result object.
+ *
+ * @param {{ preserveLicense?: boolean, backupsDir?: string }} opts
+ * @returns {{ ok: boolean, backupPath: string|null, licensePreserved: boolean }}
+ */
+function factoryResetDatabase({ preserveLicense = true, backupsDir } = {}) {
+  // ── Step 1: Safety backup ───────────────────────────────────────────────
+  let backupPath = null;
+  try {
+    const AdmZip   = require('adm-zip');
+    const destDir  = backupsDir || (
+      app && typeof app.getPath === 'function'
+        ? require('path').join(app.getPath('userData'), 'backups')
+        : require('path').join(__dirname, '../../data/backups')
+    );
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+
+    const stamp    = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+    const zipName  = `pre-reset-backup-${stamp}.qcbackup`;
+    backupPath     = require('path').join(destDir, zipName);
+
+    const zip      = new AdmZip();
+    const dbBytes  = Buffer.from(db.export());
+    zip.addFile('database.sqlite', dbBytes);
+
+    const profile  = getCompanyProfile();
+    const manifest = {
+      app:       'QuoteCraft',
+      magic:     'QUOTECRAFT_BACKUP',
+      version:   2,
+      createdAt: new Date().toISOString(),
+      note:      'Automatic pre-reset safety backup',
+    };
+    zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'));
+
+    if (profile && profile.logo_path && fs.existsSync(profile.logo_path)) {
+      try {
+        zip.addFile(require('path').basename(profile.logo_path), fs.readFileSync(profile.logo_path));
+      } catch (_) { /* skip unreadable logo */ }
+    }
+    zip.writeZip(backupPath);
+  } catch (backupErr) {
+    console.error('[QuoteCraft] Pre-reset backup failed:', backupErr.message);
+    backupPath = null;  // non-fatal — continue with reset
+  }
+
+  // ── Step 2: Snapshot licence if preserving ──────────────────────────────
+  let licenseSnapshot = null;
+  if (preserveLicense) {
+    try {
+      const res = db.exec(`SELECT * FROM license_info WHERE id = 1`);
+      if (res && res[0] && res[0].values && res[0].values.length) {
+        const cols = res[0].columns;
+        const row  = res[0].values[0];
+        licenseSnapshot = {};
+        cols.forEach((c, i) => { licenseSnapshot[c] = row[i]; });
+      }
+    } catch (_) { /* table may not exist yet */ }
+  }
+
+  // ── Step 3: Wipe all user-data tables ──────────────────────────────────
+  const WIPE_TABLES = [
+    'clients', 'client_contacts', 'client_notes',
+    'quotes', 'quote_line_items',
+    'invoices', 'invoice_line_items',
+    'payments',
+    'expenses',
+    'time_entries',
+    'projects',
+    'items',
+    'credit_notes',
+    'audit_log_entries',
+    'attachments',
+    'recurring_profiles',
+    'document_email_log',
+    'payment_instruction_presets',
+    'reminder_rules',
+    'reminder_log',
+  ];
+  db.run('BEGIN');
+  try {
+    for (const tbl of WIPE_TABLES) {
+      try { db.run(`DELETE FROM ${tbl}`); } catch (_) { /* table may not exist */ }
+    }
+    // Reset company_profile to blank placeholder
+    db.run(`DELETE FROM company_profile`);
+    db.run(
+      `INSERT INTO company_profile (id, invoice_prefix, invoice_start_number, quote_prefix,
+         default_tax_rate, pdf_accent_color, pdf_layout_style, default_currency, created_at, updated_at)
+       VALUES (1, 'INV-', 1, 'Q-', 0, '#0ea5e9', 'standard', 'USD', ?, ?)`,
+      [new Date().toISOString(), new Date().toISOString()]
+    );
+    // Clear license unless preserving
+    if (!preserveLicense) {
+      try { db.run(`DELETE FROM license_info`); } catch (_) {}
+    }
+    db.run('COMMIT');
+  } catch (err) {
+    db.run('ROLLBACK');
+    throw err;
+  }
+
+  // ── Step 4: Restore licence snapshot ───────────────────────────────────
+  if (licenseSnapshot) {
+    try {
+      db.run(`DELETE FROM license_info`);
+      const cols   = Object.keys(licenseSnapshot).filter(c => c !== 'id');
+      const vals   = cols.map(c => licenseSnapshot[c]);
+      const pholds = cols.map(() => '?').join(', ');
+      db.run(
+        `INSERT INTO license_info (id, ${cols.join(', ')}) VALUES (1, ${pholds})`,
+        vals
+      );
+    } catch (err) {
+      console.error('[QuoteCraft] Failed to restore licence after reset:', err.message);
+    }
+  }
+
+  // ── Step 5: Clean filesystem ────────────────────────────────────────────
+  try {
+    const userData = app && typeof app.getPath === 'function'
+      ? app.getPath('userData')
+      : require('path').join(__dirname, '../../data');
+
+    // Delete logo
+    const logoDir = require('path').join(userData, 'logo');
+    if (fs.existsSync(logoDir)) {
+      for (const f of fs.readdirSync(logoDir)) {
+        try { fs.unlinkSync(require('path').join(logoDir, f)); } catch (_) {}
+      }
+    }
+
+    // Clear attachments folder
+    const attDir = require('path').join(userData, 'attachments');
+    if (fs.existsSync(attDir)) {
+      for (const f of fs.readdirSync(attDir)) {
+        try { fs.unlinkSync(require('path').join(attDir, f)); } catch (_) {}
+      }
+    }
+  } catch (fsErr) {
+    console.error('[QuoteCraft] Filesystem cleanup failed:', fsErr.message);
+  }
+
+  // ── Step 6: Flush to disk ───────────────────────────────────────────────
+  saveToDisk(true);
+
+  return {
+    ok:              true,
+    backupPath,
+    licensePreserved: Boolean(licenseSnapshot),
+  };
+}
+
 module.exports = {
   initializeDatabase,
   getDb,
@@ -9808,6 +10011,8 @@ module.exports = {
   getLicenseInfo,
   saveLicenseInfo,
   clearLicenseInfo,
+  resetPreferencesToDefault,
+  factoryResetDatabase,
 };
 
 

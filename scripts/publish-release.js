@@ -42,38 +42,25 @@ const VERSION = pkg.version;
 const TAG = `v${VERSION}`;
 const SETUP_EXE = `QuoteCraft-Setup-${VERSION}.exe`;
 
-const releaseBody = `## QuoteCraft ${TAG} — Feature Update Release 🎉
+const releaseBody = `## QuoteCraft ${TAG} — Application Reset & Security Update 🎉
 
 QuoteCraft is a fast, offline-first invoice and quote management desktop application tailored for freelancers, contractors, and growing businesses.
 
 ### 🚀 What's New in ${TAG}:
 
-- **🌐 In-App Document Quick Look & Standalone HTML Receipts (Phase 5)**:
-  - Instant in-app modal preview for quotes, invoices, and payment receipts with zero external viewer requirements.
-  - Interactive toolbar with direct **Print**, **Download PDF**, **Export HTML Receipt**, **Send via Email**, and **Share via WhatsApp**.
-  - Smooth zoom controls (60% to 180%) and responsive paper rendering.
-  - Standalone, self-contained HTML receipts complete with dynamic online payment checkout buttons and inlined print styling.
+- **⚠️ Application Reset & Danger Zone (Tier A & Tier B)**:
+  - **Tier A (Reset Preferences & Defaults)**: Instantly revert invoice numbering prefixes, default tax rates, PDF accent colours, and document layout styles to factory defaults. Your clients, quotes, invoices, payments, and all business data are **not** affected.
+  - **Tier B (Factory Reset & Data Wipe)**: Safely wipe all business records, clients, invoices, and custom attachments for a clean start.
+  - **Automatic Safety Backup**: A timestamped, restorable ZIP archive (\`pre-reset-backup-<timestamp>.qcbackup\`) is automatically created before any destructive operation.
+  - **License Retention Safeguard**: Users with active Pro licenses can preserve their activation key and entitlement token across factory resets.
+  - **Friction-Protected Confirmation**: Destructive factory resets require explicitly typing \`"RESET"\` into the confirmation dialog to prevent accidental triggers.
 
-- **💱 Multi-Currency Document Billing & Exchange Rate Snapshots (Phase 4)**:
-  - Create quotes and invoices in foreign currencies (USD, EUR, GBP, NGN, etc.) with custom exchange rates.
-  - Automatic base-currency ledger equivalents (\`base_amount_cents\`) preserving local tax reporting and P&L accuracy.
-  - Automatic banking intelligence: intelligently maps local NUBAN accounts for domestic billing and foreign Domiciliary wire (IBAN/SWIFT) accounts for foreign currency documents.
-
-- **🎨 PDF Document Branding & Layout Presets (Phase 3)**:
-  - Custom brand accent color picker with curated professional palettes (Classic Navy, Emerald, Indigo, Warm Amber, etc.).
-  - 3 polished document layout styles: **Standard Modern**, **Compact Sleek**, and **Corporate Formal**.
-  - Real-time interactive document mini-preview directly inside Company Settings.
-
-- **📊 Visual Dashboard Cash Flow Analytics (Phase 2)**:
-  - Interactive SVG cash flow and revenue trajectory visualization.
-  - Quick range toggles: 30 Days, 90 Days, 6 Months, and 12 Months with rolling cash collection statistics.
-
-- **📂 CSV Data Portability Hub (Phase 1)**:
-  - Frictionless bulk client onboarding with smart column auto-detection and preview grid.
-  - Comprehensive accounting export suite: Invoices Ledger, Payments Ledger, Expenses Ledger, and Time Entries.
+- **🔒 Security & Document Preview Hardening**:
+  - Updated Content Security Policy (CSP) with \`frame-src 'self' data:\` to seamlessly support interactive document Quick Look and PDF rendering across all platforms.
 
 - **🛡️ Quality & Test Coverage**:
-  - Full automated regression suite with **52/52 passing test suites** running under Node.js.
+  - Added dedicated test suite \`test-app-reset.js\`.
+  - Full automated regression pass: **53/53 test suites passing** running under Node.js.
 
 ### 📦 Installation (Windows):
 1. Download **\`${SETUP_EXE}\`** below.

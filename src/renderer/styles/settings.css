@@ -1033,4 +1033,118 @@
   max-width: 100%;
 }
 
+/* ── Danger Zone & Reset Card ────────────────────────────────────────────── */
+.danger-zone-card {
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  background: var(--bg-card, #ffffff);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-top: 10px;
+}
+
+.danger-zone-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.danger-zone-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  stroke: #ef4444;
+}
+
+.danger-zone-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #dc2626;
+  margin: 0 0 2px;
+}
+
+.danger-zone-subtitle {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.danger-zone-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.danger-zone-row-info {
+  flex: 1;
+}
+
+.danger-zone-row-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.danger-zone-row-label.danger-label {
+  color: #dc2626;
+}
+
+.danger-zone-row-desc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.danger-zone-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.danger-zone-checkbox-row input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.danger-zone-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+.btn-reset-prefs {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-factory-reset {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #dc2626 !important;
+}
+
+.btn-factory-reset:hover {
+  background-color: #dc2626 !important;
+}
+
+.modal.modal-danger {
+  border-top: 4px solid #ef4444;
+}
+
+
 

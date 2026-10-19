@@ -1865,7 +1865,154 @@
     });
   }
 
+  function initDangerZoneControls() {
+    const resetPrefsBtn = document.getElementById('resetPreferencesBtn');
+    const factoryResetBtn = document.getElementById('factoryResetBtn');
+    const modal = document.getElementById('resetConfirmModal');
+    const modalCloseBtn = document.getElementById('resetConfirmModalClose');
+    const cancelBtn = document.getElementById('resetConfirmCancelBtn');
+    const submitBtn = document.getElementById('resetConfirmSubmitBtn');
+    const confirmInput = document.getElementById('resetConfirmInput');
+    const preserveChk = document.getElementById('preserveLicenseChk');
+    const licenseStatusText = document.getElementById('resetLicenseStatusText');
+
+    function updateLicenseStatus() {
+      if (!licenseStatusText) return;
+      const isPreserved = preserveChk ? preserveChk.checked : true;
+      licenseStatusText.textContent = isPreserved ? 'preserved' : 'erased';
+      licenseStatusText.style.color = isPreserved ? 'var(--text)' : '#dc2626';
+    }
+
+    if (preserveChk) {
+      preserveChk.addEventListener('change', updateLicenseStatus);
+    }
+
+    if (resetPrefsBtn) {
+      resetPrefsBtn.addEventListener('click', async () => {
+        const confirmed = typeof window.QuoteCraftUtils?.confirm === 'function'
+          ? await window.QuoteCraftUtils.confirm(
+              'Are you sure you want to reset your preferences to default? Numbering prefixes, default tax rate, PDF styles, and theme will be reverted to factory defaults. Your clients, quotes, invoices, and business data will NOT be affected.',
+              'Reset Preferences?'
+            )
+          : window.confirm('Reset preferences to default?');
+
+        if (!confirmed) return;
+
+        resetPrefsBtn.disabled = true;
+        const origHtml = resetPrefsBtn.innerHTML;
+        resetPrefsBtn.innerHTML = 'Resetting...';
+
+        try {
+          const res = await window.electronAPI.resetAppPreferences();
+          if (res && res.ok) {
+            window.QuoteCraftUtils?.showToast?.('Preferences have been reset to factory defaults.', 'success');
+            if (typeof loadSettings === 'function') {
+              await loadSettings();
+            }
+            if (res.profile?.theme && window.QuoteCraftTheme?.applyTheme) {
+              window.QuoteCraftTheme.applyTheme(res.profile.theme);
+            }
+          } else {
+            window.QuoteCraftUtils?.showToast?.(res?.error || 'Failed to reset preferences.', 'error');
+          }
+        } catch (err) {
+          window.QuoteCraftUtils?.showToast?.('Error resetting preferences: ' + err.message, 'error');
+        } finally {
+          resetPrefsBtn.disabled = false;
+          resetPrefsBtn.innerHTML = origHtml;
+        }
+      });
+    }
+
+    function closeModal() {
+      if (modal) modal.classList.add('hidden');
+      if (confirmInput) confirmInput.value = '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          Permanently Erase &amp; Reset
+        `;
+      }
+    }
+
+    function openModal() {
+      if (!modal) return;
+      updateLicenseStatus();
+      if (confirmInput) confirmInput.value = '';
+      if (submitBtn) submitBtn.disabled = true;
+      modal.classList.remove('hidden');
+      setTimeout(() => confirmInput?.focus(), 50);
+    }
+
+    if (factoryResetBtn) {
+      factoryResetBtn.addEventListener('click', openModal);
+    }
+    if (modalCloseBtn) {
+      modalCloseBtn.addEventListener('click', closeModal);
+    }
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', closeModal);
+    }
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+    }
+
+    if (confirmInput && submitBtn) {
+      confirmInput.addEventListener('input', () => {
+        submitBtn.disabled = confirmInput.value.trim().toUpperCase() !== 'RESET';
+      });
+      confirmInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !submitBtn.disabled) {
+          submitBtn.click();
+        }
+      });
+    }
+
+    if (submitBtn) {
+      submitBtn.addEventListener('click', async () => {
+        if (confirmInput && confirmInput.value.trim().toUpperCase() !== 'RESET') return;
+
+        submitBtn.disabled = true;
+        if (cancelBtn) cancelBtn.disabled = true;
+        submitBtn.textContent = 'Resetting QuoteCraft...';
+
+        try {
+          const preserveLicense = preserveChk ? preserveChk.checked : true;
+          const res = await window.electronAPI.factoryResetApp({ preserveLicense });
+          if (res && res.ok) {
+            closeModal();
+            window.QuoteCraftUtils?.showToast?.('Application reset successfully. Reloading...', 'success');
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
+          } else {
+            window.QuoteCraftUtils?.showToast?.(res?.error || 'Factory reset failed.', 'error');
+            submitBtn.disabled = false;
+            if (cancelBtn) cancelBtn.disabled = false;
+            submitBtn.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              Permanently Erase &amp; Reset
+            `;
+          }
+        } catch (err) {
+          window.QuoteCraftUtils?.showToast?.('Factory reset error: ' + err.message, 'error');
+          submitBtn.disabled = false;
+          if (cancelBtn) cancelBtn.disabled = false;
+          submitBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            Permanently Erase &amp; Reset
+          `;
+        }
+      });
+    }
+  }
+
   initPdfBrandingControls();
   initSettingsSubnav();
+  initDangerZoneControls();
 })();
+
 

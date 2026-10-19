@@ -186,6 +186,8 @@ const {
   getLicenseInfo,
   saveLicenseInfo,
   clearLicenseInfo,
+  resetPreferencesToDefault,
+  factoryResetDatabase,
 } = require('./database');
 const {
   validatePaystackKey,
@@ -3346,6 +3348,39 @@ function registerIpcHandlers() {
     } catch (err) {
       logger.error('[license:startTestPurchase] ' + err.message);
       return { ok: false, message: err.message };
+    }
+  });
+
+  // ── Application Reset ──────────────────────────────────────────────────
+
+  /**
+   * Tier A: Reset app preferences to factory defaults.
+   * Business data (clients, quotes, invoices) is NOT affected.
+   */
+  ipcMain.handle('settings:resetPreferences', async () => {
+    try {
+      const result = resetPreferencesToDefault();
+      logger.info('[settings:resetPreferences] Preferences reset to defaults.');
+      return result;
+    } catch (err) {
+      logger.error('[settings:resetPreferences] ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  /**
+   * Tier B: Factory reset — erase all business data.
+   * Creates a safety backup before any destructive operation.
+   */
+  ipcMain.handle('settings:factoryReset', async (_event, { preserveLicense = true } = {}) => {
+    try {
+      logger.warn('[settings:factoryReset] Factory reset initiated. preserveLicense=' + preserveLicense);
+      const result = factoryResetDatabase({ preserveLicense });
+      logger.warn('[settings:factoryReset] Factory reset complete. backupPath=' + result.backupPath);
+      return result;
+    } catch (err) {
+      logger.error('[settings:factoryReset] ' + err.message);
+      return { ok: false, error: err.message };
     }
   });
 }
