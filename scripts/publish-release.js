@@ -42,24 +42,25 @@ const VERSION = pkg.version;
 const TAG = `v${VERSION}`;
 const SETUP_EXE = `QuoteCraft-Setup-${VERSION}.exe`;
 
-const releaseBody = `## QuoteCraft ${TAG} — Application Reset & Security Update 🎉
+const releaseBody = `## QuoteCraft ${TAG} — Discount UI & Add-from-Library Fix 🎉
 
 QuoteCraft is a fast, offline-first invoice and quote management desktop application tailored for freelancers, contractors, and growing businesses.
 
 ### 🚀 What's New in ${TAG}:
 
-- **⚠️ Application Reset & Danger Zone (Tier A & Tier B)**:
-  - **Tier A (Reset Preferences & Defaults)**: Instantly revert invoice numbering prefixes, default tax rates, PDF accent colours, and document layout styles to factory defaults. Your clients, quotes, invoices, payments, and all business data are **not** affected.
-  - **Tier B (Factory Reset & Data Wipe)**: Safely wipe all business records, clients, invoices, and custom attachments for a clean start.
-  - **Automatic Safety Backup**: A timestamped, restorable ZIP archive (\`pre-reset-backup-<timestamp>.qcbackup\`) is automatically created before any destructive operation.
-  - **License Retention Safeguard**: Users with active Pro licenses can preserve their activation key and entitlement token across factory resets.
-  - **Friction-Protected Confirmation**: Destructive factory resets require explicitly typing \`"RESET"\` into the confirmation dialog to prevent accidental triggers.
+- **💰 Discount UI Real-Time Update Fix**:
+  - Document-level discounts on both **invoices** and **quotes** now update the totals panel in real time as you type.
+  - The discount row is **hidden when no discount is applied** and appears automatically with a **\`−\` minus prefix** and **green accent** when a discount is active — making it visually clear the amount is being deducted.
+  - Applies to both percentage and fixed-amount discount types.
 
-- **🔒 Security & Document Preview Hardening**:
-  - Updated Content Security Policy (CSP) with \`frame-src 'self' data:\` to seamlessly support interactive document Quick Look and PDF rendering across all platforms.
+- **📚 Add from Library Fix**:
+  - Fixed an issue where the **Add from Library** dropdown on invoice and quote forms was not populating with saved line-item templates.
+  - Library items now load correctly when creating or editing invoices and quotes.
+
+- **⚙️ Application Reset & Danger Zone (v1.5.1 carry-forward)**:
+  - Tier A (Reset Preferences) and Tier B (Factory Reset with automatic backup) remain available in **Settings → Danger Zone**.
 
 - **🛡️ Quality & Test Coverage**:
-  - Added dedicated test suite \`test-app-reset.js\`.
   - Full automated regression pass: **53/53 test suites passing** running under Node.js.
 
 ### 📦 Installation (Windows):

@@ -113,6 +113,7 @@
   const invoiceWhtRate = document.getElementById('invoiceWhtRate');
   const invoiceTotalsSubtotal = document.getElementById('invoiceTotalsSubtotal');
   const invoiceTotalsDiscount = document.getElementById('invoiceTotalsDiscount');
+  const invoiceTotalsDiscountRow = document.getElementById('invoiceTotalsDiscountRow');
   const invoiceTotalsTaxBreakdown = document.getElementById('invoiceTotalsTaxBreakdown');
   const invoiceTotalsGrand = document.getElementById('invoiceTotalsGrand');
   const invoiceTotalsWhtRow = document.getElementById('invoiceTotalsWhtRow');
@@ -2307,7 +2308,18 @@
     const netPayableCents = Math.max(0, grandTotalCents - whtAmountCents);
 
     if (invoiceTotalsSubtotal) invoiceTotalsSubtotal.textContent = window.QuoteCraftUtils.formatCurrency(subtotalCents / 100, formCurrencyCode);
-    if (invoiceTotalsDiscount) invoiceTotalsDiscount.textContent = window.QuoteCraftUtils.formatCurrency(docDiscCents / 100, formCurrencyCode);
+    if (invoiceTotalsDiscountRow) {
+      if (docDiscCents > 0) {
+        invoiceTotalsDiscountRow.classList.remove('hidden');
+        if (invoiceTotalsDiscount) invoiceTotalsDiscount.textContent = `−${window.QuoteCraftUtils.formatCurrency(docDiscCents / 100, formCurrencyCode)}`;
+      } else {
+        invoiceTotalsDiscountRow.classList.add('hidden');
+      }
+    } else if (invoiceTotalsDiscount) {
+      invoiceTotalsDiscount.textContent = docDiscCents > 0
+        ? `−${window.QuoteCraftUtils.formatCurrency(docDiscCents / 100, formCurrencyCode)}`
+        : window.QuoteCraftUtils.formatCurrency(0, formCurrencyCode);
+    }
     if (invoiceTotalsGrand) invoiceTotalsGrand.textContent = window.QuoteCraftUtils.formatCurrency(grandTotalCents / 100, formCurrencyCode);
 
     if (invoiceTotalsWhtRow && invoiceTotalsWht && invoiceTotalsWhtLabel) {

@@ -26,6 +26,7 @@
   const taxRateInput = document.getElementById('taxRate');
   const totalsSubtotal = document.getElementById('totalsSubtotal');
   const totalsDiscount = document.getElementById('totalsDiscount');
+  const totalsDiscountRow = document.getElementById('totalsDiscountRow');
   const totalsTaxBreakdown = document.getElementById('totalsTaxBreakdown');
   const totalsGrand = document.getElementById('totalsGrand');
 
@@ -465,7 +466,18 @@
     const grandCents = subtotalCents - discountCents + totalTaxCents;
 
     totalsSubtotal.textContent = centsToFormatted(subtotalCents);
-    totalsDiscount.textContent = centsToFormatted(discountCents);
+    if (totalsDiscountRow) {
+      if (discountCents > 0) {
+        totalsDiscountRow.classList.remove('hidden');
+        totalsDiscount.textContent = `−${centsToFormatted(discountCents)}`;
+      } else {
+        totalsDiscountRow.classList.add('hidden');
+      }
+    } else {
+      totalsDiscount.textContent = discountCents > 0
+        ? `−${centsToFormatted(discountCents)}`
+        : centsToFormatted(0);
+    }
     totalsGrand.textContent = centsToFormatted(grandCents);
   }
 

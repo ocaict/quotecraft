@@ -199,6 +199,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+#totalsDiscountRow .total-value {
+  color: var(--color-success, #16a34a);
+}
+
 .grand-total {
   border-top: 1px solid var(--border-strong);
   margin-top: 6px;

@@ -77,7 +77,6 @@
 .invoice-form {
   margin-top: 16px;
 }
-
 .invoice-form .form-actions {
   display: flex;
   gap: 12px;
@@ -86,3 +85,6 @@
 }
 
 
+#invoiceTotalsDiscountRow .total-value {
+  color: var(--color-success, #16a34a);
+}
