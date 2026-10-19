@@ -2609,20 +2609,32 @@
     if (!invoiceFormLibrarySelect) return;
     invoiceFormLibrarySelect.innerHTML = '<option value="">+ Add from Library…</option>';
     try {
-      const res = await window.electronAPI.getLineItemTemplates();
-      if (res.ok && Array.isArray(res.templates)) {
-        res.templates.forEach((t) => {
+      const apiFn = window.electronAPI && (window.electronAPI.listItems || window.electronAPI.getLineItemTemplates);
+      if (!apiFn) return;
+      const res = await apiFn();
+      const items = (res && res.ok && (res.items || res.templates)) || [];
+      if (Array.isArray(items)) {
+        items.forEach((t) => {
           const opt = document.createElement('option');
           opt.value = t.id;
-          opt.textContent = `${t.title || t.description} (${money(t.unit_price, formCurrencyCode)})`;
-          opt.dataset.desc = t.description;
-          opt.dataset.price = t.unit_price;
-          opt.dataset.tax = t.tax_rate;
+          const formattedPrice = money(t.unit_price, formCurrencyCode);
+          const displayName = t.name || t.title || t.description || 'Item';
+          opt.textContent = `${displayName} (${formattedPrice})`;
+          const desc = t.description && t.description.trim() && t.name && t.description.trim() !== t.name.trim()
+            ? `${t.name} - ${t.description.trim()}`
+            : (t.name || t.description || '');
+          opt.dataset.desc = desc;
+          opt.dataset.price = t.unit_price != null ? t.unit_price : 0;
+          opt.dataset.tax = (t.tax_rate !== null && t.tax_rate !== undefined)
+            ? t.tax_rate
+            : ((t.default_tax_rate !== null && t.default_tax_rate !== undefined) ? t.default_tax_rate : 0);
           opt.dataset.unit = t.unit_label || '';
           invoiceFormLibrarySelect.appendChild(opt);
         });
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      console.error('[invoices] Failed to populate library select:', e);
+    }
   }
 
   function localDateString(date) {
@@ -3203,6 +3215,7 @@
       formCurrencyCode = invoiceFormCurrency.value;
       updateInvoiceExchangeRateVisibility();
       recalcInvoiceTotals();
+      populateInvoiceLibrarySelect();
     });
   }
   if (invoiceFormClient) {
@@ -3217,6 +3230,7 @@
           formCurrencyCode = chosenClient.default_currency;
           updateInvoiceExchangeRateVisibility();
           recalcInvoiceTotals();
+          populateInvoiceLibrarySelect();
         }
       }
     });
@@ -3232,7 +3246,9 @@
       if (!selOpt || !selOpt.value) return;
       const desc = selOpt.dataset.desc || '';
       const price = selOpt.dataset.price || 0;
-      const tax = selOpt.dataset.tax || 0;
+      const tax = selOpt.dataset.tax != null && selOpt.dataset.tax !== ''
+        ? selOpt.dataset.tax
+        : (invoiceFormTaxRate ? invoiceFormTaxRate.value : 0);
       const unit = selOpt.dataset.unit || '';
       invoiceItemsBody.appendChild(createInvoiceItemRow({
         description: desc,
@@ -3245,6 +3261,10 @@
       recalcInvoiceTotals();
     });
   }
+
+  window.addEventListener('qc-library-updated', () => {
+    populateInvoiceLibrarySelect();
+  });
 
   // Payment preset quick-insert for invoices
   const invoicePaymentPresetSelect = document.getElementById('invoicePaymentPresetSelect');
@@ -3297,6 +3317,7 @@
     } catch (e) { /* keep default */ }
     await checkDueRecurring();
     await loadInvoices();
+    await populateInvoiceLibrarySelect();
     showList();
   }
 

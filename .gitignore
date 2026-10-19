@@ -22,3 +22,5 @@ scripts/.license-private-key.pem
 licenses.json
 device.id
 scripts/device.id
+.env
+.env.*

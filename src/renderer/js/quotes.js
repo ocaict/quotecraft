@@ -854,6 +854,7 @@
       currencyCode = quoteCurrencySelect.value;
       updateExchangeRateVisibility();
       recalcTotals();
+      populateLibrarySelect();
     });
   }
 
@@ -2586,7 +2587,9 @@
           quantity: 1,
           unit_label: item.unit_label || '',
           unit_price: item.unit_price,
-          tax_rate: (item.default_tax_rate !== null && item.default_tax_rate !== undefined) ? item.default_tax_rate : (taxRateInput.value || 0),
+          tax_rate: (item.tax_rate !== null && item.tax_rate !== undefined)
+            ? item.tax_rate
+            : ((item.default_tax_rate !== null && item.default_tax_rate !== undefined) ? item.default_tax_rate : (taxRateInput.value || 0)),
         });
         itemsBody.appendChild(row);
         recalcTotals();

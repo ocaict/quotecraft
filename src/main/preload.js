@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
 
   listItems: () => ipcRenderer.invoke('items:list'),
+  getLineItemTemplates: () => ipcRenderer.invoke('items:list'),
   getItem: (id) => ipcRenderer.invoke('items:get', id),
   addItem: (item) => ipcRenderer.invoke('items:add', item),
   updateItem: (id, item) => ipcRenderer.invoke('items:update', id, item),
